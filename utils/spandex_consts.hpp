@@ -25,8 +25,14 @@ http://rsim.cs.uiuc.edu/
 #define REQS_BITS	2	// depends on N_REQS
 #define REQS_BITS_P1	3	// depends on N_REQS + 1
 
-#define DNV_NUM_STATE       8
-#define DNV_STABLE_STATE_BITS   ilog2(DNV_NUM_STATE)
+
+// Ongoing transaction buffers
+#define LLC_N_REQS		4	// affects LLC_REQS_BITS
+#define LLC_REQS_BITS   	(ilog2(LLC_N_REQS))	// depends on LLC_N_REQS
+#define LLC_REQS_BITS_P1	(LLC_REQS_BITS + 1)	// depends on LLC_N_REQS + 1
+
+#define SPX_NUM_STATE       8
+#define SPX_STABLE_STATE_BITS   ilog2(SPX_NUM_STATE)
 #define LLC_STABLE_STATE_BITS	2
 #define LLC_UNSTABLE_STATE_BITS	4	// depends on # of unstable states
 
@@ -35,20 +41,39 @@ http://rsim.cs.uiuc.edu/
 #define DCS_WIDTH               2
 
 // DeNovo states
-#define DNV_I       0
-#define DNV_MAX_V   (DNV_S - 1)
-#define DNV_S       (DNV_NUM_STATE - 2)
-#define DNV_R       (DNV_NUM_STATE - 1)
+#define SPX_I       0
+#define SPX_MAX_V   (SPX_S - 1)
+#define SPX_S       (SPX_NUM_STATE - 2)
+#define SPX_R       (SPX_NUM_STATE - 1)
 
 // DeNovo Transient state
-#define DNV_IV      1
-#define DNV_II      2
-#define DNV_RI      3
-#define DNV_AMO     4
-#define DNV_IV_DCS  5
-#define DNV_XR      6
-#define DNV_XRV     7
-#define DNV_IS      8
+#define SPX_IV      1
+#define SPX_II      2
+#define SPX_RI      3
+#define SPX_AMO     4
+#define SPX_IV_DCS  5
+#define SPX_XR      6
+#define SPX_XRV     7
+#define SPX_IS      8
+
+
+// LLC states
+#define LLC_I       0
+#define LLC_V       1
+#define LLC_S       2
+
+// LLC unstable states
+#define LLC_IV      1
+#define LLC_IS      2
+#define LLC_IO      3
+#define LLC_SO      4
+#define LLC_SV      5
+#define LLC_OS      6
+#define LLC_OV      7
+#define LLC_SWB     8
+#define LLC_OWB     9
+#define LLC_SI      10
+#define LLC_WB      11
 
 #define MAX_RETRY 4
 #define MAX_RETRY_BITS ilog2(MAX_RETRY)

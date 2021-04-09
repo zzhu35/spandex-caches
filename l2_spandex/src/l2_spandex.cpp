@@ -30,7 +30,7 @@ void l2_spandex::drain_wb()
     for (int i = 0; i < N_REQS; i++)
     {
         HLS_UNROLL_LOOP(ON, "wb drain");
-        if (reqs[i].state == DNV_XR || reqs[i].state == DNV_XRV)
+        if (reqs[i].state == SPX_XR || reqs[i].state == SPX_XRV)
         {
             mshr_no_reqo = false;
             break;
@@ -146,13 +146,13 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
     for (unsigned int i = 0; i < N_REQS; ++i) {
         HLS_UNROLL_LOOP(ON, "dispatch wb");
 
-        if (reqs[i].state == DNV_I){
+        if (reqs[i].state == SPX_I){
             reqs_i = i;
             success = true;
         }
 
         wait();
-        if (reqs[i].tag == wbs[wb_i].tag && reqs[i].set == wbs[wb_i].set && reqs[i].state != DNV_I){
+        if (reqs[i].tag == wbs[wb_i].tag && reqs[i].set == wbs[wb_i].set && reqs[i].state != SPX_I){
             // found conflict, cannot dispatch WB
             success = false;
             return;
@@ -171,15 +171,15 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
         // send reqo
         if (!wbs[wb_i].dcs_en) {
             send_req_out(REQ_O, wbs[wb_i].hprot, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
-            fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, DNV_XR, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
+            fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XR, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
         else if (!wbs[wb_i].use_owner_pred) {
             send_req_out(REQ_WTfwd, wbs[wb_i].hprot, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
-            fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, DNV_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
+            fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
         else {
             send_fwd_out(FWD_WTfwd, wbs[wb_i].pred_cid, 1, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
-            fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, DNV_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
+            fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
 
         // free WB
@@ -345,7 +345,7 @@ void l2_spandex::ctrl()
                 reqs[reqs_hit_i].word_mask &= ~(rsp_in.word_mask);
 
                 if (reqs[reqs_hit_i].word_mask == 0) {
-                    reqs[reqs_hit_i].state = DNV_I;
+                    reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
                 }
 
@@ -370,10 +370,10 @@ void l2_spandex::ctrl()
 
                 if (reqs[reqs_hit_i].word_mask == 0) {
                     HLS_DEFINE_PROTOCOL("spandex-resp");
-                    if (reqs[reqs_hit_i].state == DNV_IV) send_rd_rsp(reqs[reqs_hit_i].line);
-                    reqs[reqs_hit_i].state = DNV_I;
+                    if (reqs[reqs_hit_i].state == SPX_IV) send_rd_rsp(reqs[reqs_hit_i].line);
+                    reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
-                    put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, DNV_R, reqs_hit_i);
+                    put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_R, reqs_hit_i);
                 }
 
             }
@@ -395,9 +395,9 @@ void l2_spandex::ctrl()
                     HLS_DEFINE_PROTOCOL("spandex-resp");
                     send_rd_rsp(line);
 
-                    reqs[reqs_hit_i].state = DNV_I;
+                    reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
-                    //put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, DNV_I, reqs_hit_i);
+                    //put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_I, reqs_hit_i);
                 }
             }
             break;
@@ -418,7 +418,7 @@ void l2_spandex::ctrl()
                     
                     HLS_DEFINE_PROTOCOL("spandex-resp");
                     send_rd_rsp(reqs[reqs_hit_i].line);
-                    reqs[reqs_hit_i].state = DNV_I;
+                    reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
                     put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, current_valid_state, reqs_hit_i);
                 }
@@ -429,14 +429,14 @@ void l2_spandex::ctrl()
             {
                 switch (reqs[reqs_hit_i].state)
                 {
-                    case DNV_IV_DCS:
+                    case SPX_IV_DCS:
                     {
                         HLS_DEFINE_PROTOCOL("send reqV miss pred");
                         send_req_out(REQ_V, reqs[reqs_hit_i].hprot, (reqs[reqs_hit_i].tag, reqs[reqs_hit_i].set), 0, ~reqs[reqs_hit_i].word_mask);
-                        reqs[reqs_hit_i].state = DNV_IV;
+                        reqs[reqs_hit_i].state = SPX_IV;
                     }
                     break;
-                    case DNV_IV:
+                    case SPX_IV:
                     {
                         reqs[reqs_hit_i].retry++;
                         {
@@ -457,7 +457,7 @@ void l2_spandex::ctrl()
 
             case RSP_S:
             {
-                if (reqs[reqs_hit_i].state == DNV_IS) {
+                if (reqs[reqs_hit_i].state == SPX_IS) {
 
                         for (int i = 0; i < WORDS_PER_LINE; i++) {
                             HLS_UNROLL_LOOP(ON);
@@ -473,12 +473,12 @@ void l2_spandex::ctrl()
                             
                             HLS_DEFINE_PROTOCOL();
                             send_rd_rsp(reqs[reqs_hit_i].line);
-                            reqs[reqs_hit_i].state = DNV_I;
+                            reqs[reqs_hit_i].state = SPX_I;
                             reqs_cnt++;
-                            put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, DNV_S, reqs_hit_i);
+                            put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_S, reqs_hit_i);
                         }
                 }
-                else if (reqs[reqs_hit_i].state == DNV_II) {
+                else if (reqs[reqs_hit_i].state == SPX_II) {
 
                         for (int i = 0; i < WORDS_PER_LINE; i++) {
                             HLS_UNROLL_LOOP(ON);
@@ -495,9 +495,9 @@ void l2_spandex::ctrl()
                             HLS_DEFINE_PROTOCOL();
                             send_rd_rsp(reqs[reqs_hit_i].line);
 
-                            reqs[reqs_hit_i].state = DNV_I;
+                            reqs[reqs_hit_i].state = SPX_I;
                             reqs_cnt++;
-                            put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, DNV_I, reqs_hit_i);
+                            put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_I, reqs_hit_i);
                         }
                 }
             }
@@ -534,8 +534,8 @@ void l2_spandex::ctrl()
                 {
                     case FWD_INV_SPDX:
                     {
-                        if(reqs[reqs_fwd_stall_i].state == DNV_IS){
-                            reqs[reqs_fwd_stall_i].state = DNV_II;
+                        if(reqs[reqs_fwd_stall_i].state == SPX_IS){
+                            reqs[reqs_fwd_stall_i].state = SPX_II;
                         }
                         {
                             HLS_DEFINE_PROTOCOL("send rsp_inv_ack_spdx fwd_stall");
@@ -548,7 +548,7 @@ void l2_spandex::ctrl()
                     {
                         // Not checking word mask here
                         // Fwd Req O only comes from llc, word mask should be correct
-                        if(reqs[reqs_fwd_stall_i].state == DNV_RI){
+                        if(reqs[reqs_fwd_stall_i].state == SPX_RI){
                             HLS_DEFINE_PROTOCOL("fwd req o stall rsp o");
                             send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
                             success = true;
@@ -559,7 +559,7 @@ void l2_spandex::ctrl()
                     {
                         // Not checking word mask here
                         // Fwd Req Odata only comes from llc, word mask should be correct
-                        if(reqs[reqs_fwd_stall_i].state == DNV_RI){
+                        if(reqs[reqs_fwd_stall_i].state == SPX_RI){
                             HLS_DEFINE_PROTOCOL("fwd req o stall rsp o");
                             send_rsp_out(RSP_Odata, fwd_in.req_id, true, fwd_in.addr, reqs[reqs_fwd_stall_i].line, fwd_in.word_mask);
                             success = true;
@@ -577,7 +577,7 @@ void l2_spandex::ctrl()
                                 // Check if the word is in the ReqWB
                                 // Since Fwd Req V can be sent by other caches (NOT llc)
                                 // We need to handle mispredicted owner
-                                if((reqs[reqs_fwd_stall_i].word_mask & (1 << i)) && reqs[reqs_fwd_stall_i].state == DNV_RI){
+                                if((reqs[reqs_fwd_stall_i].word_mask & (1 << i)) && reqs[reqs_fwd_stall_i].state == SPX_RI){
                                     ack_mask |= 1 << i;
                                 }else{
                                     nack_mask |= 1 << i;
@@ -599,11 +599,11 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_WB_ACK:
                     {
-                        if (reqs[reqs_fwd_stall_i].state == DNV_RI || reqs[reqs_fwd_stall_i].state == DNV_II)
+                        if (reqs[reqs_fwd_stall_i].state == SPX_RI || reqs[reqs_fwd_stall_i].state == SPX_II)
                         {
                             // erase this line when WB complete
                             // no need to call put_reqs here because there is no state change to either SRAM or xxx_buf
-                            reqs[reqs_fwd_stall_i].state = DNV_I;
+                            reqs[reqs_fwd_stall_i].state = SPX_I;
                             reqs_cnt++;
                             success = true;
                         }
@@ -612,26 +612,26 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_RVK_O:
                     {
-                        if (reqs[reqs_fwd_stall_i].state == DNV_RI)
+                        if (reqs[reqs_fwd_stall_i].state == SPX_RI)
                         {
-                            // handle DNV_RI - LLC_OV deadlock
+                            // handle SPX_RI - LLC_OV deadlock
                             HLS_DEFINE_PROTOCOL("deadlock-solver-1");
                             word_mask_t rsp_mask = reqs[reqs_fwd_stall_i].word_mask & fwd_in.word_mask;
                             reqs[reqs_fwd_stall_i].word_mask &= ~rsp_mask;
                             if (rsp_mask) send_rsp_out(RSP_RVK_O, 0, false, addr_br.line_addr, reqs[reqs_fwd_stall_i].line, rsp_mask);
-                            if (!reqs[reqs_fwd_stall_i].word_mask) reqs[reqs_fwd_stall_i].state = DNV_II;
+                            if (!reqs[reqs_fwd_stall_i].word_mask) reqs[reqs_fwd_stall_i].state = SPX_II;
                             success = true;
                         }
-                        else if (reqs[reqs_fwd_stall_i].state == DNV_XR)
+                        else if (reqs[reqs_fwd_stall_i].state == SPX_XR)
                         {
                             word_mask_t rsp_mask = 0;
                             if (tag_hit) {
                                 for (int i = 0; i < WORDS_PER_LINE; i++)
                                 {
                                     HLS_UNROLL_LOOP(ON, "1");
-                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == DNV_R) { // if reqo and we have this word in registered
+                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) { // if reqo and we have this word in registered
                                         rsp_mask |= 1 << i;
-                                        state_buf[reqs[reqs_fwd_stall_i].way][i] = DNV_I;
+                                        state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
                                     }
                                 }
                                 if (rsp_mask) {
@@ -649,7 +649,7 @@ void l2_spandex::ctrl()
                     {
                         // Not checking word mask here
                         // Fwd Req S only comes from llc, word mask should be correct
-                        if(reqs[reqs_fwd_stall_i].state == DNV_RI){
+                        if(reqs[reqs_fwd_stall_i].state == SPX_RI){
                             HLS_DEFINE_PROTOCOL("fwd req s stall rsp s");
                             send_rsp_out(RSP_S, fwd_in.req_id, true, fwd_in.addr, reqs[reqs_fwd_stall_i].line, fwd_in.word_mask);
                             success = true;
@@ -673,9 +673,9 @@ void l2_spandex::ctrl()
                         if (tag_hit) {
                             for (int i = 0; i < WORDS_PER_LINE; i++){
                                 HLS_UNROLL_LOOP(ON);
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == DNV_S) {
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_S) {
                                     // if the word in the way is hit in the cache, go to invalid state
-                                    state_buf[way_hit][i] = DNV_I;
+                                    state_buf[way_hit][i] = SPX_I;
                                 }
                             }
                             send_inval(fwd_in.addr);
@@ -694,9 +694,9 @@ void l2_spandex::ctrl()
                             for (int i = 0; i < WORDS_PER_LINE; i++)
                             {
                                 HLS_UNROLL_LOOP(ON, "1");
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == DNV_R) { // if reqo and we have this word in registered
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_R) { // if reqo and we have this word in registered
                                     // go to invalid state
-                                    state_buf[way_hit][i] = DNV_I;
+                                    state_buf[way_hit][i] = SPX_I;
                                     ack_mask |= 1 << i;
                                 }
                             }
@@ -716,9 +716,9 @@ void l2_spandex::ctrl()
                             for (int i = 0; i < WORDS_PER_LINE; i++)
                             {
                                 HLS_UNROLL_LOOP(ON, "1");
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == DNV_R) { // if reqo and we have this word in registered
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_R) { // if reqo and we have this word in registered
                                     // go to invalid state
-                                    state_buf[way_hit][i] = DNV_I;
+                                    state_buf[way_hit][i] = SPX_I;
                                     ack_mask |= 1 << i;
                                 }
                             }
@@ -738,10 +738,10 @@ void l2_spandex::ctrl()
                             for (int i = 0; i < WORDS_PER_LINE; i++)
                             {
                                 HLS_UNROLL_LOOP(ON, "1");
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == DNV_R) {
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_R) {
                                     ack_mask |= 1 << i;
                                 }
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] != DNV_R) {
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] != SPX_R) {
                                     nack_mask |= 1 << i;
                                 }
                             }
@@ -772,9 +772,9 @@ void l2_spandex::ctrl()
                             for (int i = 0; i < WORDS_PER_LINE; i++)
                             {
                                 HLS_UNROLL_LOOP(ON, "1");
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == DNV_R) { // if reqo and we have this word in registered
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_R) { // if reqo and we have this word in registered
                                     rsp_mask |= 1 << i;
-                                    state_buf[way_hit][i] = DNV_I;
+                                    state_buf[way_hit][i] = SPX_I;
                                 }
                             }
                             if (rsp_mask) {
@@ -792,9 +792,9 @@ void l2_spandex::ctrl()
                             for (int i = 0; i < WORDS_PER_LINE; i++)
                             {
                                 HLS_UNROLL_LOOP(ON, "1");
-                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == DNV_R) { // if reqo and we have this word in registered
+                                if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_R) { // if reqo and we have this word in registered
                                     rsp_mask |= 1 << i;
-                                    state_buf[way_hit][i] = DNV_S;
+                                    state_buf[way_hit][i] = SPX_S;
                                 }
                             }
                             if (rsp_mask) {
@@ -816,7 +816,7 @@ void l2_spandex::ctrl()
                             for (int i = 0; i < WORDS_PER_LINE; i++){
                                 HLS_UNROLL_LOOP(ON, "1");
                                 if (fwd_in.word_mask & (1 << i)) {
-                                    if (state_buf[way_hit][i] == DNV_R) {
+                                    if (state_buf[way_hit][i] == SPX_R) {
                                         line_buf[way_hit].range(BITS_PER_WORD*(i+1)-1,BITS_PER_WORD*i) = fwd_in.line.range(BITS_PER_WORD*(i+1)-1,BITS_PER_WORD*i);
                                     } else {
                                         word_mask |= 1 << i;
@@ -881,7 +881,7 @@ void l2_spandex::ctrl()
                 word_mask_t word_mask_owned = 0;
                 for (int i = 0; i < WORDS_PER_LINE; i++){
                     HLS_UNROLL_LOOP(ON);
-                    if(state_buf[way_hit][i] == DNV_R){
+                    if(state_buf[way_hit][i] == SPX_R){
                         word_mask_owned |= 1 << i;
                     }
                 }
@@ -912,7 +912,7 @@ void l2_spandex::ctrl()
                         for (int i = 0; i < WORDS_PER_LINE; i ++)
                         {
                             HLS_UNROLL_LOOP(ON, "3");
-                            if (state_buf[evict_way][i] == DNV_R)
+                            if (state_buf[evict_way][i] == SPX_R)
                             {
                                 word_mask |= 1 << i;
                             }
@@ -922,7 +922,7 @@ void l2_spandex::ctrl()
                         {
                             HLS_DEFINE_PROTOCOL("send wb");
                             send_req_out(REQ_WB, hprot_buf[evict_way], line_addr_evict, line_buf[evict_way], word_mask);
-                            fill_reqs(0, evict_addr_br, 0, 0, 0, DNV_RI, 0, 0, line_buf[evict_way], word_mask, reqs_empty_i);
+                            fill_reqs(0, evict_addr_br, 0, 0, 0, SPX_RI, 0, 0, line_buf[evict_way], word_mask, reqs_empty_i);
                         }
                         send_inval(line_addr_evict);
                     }
@@ -938,7 +938,7 @@ void l2_spandex::ctrl()
 
                     if (cpu_req.amo || cpu_req.cpu_msg == READ_ATOMIC || cpu_req.cpu_msg == WRITE_ATOMIC) {
 
-                        if (word_hit && (state_buf[way_hit][addr_br.w_off] == DNV_R)) {
+                        if (word_hit && (state_buf[way_hit][addr_br.w_off] == SPX_R)) {
                             if (cpu_req.amo) {
                                 send_rd_rsp(line_buf[way_hit]);
                                 write_word_amo(line_buf[way_hit], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize, cpu_req.amo);
@@ -963,8 +963,8 @@ void l2_spandex::ctrl()
                             if (tag_hit || empty_way_found) {
                                 amo_way = tag_hit ? way_hit : empty_way;
                                 HLS_DEFINE_PROTOCOL("send_req_amo");
-                                // fill_reqs(0, addr_br, 0, amo_way, 0, DNV_AMO, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
-                                fill_reqs(cpu_req.cpu_msg, addr_br, 0, amo_way, cpu_req.hsize, DNV_AMO, cpu_req.hprot, 0, line_buf[amo_way], 0, reqs_empty_i);
+                                // fill_reqs(0, addr_br, 0, amo_way, 0, SPX_AMO, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
+                                fill_reqs(cpu_req.cpu_msg, addr_br, 0, amo_way, cpu_req.hsize, SPX_AMO, cpu_req.hprot, 0, line_buf[amo_way], 0, reqs_empty_i);
                                 send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
                                 reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
                                 reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
@@ -986,7 +986,7 @@ void l2_spandex::ctrl()
                         // b/c we cannot have partial Shared line
                         for(int i = 0; i < WORDS_PER_LINE; i++){
                             HLS_UNROLL_LOOP(ON);
-                            if(state_buf[way_write][i] == DNV_S){
+                            if(state_buf[way_write][i] == SPX_S){
                                 state_buf[way_write][i] = current_valid_state;
                             }
                         }
@@ -995,7 +995,7 @@ void l2_spandex::ctrl()
                                 switch (cpu_req.dcs){
                                     case DCS_ReqWTfwd:
                                     {
-                                        if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != DNV_R)) { // if no hit or not in registered
+                                        if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
                                             bool success = false;
                                             add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
                                             if (!success)
@@ -1014,11 +1014,11 @@ void l2_spandex::ctrl()
                                     break;
                                 }
                         }else{
-                            if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != DNV_R)) { // if no hit or not in registered
+                            if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
                                 if (cpu_req.hsize < BYTE_BITS) // partial word write
                                 {
-                                    // fill_reqs(0, addr_br, 0, way_write, 0, DNV_XR, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
-                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, 0, DNV_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
+                                    // fill_reqs(0, addr_br, 0, way_write, 0, SPX_XR, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, 0, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
                                     send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
                                     reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
                                     reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
@@ -1038,7 +1038,7 @@ void l2_spandex::ctrl()
 
                                         cpu_req_conflict = cpu_req;
                                     } else {
-                                        state_buf[way_write][addr_br.w_off] = DNV_R; // directly go to registered
+                                        state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
                                     }
                                 }
                             }
@@ -1063,16 +1063,16 @@ void l2_spandex::ctrl()
                             if(cpu_req.dcs_en && cpu_req.use_owner_pred){
                                 HLS_DEFINE_PROTOCOL("cpu read fwd req v");
                                 send_fwd_out(FWD_REQ_V, cpu_req.pred_cid, 1, addr_br.line_addr, 0, word_mask);
-                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, DNV_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
+                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
                             }else if(cpu_req.dcs_en){
                                 HLS_DEFINE_PROTOCOL("cpu read req v");
                                 send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, word_mask);
-                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, DNV_IV, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
+                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
                             }else{
                                 // ReqS, the line will NOT be partial owned
                                 HLS_DEFINE_PROTOCOL("cpu read req s partial v");
                                 send_req_out(REQ_S, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
-                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, DNV_IS, cpu_req.hprot, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
+                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_IS, cpu_req.hprot, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
                             }
                         }
                         else {
@@ -1086,15 +1086,15 @@ void l2_spandex::ctrl()
                         if(cpu_req.dcs_en && cpu_req.use_owner_pred){
                             HLS_DEFINE_PROTOCOL("cpu read empty way fwd req v");
                             send_fwd_out(FWD_REQ_V, cpu_req.pred_cid, 1, addr_br.line_addr, 0, WORD_MASK_ALL);
-                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, DNV_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }else if(cpu_req.dcs_en && cpu_req.dcs == DCS_ReqS){
                             HLS_DEFINE_PROTOCOL("cpu read empty way req s");
                             send_req_out(REQ_S, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
-                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, DNV_IS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }else{
                             HLS_DEFINE_PROTOCOL("cpu read empty way req v");
                             send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
-                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, DNV_IV, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }
                     }
                     if(cpu_req.rl){
@@ -1106,10 +1106,10 @@ void l2_spandex::ctrl()
         }
         if ((do_cpu_req && !set_conflict) || (do_fwd && !fwd_stall) || do_rsp){
             for (int i = 0; i < L2_WAYS; i++) {
-                sc_uint<DNV_STABLE_STATE_BITS * WORDS_PER_LINE> line_state = 0;
+                sc_uint<SPX_STABLE_STATE_BITS * WORDS_PER_LINE> line_state = 0;
                 for (int j = 0; j < WORDS_PER_LINE; j++) {
                     HLS_UNROLL_LOOP(ON, "5");
-                    line_state |= state_buf[i][j] << (j * DNV_STABLE_STATE_BITS);
+                    line_state |= state_buf[i][j] << (j * SPX_STABLE_STATE_BITS);
                 }
                 states.port1[0][base + i] = line_state;
             }
@@ -1493,7 +1493,7 @@ void l2_spandex::fill_reqs(cpu_msg_t cpu_msg, addr_breakdown_t addr_br, l2_tag_t
     reqs_cnt--;
 }
 
-void l2_spandex::put_reqs(l2_set_t set, l2_way_t way, l2_tag_t tag, line_t line, hprot_t hprot, dnv_state_t state,
+void l2_spandex::put_reqs(l2_set_t set, l2_way_t way, l2_tag_t tag, line_t line, hprot_t hprot, spx_state_t state,
 		  sc_uint<REQS_BITS> reqs_i)
 {
     PUT_REQS;
@@ -1522,13 +1522,13 @@ inline void l2_spandex::read_set(l2_set_t set)
     // below for implicit memories usage
     sc_uint<L2_SET_BITS+L2_WAY_BITS> base = set << L2_WAY_BITS;
 
-    sc_uint<DNV_STABLE_STATE_BITS * WORDS_PER_LINE> line_state;
+    sc_uint<SPX_STABLE_STATE_BITS * WORDS_PER_LINE> line_state;
 
     tag_buf[0] = tags.port2[0][base + 0];
     line_state = states.port2[0][base + 0];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "8");
-        state_buf[0][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[0][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
 
     }
     hprot_buf[0] = hprots.port2[0][base + 0];
@@ -1540,7 +1540,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port3[0][base + 1];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "9");
-        state_buf[1][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[1][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[1] = hprots.port3[0][base + 1];
     line_buf[1] = lines.port3[0][base + 1];
@@ -1551,7 +1551,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port4[0][base + 2];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "10");
-        state_buf[2][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[2][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[2] = hprots.port4[0][base + 2];
     line_buf[2] = lines.port4[0][base + 2];
@@ -1560,7 +1560,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port5[0][base + 3];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "11");
-        state_buf[3][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[3][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[3] = hprots.port5[0][base + 3];
     line_buf[3] = lines.port5[0][base + 3];
@@ -1571,7 +1571,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port6[0][base + 4];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "12");
-        state_buf[4][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[4][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[4] = hprots.port6[0][base + 4];
     line_buf[4] = lines.port6[0][base + 4];
@@ -1580,7 +1580,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port7[0][base + 5];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "13");
-        state_buf[5][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[5][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[5] = hprots.port7[0][base + 5];
     line_buf[5] = lines.port7[0][base + 5];
@@ -1589,7 +1589,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port8[0][base + 6];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "14");
-        state_buf[6][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[6][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[6] = hprots.port8[0][base + 6];
     line_buf[6] = lines.port8[0][base + 6];
@@ -1598,7 +1598,7 @@ inline void l2_spandex::read_set(l2_set_t set)
     line_state = states.port9[0][base + 7];
     for (int i = 0; i < WORDS_PER_LINE; i++) {
         HLS_UNROLL_LOOP(ON, "15");
-        state_buf[7][i] = line_state >> (i * DNV_STABLE_STATE_BITS);
+        state_buf[7][i] = line_state >> (i * SPX_STABLE_STATE_BITS);
     }
     hprot_buf[7] = hprots.port9[0][base + 7];
     line_buf[7] = lines.port9[0][base + 7];
@@ -1667,7 +1667,7 @@ void l2_spandex::reqs_lookup(line_breakdown_t<l2_tag_t, l2_set_t> line_br, sc_ui
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_LOOKUP_LOOP;
 
-        if (reqs[i].tag == line_br.tag && reqs[i].set == line_br.set && reqs[i].state != DNV_I) {
+        if (reqs[i].tag == line_br.tag && reqs[i].set == line_br.set && reqs[i].state != SPX_I) {
             reqs_hit = true;
             reqs_hit_i = i;
         }
@@ -1690,10 +1690,10 @@ void l2_spandex::reqs_peek_req(l2_set_t set, sc_uint<REQS_BITS> &reqs_i)
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_PEEK_REQ_LOOP;
 
-        if (reqs[i].state == DNV_I)
+        if (reqs[i].state == SPX_I)
             reqs_i = i;
 
-        if (reqs[i].set == set && reqs[i].state != DNV_I){
+        if (reqs[i].set == set && reqs[i].state != SPX_I){
             set_conflict = true;
         }
     }
@@ -1710,7 +1710,7 @@ void l2_spandex::reqs_peek_flush(l2_set_t set, sc_uint<REQS_BITS> &reqs_i)
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_PEEK_REQ_LOOP;
 
-        if (reqs[i].state == DNV_I)
+        if (reqs[i].state == SPX_I)
             reqs_i = i;
     }
 
@@ -1729,7 +1729,7 @@ void l2_spandex::reqs_peek_fwd(addr_breakdown_t addr_br)
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_PEEK_REQ_LOOP;
 
-        if (reqs[i].tag == addr_br.tag && reqs[i].set == addr_br.set && reqs[i].state != DNV_I){
+        if (reqs[i].tag == addr_br.tag && reqs[i].set == addr_br.set && reqs[i].state != SPX_I){
             fwd_stall = true;
             reqs_fwd_stall_i = i;
         }
@@ -1739,12 +1739,12 @@ void l2_spandex::reqs_peek_fwd(addr_breakdown_t addr_br)
 
 void l2_spandex::self_invalidate()
 {
-    if(current_valid_state != DNV_MAX_V){
+    if(current_valid_state != SPX_MAX_V){
         current_valid_state++;
     }else{
         for (int i = 0; i < L2_LINES; i++){
             HLS_UNROLL_LOOP(OFF, "self invalidate");
-            sc_uint<DNV_STABLE_STATE_BITS * WORDS_PER_LINE> line_state, line_state_in;
+            sc_uint<SPX_STABLE_STATE_BITS * WORDS_PER_LINE> line_state, line_state_in;
             {
                 HLS_DEFINE_PROTOCOL("self invalidate read");
                 wait();
@@ -1752,15 +1752,15 @@ void l2_spandex::self_invalidate()
                 wait();
             }
 
-            dnv_state_t state_tmp;
+            spx_state_t state_tmp;
             line_state_in = 0;
             for (int j = 0; j < WORDS_PER_LINE; j++){
                 HLS_UNROLL_LOOP(ON, "8");
-                state_tmp = line_state >> (j * DNV_STABLE_STATE_BITS);
-                if(state_tmp != DNV_R && state_tmp != DNV_S){
-                    state_tmp = DNV_I;
+                state_tmp = line_state >> (j * SPX_STABLE_STATE_BITS);
+                if(state_tmp != SPX_R && state_tmp != SPX_S){
+                    state_tmp = SPX_I;
                 }
-                line_state_in |= state_tmp << (j * DNV_STABLE_STATE_BITS);
+                line_state_in |= state_tmp << (j * SPX_STABLE_STATE_BITS);
             }
 
             {
@@ -1776,7 +1776,7 @@ void l2_spandex::self_invalidate()
 
 void l2_spandex::flush()
 {
-    sc_uint<DNV_STABLE_STATE_BITS * WORDS_PER_LINE> line_state;
+    sc_uint<SPX_STABLE_STATE_BITS * WORDS_PER_LINE> line_state;
     bool success = false;
     line_t line_data;
     hprot_t line_hprot;
@@ -1797,8 +1797,8 @@ void l2_spandex::flush()
     for (unsigned int i = 0; i < WORDS_PER_LINE; i++)
     {
         HLS_UNROLL_LOOP(ON, "flush");
-        dnv_state_t word_state = line_state >> (i * DNV_STABLE_STATE_BITS);
-        if (word_state == DNV_R)
+        spx_state_t word_state = line_state >> (i * SPX_STABLE_STATE_BITS);
+        if (word_state == SPX_R)
         {
             flush_owned |= 1 << i;
         }
@@ -1821,10 +1821,10 @@ void l2_spandex::flush()
         for (unsigned int i = 0; i < N_REQS; ++i) {
             HLS_UNROLL_LOOP(ON, "flush");
 
-            if (reqs[i].state == DNV_I){
+            if (reqs[i].state == SPX_I){
                 reqs_i = i;
             }
-            if (reqs[i].tag == line_tag && reqs[i].set == flush_line >> L2_WAY_BITS && reqs[i].state != DNV_I){
+            if (reqs[i].tag == line_tag && reqs[i].set == flush_line >> L2_WAY_BITS && reqs[i].state != SPX_I){
                 // found conflict, cannot dispatch WB
                 success = false;
                 return;
@@ -1833,7 +1833,7 @@ void l2_spandex::flush()
         {
             HLS_DEFINE_PROTOCOL("flush req");
             send_req_out(REQ_WB, line_hprot, flush_addr, line_data, flush_owned);
-            fill_reqs(0, flush_addr_br, 0, 0, 0, DNV_RI, 0, 0, line_data, flush_owned, reqs_i);
+            fill_reqs(0, flush_addr_br, 0, 0, 0, SPX_RI, 0, 0, line_data, flush_owned, reqs_i);
             success = true;
         }
     }

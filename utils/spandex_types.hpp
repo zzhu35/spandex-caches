@@ -56,7 +56,7 @@ typedef sc_uint<MAX_RETRY_BITS>		retry_t;
 typedef sc_uint<ARIANE_AMO_BITS>		amo_t;
 typedef sc_uint<BYTE_BITS>		    byte_offset_t;
 typedef sc_uint<STABLE_STATE_BITS>	    state_t;
-typedef sc_uint<DNV_STABLE_STATE_BITS>		dnv_state_t;
+typedef sc_uint<SPX_STABLE_STATE_BITS>		spx_state_t;
 typedef sc_uint<LLC_STABLE_STATE_BITS>      llc_state_t;
 typedef sc_uint<UNSTABLE_STATE_BITS>        unstable_state_t;
 typedef sc_uint<LLC_UNSTABLE_STATE_BITS>    llc_unstable_state_t;
