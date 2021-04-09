@@ -14,6 +14,7 @@ http://rsim.cs.uiuc.edu/
 #define __SPANDEX_UTILS_HPP__
 
 #include "spandex_types.hpp"
+#define __CACHE_TYPES_HPP__
 #include "cache_utils.hpp"
 
 inline void write_word_amo(line_t &line, word_t word, word_offset_t w_off, byte_offset_t b_off, hsize_t hsize, amo_t amo)
