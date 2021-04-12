@@ -3,7 +3,7 @@
 Copyright (c) 2021 University of Illinois Urbana Champaign, RSIM Group
 http://rsim.cs.uiuc.edu/
 
-	Modified by Zeran Zhu
+	Modified by Zeran Zhu, Robert Jin
 	zzhu35@illinois.edu
 	
 	April 9 2021
