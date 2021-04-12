@@ -115,14 +115,6 @@ public:
     EXP_MEM_TYPE_STRING(llc_spandex, sharers, LLC_SETS, LLC_WAYS)<sharers_t, LLC_LINES> sharers;
     EXP_MEM_TYPE_STRING(llc_spandex, dirty_bits, LLC_SETS, LLC_WAYS)<sc_uint<2>, LLC_LINES> dirty_bits;
     EXP_MEM_TYPE_STRING(llc_spandex, evict_ways, LLC_SETS, LLC_WAYS)<llc_way_t, LLC_SETS> evict_ways;
-    // llc_tag_t tags[LLC_LINES];
-    // llc_state_t states[LLC_LINES];
-    // line_t lines[LLC_LINES];
-    // hprot_t hprots[LLC_LINES];
-    // owner_t owners[LLC_LINES];
-    // sharers_t sharers[LLC_LINES];
-    // sc_uint<2> dirty_bits[LLC_LINES];
-    // llc_way_t evict_ways[LLC_SETS];
 
     // Local registers
 

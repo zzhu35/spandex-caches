@@ -3,7 +3,7 @@
 Copyright (c) 2021 University of Illinois Urbana Champaign, RSIM Group
 http://rsim.cs.uiuc.edu/
 
-	Modified by Zeran Zhu
+	Modified by Zeran Zhu, Robert Jin
 	zzhu35@illinois.edu
 	
 	April 9 2021
@@ -237,8 +237,6 @@ public:
 #ifdef STATS_ENABLE
     void send_stats(bool stats);
 #endif
-
-    // line_t make_line_of_addr(addr_t addr); // is this needed here? not called by l2.cpp
 
 private:
 
