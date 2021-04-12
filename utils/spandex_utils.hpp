@@ -3,10 +3,10 @@
 Copyright (c) 2021 University of Illinois Urbana Champaign, RSIM Group
 http://rsim.cs.uiuc.edu/
 
-	Modified by Zeran Zhu
-	zzhu35@illinois.edu
-	
-	April 9 2021
+    Modified by Zeran Zhu
+    zzhu35@illinois.edu
+
+    April 9 2021
 
 */
 
@@ -24,14 +24,14 @@ inline void write_word_amo(line_t &line, word_t word, word_offset_t w_off, byte_
     b_off_tmp = b_off;
 
     switch (hsize) {
-    case BYTE:
-	size = 8; break;
-    case HALFWORD:
-	size = 16; break;
-    case WORD_32:
-        size = 32; break;
-    default:
-        size = 64; break;
+        case BYTE:
+            size = 8; break;
+        case HALFWORD:
+            size = 16; break;
+        case WORD_32:
+            size = 32; break;
+        default:
+            size = 64; break;
     }
 
     uint32_t w_off_bits = BITS_PER_WORD * w_off;
@@ -84,53 +84,53 @@ inline void write_word_amo(line_t &line, word_t word, word_offset_t w_off, byte_
 
 inline void calc_amo(line_t& line, line_t& data, coh_msg_t req, word_mask_t word_mask)
 {
-            // word_mask must contain only one bit set
-        int i;
-        for (i = 0; i < WORDS_PER_LINE; i++)
-        {
-                HLS_UNROLL_LOOP("amo");
-                if (word_mask & (1 << i)) break;
-        }
-        wait();
-        int old = line.range((i+1)*BITS_PER_WORD-1, i*BITS_PER_WORD).to_int();
-        int dataw = data.range((i+1)*BITS_PER_WORD-1, i*BITS_PER_WORD).to_int();
+    // word_mask must contain only one bit set
+    int i;
+    for (i = 0; i < WORDS_PER_LINE; i++)
+    {
+        HLS_UNROLL_LOOP("amo");
+        if (word_mask & (1 << i)) break;
+    }
+    wait();
+    int old = line.range((i+1)*BITS_PER_WORD-1, i*BITS_PER_WORD).to_int();
+    int dataw = data.range((i+1)*BITS_PER_WORD-1, i*BITS_PER_WORD).to_int();
 
-        // @TODO MAX MIN might not work, depending on if to_int() sign_extends
+    // @TODO MAX MIN might not work, depending on if to_int() sign_extends
 
-        data = line; // send old data back
-        switch (req)
-        {
-                case REQ_AMO_SWAP:
-                        old = dataw;
-                        break;
-                case REQ_AMO_ADD:
-                        old += dataw;
-                        break;
-                case REQ_AMO_AND:
-                        old &= dataw;
-                        break;
-                case REQ_AMO_OR:
-                        old |= dataw;
-                        break;
-                case REQ_AMO_XOR:
-                        old ^= dataw;
-                        break;
-                case REQ_AMO_MAX:
-                        old = (old > dataw) ? old : dataw;
-                        break;
-                case REQ_AMO_MAXU:
-                        old = ((unsigned)old > (unsigned)dataw) ? old : dataw;
-                        break;
-                case REQ_AMO_MIN:
-                        old = (old < dataw) ? old : dataw;
-                        break;
-                case REQ_AMO_MINU:
-                        old = ((unsigned)old < (unsigned)dataw) ? old : dataw;
-                        break;
-                default:
-                break;
-        }
-        line.range((i+1)*BITS_PER_WORD-1, i*BITS_PER_WORD) = old; // store calculated new word in the line
+    data = line; // send old data back
+    switch (req)
+    {
+        case REQ_AMO_SWAP:
+            old = dataw;
+            break;
+        case REQ_AMO_ADD:
+            old += dataw;
+            break;
+        case REQ_AMO_AND:
+            old &= dataw;
+            break;
+        case REQ_AMO_OR:
+            old |= dataw;
+            break;
+        case REQ_AMO_XOR:
+            old ^= dataw;
+            break;
+        case REQ_AMO_MAX:
+            old = (old > dataw) ? old : dataw;
+            break;
+        case REQ_AMO_MAXU:
+            old = ((unsigned)old > (unsigned)dataw) ? old : dataw;
+            break;
+        case REQ_AMO_MIN:
+            old = (old < dataw) ? old : dataw;
+            break;
+        case REQ_AMO_MINU:
+            old = ((unsigned)old < (unsigned)dataw) ? old : dataw;
+            break;
+        default:
+        break;
+    }
+    line.range((i+1)*BITS_PER_WORD-1, i*BITS_PER_WORD) = old; // store calculated new word in the line
 
 }
 
