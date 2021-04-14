@@ -16,6 +16,11 @@ http://rsim.cs.uiuc.edu/
 
 #include "cache_consts.hpp"
 
+#ifdef  COH_MSG_TYPE_WIDTH
+#undef  COH_MSG_TYPE_WIDTH
+#define COH_MSG_TYPE_WIDTH 4
+#endif
+
 // write buffer
 #define N_WB 4
 #define WB_BITS 2
