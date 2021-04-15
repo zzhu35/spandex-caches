@@ -42,6 +42,7 @@ http://rsim.cs.uiuc.edu/
 #define LLC_UNSTABLE_STATE_BITS	4	// depends on # of unstable states
 
 #define WORDS_PER_LINE		(1 << WORD_BITS)
+#define BYTES_PER_LINE		(BITS_PER_LINE >> 3)
 #define WORD_MASK_ALL       ((1 << WORDS_PER_LINE) - 1)
 #define DCS_WIDTH               2
 
@@ -60,6 +61,7 @@ http://rsim.cs.uiuc.edu/
 #define SPX_XR      6
 #define SPX_XRV     7
 #define SPX_IS      8
+#define SPX_WB_FILL 9
 
 
 // LLC states

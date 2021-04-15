@@ -229,7 +229,7 @@ public:
     // write buffer
 
     void drain_wb();
-    void add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid);
+    void add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid, hsize_t hsize);
     void peek_wb(bool& hit, sc_uint<WB_BITS>& wb_i, addr_breakdown_t addr_br);
     void dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i);
 

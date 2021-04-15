@@ -869,6 +869,7 @@ public:
     l2_way_t way;
     hprot_t hprot;
     word_mask_t word_mask;
+    sc_uint<BYTES_PER_LINE> bm;
     line_t line;
     bool    dcs_en;
     bool    use_owner_pred;
