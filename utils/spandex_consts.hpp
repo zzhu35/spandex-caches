@@ -108,8 +108,18 @@ http://rsim.cs.uiuc.edu/
 #define REQ_AMO_MAXU    12 // UMAX
 #define REQ_AMO_MIN     13 // SMIN
 #define REQ_AMO_MINU    14 // UMIN
-/* DMA currently not used by Spandex */
 #define REQ_WTfwd       15
+
+/* Legacy DMA support */
+#ifdef  REQ_DMA_READ_BURST
+#undef  REQ_DMA_READ_BURST
+#define REQ_DMA_READ_BURST  0x1E
+#endif
+
+#ifdef  REQ_DMA_WRITE_BURST
+#undef  REQ_DMA_WRITE_BURST
+#define REQ_DMA_WRITE_BURST 0x1F
+#endif
 
 
 // forwards (L3 to L2/TU)
