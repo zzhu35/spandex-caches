@@ -1749,7 +1749,6 @@ void l2_spandex::self_invalidate()
                 HLS_DEFINE_PROTOCOL("self invalidate read");
                 wait();
                 line_state = states.port2[0][i];
-                wait();
             }
 
             spx_state_t state_tmp;
@@ -1765,7 +1764,6 @@ void l2_spandex::self_invalidate()
 
             {
                 HLS_DEFINE_PROTOCOL("self invalidate write");
-                wait();
                 states.port1[0][i] = line_state_in;
                 wait();
             }
