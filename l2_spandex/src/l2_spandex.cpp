@@ -1087,14 +1087,14 @@ void l2_spandex::ctrl()
                             HLS_DEFINE_PROTOCOL("cpu read empty way fwd req v");
                             send_fwd_out(FWD_REQ_V, cpu_req.pred_cid, 1, addr_br.line_addr, 0, WORD_MASK_ALL);
                             fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
-                        }else if(cpu_req.dcs_en && cpu_req.dcs == DCS_ReqS){
-                            HLS_DEFINE_PROTOCOL("cpu read empty way req s");
-                            send_req_out(REQ_S, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
-                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
-                        }else{
+                        }else if(cpu_req.dcs_en){
                             HLS_DEFINE_PROTOCOL("cpu read empty way req v");
                             send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
                             fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                        }else{
+                            HLS_DEFINE_PROTOCOL("cpu read empty way req s");
+                            send_req_out(REQ_S, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
+                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }
                     }
                     if(cpu_req.rl){
