@@ -108,6 +108,9 @@ public:
     put_initiator<bool> l2_stats;
 #endif
 
+    // Fence from Ariane to L2
+    nb_get_initiator< sc_uint<2> > l2_fence;
+
     // Local memory
     EXP_MEM_TYPE_STRING(l2_spandex, tags, L2_SETS, L2_WAYS)<l2_tag_t, L2_LINES> tags;
     EXP_MEM_TYPE_STRING(l2_spandex, states, L2_SETS, L2_WAYS)<sc_uint<SPX_STABLE_STATE_BITS * WORDS_PER_LINE>, L2_LINES> states;
@@ -173,6 +176,7 @@ public:
 #ifdef STATS_ENABLE
         l2_stats.clk_rst(clk, rst);
 #endif
+	    l2_fence.clk_rst(clk, rst);
 
         // Flatten arrays
         L2_SPANDEX_FLATTEN_REGS;

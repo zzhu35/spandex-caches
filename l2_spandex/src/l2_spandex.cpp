@@ -199,6 +199,7 @@ void l2_spandex::ctrl()
 
     bool is_flush_all;
     bool is_sync;
+	sc_uint<2> is_fence;
     {
         L2_SPANDEX_RESET;
 
@@ -226,10 +227,13 @@ void l2_spandex::ctrl()
         bool do_fwd = false;
         bool do_cpu_req = false;
 
+        bool do_fence = false;
+
         bool can_get_rsp_in = false;
         bool can_get_req_in = false;
         bool can_get_fwd_in = false;
         bool can_get_flush_in = false;
+        bool can_get_fence_in = false;
 
         sc_uint<L2_SET_BITS+L2_WAY_BITS>  base = 0;
 
@@ -248,12 +252,18 @@ void l2_spandex::ctrl()
             HLS_DEFINE_PROTOCOL("llc-io-check");
             // HLS_CONSTRAIN_LATENCY(0, HLS_ACHIEVABLE, "l2-io-latency");
 
+            can_get_fence_in = l2_fence.nb_can_get();
             can_get_rsp_in = l2_rsp_in.nb_can_get();
             can_get_req_in = ((l2_cpu_req.nb_can_get() && (!drain_in_progress)) || set_conflict) && !evict_stall && (reqs_cnt != 0); // if drain in progress, block all cpu requests
             can_get_fwd_in = (l2_fwd_in.nb_can_get() && !fwd_stall) || fwd_stall_ended;
             can_get_flush_in = l2_flush.nb_can_get();
 
-            if (can_get_flush_in) {
+            if (can_get_fence_in) {
+				l2_fence.nb_get(is_fence);
+                if(is_fence) {
+                    do_fence = true; 
+                }
+            } else if (can_get_flush_in) {
                 l2_flush.nb_get(is_sync);
                 do_flush = true;
             } else if (can_get_rsp_in) {
@@ -310,7 +320,12 @@ void l2_spandex::ctrl()
         }
 #endif
 
-        if (do_flush) {
+        if (do_fence)
+        {
+            if (is_fence[0]) self_invalidate();
+            if (is_fence[1]) drain_in_progress = true;
+            do_fence = false;
+        } else if (do_flush) {
             drain_in_progress = true;
             do_ongoing_flush = true;
             flush_line = 0;
@@ -1187,6 +1202,7 @@ inline void l2_spandex::reset_io()
 #ifdef STATS_ENABLE
     l2_stats.reset_put();
 #endif
+    l2_fence.reset_get();
 
     /* Reset memories */
     tags.port1.reset();
