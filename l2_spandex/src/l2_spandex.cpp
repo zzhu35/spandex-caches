@@ -650,8 +650,10 @@ void l2_spandex::ctrl()
                         // Not checking word mask here
                         // Fwd Req S only comes from llc, word mask should be correct
                         if(reqs[reqs_fwd_stall_i].state == SPX_RI){
-                            HLS_DEFINE_PROTOCOL("fwd req s stall rsp s");
+                            HLS_DEFINE_PROTOCOL("fwd_req_s stall rsp_s & rsp_rvo_o");
                             send_rsp_out(RSP_S, fwd_in.req_id, true, fwd_in.addr, reqs[reqs_fwd_stall_i].line, fwd_in.word_mask);
+                            wait();
+                            send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, reqs[reqs_fwd_stall_i].line, fwd_in.word_mask);
                             success = true;
                         }
                     }
