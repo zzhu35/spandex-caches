@@ -658,6 +658,16 @@ void l2_spandex::ctrl()
                         }
                     }
                     break;
+                    case FWD_WTfwd:
+                    {
+                        if(reqs[reqs_fwd_stall_i].state == SPX_RI){
+                            HLS_DEFINE_PROTOCOL("fwd_wtfwd on RI send req_wt & rsp_o");
+                            send_req_out(REQ_WT, 1, fwd_in.addr, fwd_in.line, fwd_in.word_mask);
+                            send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
+                            success = true;
+                        }
+                    }
+                    break;
                     default:
                     break;
 
