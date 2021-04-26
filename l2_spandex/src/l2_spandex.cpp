@@ -151,7 +151,6 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
             success = true;
         }
 
-        wait();
         if (reqs[i].tag == wbs[wb_i].tag && reqs[i].set == wbs[wb_i].set && reqs[i].state != SPX_I){
             // found conflict, cannot dispatch WB
             success = false;
@@ -1029,7 +1028,7 @@ void l2_spandex::ctrl()
                             if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
                                 if (cpu_req.hsize < BYTE_BITS) // partial word write
                                 {
-                                    // fill_reqs(0, addr_br, 0, way_write, 0, SPX_XR, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
+                                    HLS_DEFINE_PROTOCOL("partial word write send req_odata");
                                     fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, 0, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
                                     send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
                                     reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
