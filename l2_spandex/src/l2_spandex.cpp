@@ -199,7 +199,7 @@ void l2_spandex::ctrl()
 
     bool is_flush_all;
     bool is_sync;
-	sc_uint<2> is_fence;
+    sc_uint<2> is_fence;
     {
         L2_SPANDEX_RESET;
 
@@ -259,9 +259,9 @@ void l2_spandex::ctrl()
             can_get_flush_in = l2_flush.nb_can_get();
 
             if (can_get_fence_in) {
-				l2_fence.nb_get(is_fence);
+                l2_fence.nb_get(is_fence);
                 if(is_fence) {
-                    do_fence = true; 
+                    do_fence = true;
                 }
             } else if (can_get_flush_in) {
                 l2_flush.nb_get(is_sync);

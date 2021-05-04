@@ -176,7 +176,7 @@ public:
 #ifdef STATS_ENABLE
         l2_stats.clk_rst(clk, rst);
 #endif
-	    l2_fence.clk_rst(clk, rst);
+        l2_fence.clk_rst(clk, rst);
 
         // Flatten arrays
         L2_SPANDEX_FLATTEN_REGS;
