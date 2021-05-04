@@ -26,11 +26,11 @@ define_system_module tb  ../tb/l2_spandex_tb.cpp ../tb/system.cpp ../tb/sc_main.
 # set params_set(n) "sets ways word_off_bits byte_off_bits address_bits endian"
 
 # Leon3 default
-set params_set(0) "512 4 2 2 32 BIG_ENDIAN"
+# set params_set(0) "512 4 2 2 32 BIG_ENDIAN"
 # Ariane default
-set params_set(1) "512 4 1 3 32 LITTLE_ENDIAN"
+set params_set(0) "512 4 1 3 32 LITTLE_ENDIAN"
 # Ibex default
-set params_set(2) "512 4 2 2 32 LITTLE_ENDIAN"
+# set params_set(2) "512 4 2 2 32 LITTLE_ENDIAN"
 
 foreach ps [array names params_set] {
 
