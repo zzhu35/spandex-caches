@@ -83,25 +83,19 @@ foreach ps [array names params_set] {
 
     define_system_config tb "TESTBENCH$pars" -io_config $iocfg
 
-    define_sim_config "BEHAV$pars" "l2_spandex BEH" \
-	"tb TESTBENCH$pars" -io_config $iocfg
+    define_sim_config "BEHAV$pars" "l2_spandex BEH" "tb TESTBENCH$pars" -io_config $iocfg
 
     foreach cfg [list BASIC] {
 
-	set cname "$cfg$pars"
+	    set cname "$cfg$pars"
 
-	define_hls_config l2_spandex $cname --clock_period=$CLOCK_PERIOD $COMMON_HLS_FLAGS \
-	    -DHLS_DIRECTIVES_$cfg -io_config $iocfg
+	    define_hls_config l2_spandex $cname --clock_period=$CLOCK_PERIOD $COMMON_HLS_FLAGS -DHLS_DIRECTIVES_$cfg -io_config $iocfg
 
-	if {$TECH_IS_XILINX == 1} {
-
-	    define_sim_config "$cname\_V" "l2_spandex RTL_V $cname" "tb TESTBENCH$pars" \
-		-verilog_top_modules glbl -io_config $iocfg
-	} else {
-
-	    define_sim_config "$cname\_V" "l2_spandex RTL_V $cname" "tb TESTBENCH$pars" \
-		-io_config $iocfg
-	}
+	    if {$TECH_IS_XILINX == 1} {
+	        define_sim_config "$cname\_V" "l2_spandex RTL_V $cname" "tb TESTBENCH$pars" -verilog_top_modules glbl -io_config $iocfg
+	    } else {
+	        define_sim_config "$cname\_V" "l2_spandex RTL_V $cname" "tb TESTBENCH$pars" -io_config $iocfg
+	    }
     }
 }
 

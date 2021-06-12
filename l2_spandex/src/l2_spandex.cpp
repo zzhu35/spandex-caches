@@ -1315,8 +1315,6 @@ inline void l2_spandex::reset_io()
     watch_dog2.write(0);
     watch_dog3.write(0);
     watch_dog4.write(0);
-    count = 0;
-    count2 = 0;
     flush_line_dbg.write(0);
     drain_in_progress_dbg.write(0);
     current_line_dbg.write(0);

@@ -95,21 +95,19 @@ public:
     nb_get_initiator<l2_fwd_in_t>	l2_fwd_in;
     nb_get_initiator<l2_rsp_in_t>	l2_rsp_in;
     nb_get_initiator<bool>		    l2_flush;
+    nb_get_initiator<sc_uint<2> >   l2_fence;
 
     // Output ports
-    put_initiator<l2_rd_rsp_t>	l2_rd_rsp;
-    put_initiator<l2_inval_t>	l2_inval;
-    put_initiator< sc_uint<2> >	l2_bresp;
-    nb_put_initiator<l2_req_out_t> l2_req_out;
-    nb_put_initiator<l2_fwd_out_t> l2_fwd_out;
-    nb_put_initiator<l2_rsp_out_t> l2_rsp_out;
+    put_initiator<l2_rd_rsp_t>      l2_rd_rsp;
+    put_initiator<l2_inval_t>   	l2_inval;
+    put_initiator<sc_uint<2> >   	l2_bresp;
+    nb_put_initiator<l2_req_out_t>  l2_req_out;
+    nb_put_initiator<l2_fwd_out_t>  l2_fwd_out;
+    nb_put_initiator<l2_rsp_out_t>  l2_rsp_out;
 
 #ifdef STATS_ENABLE
     put_initiator<bool> l2_stats;
 #endif
-
-    // Fence from Ariane to L2
-    nb_get_initiator< sc_uint<2> > l2_fence;
 
     // Local memory
     EXP_MEM_TYPE_STRING(l2_spandex, tags, L2_SETS, L2_WAYS)<l2_tag_t, L2_LINES> tags;
@@ -131,8 +129,6 @@ public:
     hprot_t	 hprot_buf[L2_WAYS];
     line_t	 line_buf[L2_WAYS];
     l2_way_t	 evict_way;
-    int count;
-    int count2;
 
     // Constructor
     SC_CTOR(l2_spandex)
@@ -168,6 +164,7 @@ public:
         l2_fwd_out.clk_rst (clk, rst);
         l2_rsp_in.clk_rst (clk, rst);
         l2_flush.clk_rst (clk, rst);
+        l2_fence.clk_rst(clk, rst);
         l2_bresp.clk_rst (clk, rst);
         l2_rd_rsp.clk_rst(clk, rst);
         l2_inval.clk_rst(clk, rst);
@@ -176,7 +173,6 @@ public:
 #ifdef STATS_ENABLE
         l2_stats.clk_rst(clk, rst);
 #endif
-        l2_fence.clk_rst(clk, rst);
 
         // Flatten arrays
         L2_SPANDEX_FLATTEN_REGS;

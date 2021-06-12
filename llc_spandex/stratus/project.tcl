@@ -50,61 +50,43 @@ define_system_module tb  ../tb/llc_spandex_tb.cpp ../tb/system.cpp ../tb/sc_main
 # HLS and Simulation configurations
 ######################################################################
 
-# foreach sets [list 256 512 1024 2048 4096 8192] {
+# Add more HLS configuration here if needed:
+# set params_set(n) "sets ways word_off_bits byte_off_bits address_bits endian"
 
-#     foreach ways [list 4 8 16 32] {
+set params_set(0) "1024 8 1 3 32"
 
-foreach sets [list 1024] {
+foreach ps [array names params_set] {
 
-    foreach ways [list 8] {
+    set sets   [lindex $params_set($ps) 0]
+    set ways   [lindex $params_set($ps) 1]
+    set wbits  [lindex $params_set($ps) 2]
+    set bbits  [lindex $params_set($ps) 3]
+    set abits  [lindex $params_set($ps) 4]
 
-	foreach wbits [list 1] {
-
-	    foreach bbits [list 3] {
-
-		foreach abits [list 32] {
-
-		    # Skip these configurations
-		    if {$wbits == 1 && $bbits == 2} {continue}
-		    if {$wbits == 2 && $bbits == 3} {continue}
-
-		    set words_per_line [expr 1 << $wbits]
-		    set bits_per_word [expr (1 << $bbits) * 8]
-
-		    set pars "_${sets}SETS_${ways}WAYS_${words_per_line}x${bits_per_word}LINE_${abits}ADDR"
-
-		    set iocfg "IOCFG$pars"
-
-		    define_io_config * $iocfg -DLLC_SETS=$sets -DLLC_WAYS=$ways \
-			-DADDR_BITS=$abits -DBYTE_BITS=$bbits -DWORD_BITS=$wbits
-
-		    define_system_config tb "TESTBENCH$pars" -io_config $iocfg
-
-		    define_sim_config "BEHAV$pars" "llc_spandex BEH" "tb TESTBENCH$pars" \
-			-io_config $iocfg
-
-		    foreach cfg [list BASIC] {
-
-			set cname "$cfg$pars"
-
-			define_hls_config llc_spandex $cname --clock_period=$CLOCK_PERIOD \
-			    $COMMON_HLS_FLAGS -DHLS_DIRECTIVES_$cfg -io_config $iocfg
-
-			if {$TECH_IS_XILINX == 1} {
-
-			    define_sim_config "$cname\_V" "llc_spandex RTL_V $cname" \
-				"tb TESTBENCH$pars" -verilog_top_modules glbl \
-				-io_config $iocfg
-
-			} else {
-
-			    define_sim_config "$cname\_V" "llc_spandex RTL_V $cname" \
-				"tb TESTBENCH$pars" -io_config $iocfg
-			}
-		    }
+	set words_per_line [expr 1 << $wbits]
+	set bits_per_word [expr (1 << $bbits) * 8]
+	
+	set pars "_${sets}SETS_${ways}WAYS_${words_per_line}x${bits_per_word}LINE_${abits}ADDR"
+	
+	set iocfg "IOCFG$pars"
+	
+	define_io_config * $iocfg -DLLC_SETS=$sets -DLLC_WAYS=$ways -DADDR_BITS=$abits -DBYTE_BITS=$bbits -DWORD_BITS=$wbits
+	
+	define_system_config tb "TESTBENCH$pars" -io_config $iocfg
+	
+	define_sim_config "BEHAV$pars" "llc_spandex BEH" "tb TESTBENCH$pars" -io_config $iocfg
+	
+	foreach cfg [list BASIC] {
+	
+		set cname "$cfg$pars"
+	
+		define_hls_config llc_spandex $cname --clock_period=$CLOCK_PERIOD $COMMON_HLS_FLAGS -DHLS_DIRECTIVES_$cfg -io_config $iocfg
+	
+		if {$TECH_IS_XILINX == 1} {
+			define_sim_config "$cname\_V" "llc_spandex RTL_V $cname" "tb TESTBENCH$pars" -verilog_top_modules glbl -io_config $iocfg
+		} else {
+			define_sim_config "$cname\_V" "llc_spandex RTL_V $cname" "tb TESTBENCH$pars" -io_config $iocfg
 		}
-	    }
-	}
     }
 }
 

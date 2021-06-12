@@ -89,16 +89,16 @@ public:
 #endif
 
     // Input ports
-    nb_get_initiator<llc_req_in_t<CACHE_ID_WIDTH> >        llc_req_in;
-    nb_get_initiator<llc_req_in_t<LLC_COH_DEV_ID_WIDTH> >  llc_dma_req_in;
-    nb_get_initiator<llc_rsp_in_t>	llc_rsp_in;
-    nb_get_initiator<llc_mem_rsp_t>	llc_mem_rsp;
+    nb_get_initiator<llc_req_in_t<CACHE_ID_WIDTH> >          llc_req_in;
+    nb_get_initiator<llc_req_in_t<LLC_COH_DEV_ID_WIDTH> >    llc_dma_req_in;
+    nb_get_initiator<llc_rsp_in_t>      llc_rsp_in;
+    nb_get_initiator<llc_mem_rsp_t>     llc_mem_rsp;
     nb_get_initiator<bool>              llc_rst_tb;
 
     // Output ports
-    nb_put_initiator<llc_rsp_out_t<CACHE_ID_WIDTH> >        llc_rsp_out;
-    nb_put_initiator<llc_rsp_out_t<LLC_COH_DEV_ID_WIDTH> >  llc_dma_rsp_out;
-    nb_put_initiator<llc_fwd_out_t>	llc_fwd_out;
+    nb_put_initiator<llc_rsp_out_t<CACHE_ID_WIDTH> >         llc_rsp_out;
+    nb_put_initiator<llc_rsp_out_t<LLC_COH_DEV_ID_WIDTH> >   llc_dma_rsp_out;
+    nb_put_initiator<llc_fwd_out_t>     llc_fwd_out;
     nb_put_initiator<llc_mem_req_t>     llc_mem_req;
     nb_put_initiator<bool>              llc_rst_tb_done;
 
