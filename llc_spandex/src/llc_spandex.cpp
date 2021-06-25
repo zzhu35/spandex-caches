@@ -204,7 +204,17 @@ inline void llc_spandex::reset_io()
     evict_ways.port1.reset();
     evict_ways.port2.reset();
 
-    wait();
+    // Reset states
+    {
+        HLS_DEFINE_PROTOCOL("reset invalidate");
+        wait();
+
+        for (int i = 0; i < LLC_LINES; i++) {
+            HLS_UNROLL_LOOP(OFF, "states reset");
+            states.port1[0][i] = LLC_I;
+            wait();
+        }
+    }
 }
 
 inline void llc_spandex::reset_state()

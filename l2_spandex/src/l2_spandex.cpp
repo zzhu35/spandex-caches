@@ -1361,6 +1361,22 @@ inline void l2_spandex::reset_io()
     current_set = 0;
     current_valid_state = 1;
 
+    // Reset states and ReqS
+    {
+        HLS_DEFINE_PROTOCOL("reset invalidate");
+        wait();
+
+        for (int i = 0; i < L2_LINES; i++) {
+            HLS_UNROLL_LOOP(OFF, "states reset");
+            states.port1[0][i] = SPX_I;
+            wait();
+        }
+
+        for (int i = 0; i < N_REQS; i++) {
+            HLS_UNROLL_LOOP(ON, "reqs reset");
+            reqs[i].state = SPX_I;
+        }
+    }
 }
 
 
