@@ -382,6 +382,14 @@ void l2_spandex::ctrl()
 
                 if (reqs[reqs_hit_i].word_mask == 0) {
                     HLS_DEFINE_PROTOCOL("spandex-resp");
+
+                    // in case RspOdata is for atomic send rd_rsp immediately and clear set_conflict
+                    if (reqs[reqs_hit_i].state == SPX_AMO) {
+                        send_rd_rsp(reqs[reqs_hit_i].line);
+                        write_word_amo(reqs[reqs_hit_i].line, cpu_req_conflict.word, reqs[reqs_hit_i].w_off, reqs[reqs_hit_i].b_off, reqs[reqs_hit_i].hsize, cpu_req_conflict.amo);
+                        set_conflict = false;
+                    }
+                
                     if (reqs[reqs_hit_i].state == SPX_IV) send_rd_rsp(reqs[reqs_hit_i].line);
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
