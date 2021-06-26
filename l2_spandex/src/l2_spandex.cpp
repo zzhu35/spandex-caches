@@ -196,13 +196,11 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
 void l2_spandex::ctrl()
 {
 
-    bool is_flush_all;
     bool is_sync;
     sc_uint<2> is_fence;
     {
         L2_SPANDEX_RESET;
 
-        is_flush_all = true;
         is_to_req[0] = 1;
         is_to_req[1] = 0;
 
@@ -1305,7 +1303,6 @@ inline void l2_spandex::reset_io()
     way_hit_req_dbg.write(0);
     empty_found_req_dbg.write(0);
     empty_way_req_dbg.write(0);
-    reqs_hit_req_dbg.write(0);
     reqs_hit_i_req_dbg.write(0);
     way_hit_fwd_dbg.write(0);
     peek_reqs_i_dbg.write(0);
@@ -1413,8 +1410,6 @@ bool l2_spandex::get_flush()
 
     bool flush_tmp = false;
 
-    // is_flush_all == 0 -> flush data, not instructions
-    // is_flush_all == 1 -> flush data and instructions
     l2_flush.nb_get(flush_tmp);
 
     return flush_tmp;
@@ -1703,19 +1698,15 @@ void l2_spandex::reqs_lookup(line_breakdown_t<l2_tag_t, l2_set_t> line_br, sc_ui
 {
     REQS_LOOKUP;
 
-    bool reqs_hit = false;
-
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_LOOKUP_LOOP;
 
         if (reqs[i].tag == line_br.tag && reqs[i].set == line_br.set && reqs[i].state != SPX_I) {
-            reqs_hit = true;
             reqs_hit_i = i;
         }
     }
 
 #ifdef L2_DEBUG
-    reqs_hit_req_dbg.write(reqs_hit);
     reqs_hit_i_req_dbg.write(reqs_hit_i);
 #endif
     // REQS_LOOKUP_ASSERT;

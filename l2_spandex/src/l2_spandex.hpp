@@ -60,7 +60,6 @@ public:
     sc_signal<l2_way_t> way_hit_req_dbg;
     sc_signal<bool> empty_found_req_dbg;
     sc_signal<l2_way_t> empty_way_req_dbg;
-    sc_signal<bool> reqs_hit_req_dbg;
     sc_signal<sc_uint<REQS_BITS> > reqs_hit_i_req_dbg;
     sc_signal<l2_way_t> way_hit_fwd_dbg;
     sc_signal<l2_way_t> peek_reqs_i_dbg;

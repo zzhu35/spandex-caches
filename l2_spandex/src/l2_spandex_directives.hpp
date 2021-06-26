@@ -376,7 +376,6 @@ http://rsim.cs.uiuc.edu/
     HLS_PRESERVE_SIGNAL(way_hit_req_dbg, true);		\
     HLS_PRESERVE_SIGNAL(empty_found_req_dbg, true);	\
     HLS_PRESERVE_SIGNAL(empty_way_req_dbg, true);	\
-    HLS_PRESERVE_SIGNAL(reqs_hit_req_dbg, true);	\
     HLS_PRESERVE_SIGNAL(reqs_hit_i_req_dbg, true);	\
     HLS_PRESERVE_SIGNAL(way_hit_fwd_dbg, true);		\
     HLS_PRESERVE_SIGNAL(peek_reqs_i_dbg, true);		\
