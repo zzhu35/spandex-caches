@@ -192,10 +192,10 @@ public:
     }
     inline friend ostream & operator<<(ostream& os, const l2_rd_rsp_t& x) {
         os << hex << "("
-           << "line: ";
+           << "line:";
         for (int i = WORDS_PER_LINE-1; i >= 0; --i) {
             int base = i*BITS_PER_WORD;
-            os << x.line.range(base + BITS_PER_WORD - 1, base) << " ";
+            os << " " << x.line.range(base + BITS_PER_WORD - 1, base);
         }
         os << ")";
         return os;
@@ -377,10 +377,15 @@ public:
     inline friend ostream & operator<<(ostream& os, const llc_rsp_out_t& x) {
         os << hex << "(coh_msg: ";
         switch (x.coh_msg) {
-            case RSP_DATA : os << "DATA"; break;
-            case RSP_EDATA : os << "EDATA"; break;
-            case RSP_INVACK : os << "INVACK"; break;
-            case RSP_DATA_DMA : os << "DATA_DMA"; break;
+            case RSP_S : os << "RSP_S"; break;
+            case RSP_Odata : os << "RSP_Odata"; break;
+            case RSP_INV_ACK_SPDX : os << "RSP_INV_ACK_SPDX"; break;
+            case RSP_NACK : os << "RSP_NACK"; break;
+            case RSP_RVK_O : os << "RSP_RVK_O"; break;
+            case RSP_V : os << "RSP_V"; break;
+            case RSP_O : os << "RSP_O"; break;
+            case RSP_WT : os << "RSP_WT"; break;
+            case RSP_WTdata : os << "RSP_WTdata"; break;
             default: os << "UNKNOWN"; break;
         }
         os << ", addr: "       << x.addr
@@ -459,7 +464,7 @@ public:
         os << ", addr: "       << x.addr
            << ", req_id: " << x.req_id
            << ", line: " << x.line
-           << ", word_mask" << x.word_mask
+           << ", word_mask: " << x.word_mask
            << ", dest_id: " << x.dest_id << ")";
         return os;
     }
@@ -585,14 +590,22 @@ public:
     inline friend ostream & operator<<(ostream& os, const llc_req_in_t& x) {
         os << hex << "(coh_msg: ";
         switch (x.coh_msg) {
-            case REQ_GETS : os << "GETS"; break;
-            case REQ_GETM : os << "GETM"; break;
-            case REQ_PUTS : os << "PUTS"; break;
-            case REQ_PUTM : os << "PUTM"; break;
-            case REQ_DMA_READ : os << "DMA_READ"; break;
-            case REQ_DMA_WRITE : os << "DMA_WRITE"; break;
-            case REQ_DMA_READ_BURST : os << "DMA_READ_BURST"; break;
-            case REQ_DMA_WRITE_BURST : os << "DMA_WRITE_BURST"; break;
+            case REQ_S : os << "REQ_S"; break;
+            case REQ_Odata : os << "REQ_Odata"; break;
+            case REQ_WT : os << "REQ_WT"; break;
+            case REQ_WB : os << "REQ_WB"; break;
+            case REQ_O : os << "REQ_O"; break;
+            case REQ_V : os << "REQ_V"; break;
+            case REQ_WTdata : os << "REQ_WTdata"; break;
+            case REQ_AMO_ADD : os << "REQ_AMO_ADD"; break;
+            case REQ_AMO_AND : os << "REQ_AMO_AND"; break;
+            case REQ_AMO_OR : os << "REQ_AMO_OR"; break;
+            case REQ_AMO_XOR : os << "REQ_AMO_XOR"; break;
+            case REQ_AMO_MAX : os << "REQ_AMO_MAX"; break;
+            case REQ_AMO_MAXU : os << "REQ_AMO_MAXU"; break;
+            case REQ_AMO_MIN : os << "REQ_AMO_MIN"; break;
+            case REQ_AMO_MINU : os << "REQ_AMO_MINU"; break;
+            case REQ_WTfwd : os << "REQ_WTfwd"; break;
             default: os << "UNKNOWN"; break;
         }
         os << ", hprot: " << x.hprot
