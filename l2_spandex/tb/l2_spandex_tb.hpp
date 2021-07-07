@@ -1,5 +1,14 @@
-// Copyright (c) 2011-2019 Columbia University, System Level Design Group
-// SPDX-License-Identifier: Apache-2.0
+/*
+
+Copyright (c) 2021 University of Illinois Urbana Champaign, RSIM Group
+http://rsim.cs.uiuc.edu/
+
+	Modified by Zeran Zhu, Robert Jin, Vignesh Suresh
+	zzhu35@illinois.edu
+	
+	April 9 2021
+
+*/
 
 #ifndef __l2_spandex_tb_HPP__
 #define __l2_spandex_tb_HPP__
@@ -54,11 +63,11 @@ public:
 	    reset_signal_is(rst, false);
 #endif
 	    // Assign clock and reset to put_get ports
-	    l2_cpu_req_tb.clk_rst (clk, rst);
-	    l2_fwd_in_tb.clk_rst (clk, rst);
-	    l2_rsp_in_tb.clk_rst (clk, rst);
-	    l2_flush_tb.clk_rst (clk, rst);
-	    l2_fence_tb.clk_rst (clk, rst);
+	    l2_cpu_req_tb.clk_rst(clk, rst);
+	    l2_fwd_in_tb.clk_rst(clk, rst);
+	    l2_rsp_in_tb.clk_rst(clk, rst);
+	    l2_flush_tb.clk_rst(clk, rst);
+	    l2_fence_tb.clk_rst(clk, rst);
 	    l2_rd_rsp_tb.clk_rst(clk, rst);
 	    l2_inval_tb.clk_rst(clk, rst);
 	    l2_bresp_tb.clk_rst(clk, rst);
@@ -83,10 +92,10 @@ public:
     void put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize, 
         addr_t addr, word_t word, hprot_t hprot, amo_t amo, bool aq, bool rl, bool dcs_en, 
         bool use_owner_pred, dcs_t dcs, cache_id_t pred_cid);
-    void get_req_out(coh_msg_t coh_msg, addr_t addr, hprot_t hprot, word_mask_t word_mask);
+    void get_req_out(coh_msg_t coh_msg, addr_t addr, hprot_t hprot, line_t line, word_mask_t word_mask);
     void get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, addr_t addr, 
-		     line_t line);
-    void put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id);
+        line_t line, word_mask_t word_mask);
+    void put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask);
     void put_rsp_in(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt);
     void get_rd_rsp(line_t line);
     void get_inval(addr_t addr);
@@ -96,6 +105,8 @@ public:
 	    line_t fwd_line, hprot_t hprot);
     void op_flush(coh_msg_t coh_msg, addr_t addr);
     void flush(int n_lines, bool is_flush_all);
+
+    int error_count;
 
 private:
 
