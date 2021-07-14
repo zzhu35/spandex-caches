@@ -98,7 +98,7 @@ public:
     void put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask);
     void put_rsp_in(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt);
     void get_rd_rsp(line_t line);
-    void get_inval(addr_t addr);
+    void get_inval(addr_t addr_inval, hprot_t hprot_inval);
     void op(cpu_msg_t cpu_msg, int beh, int rsp_beh, coh_msg_t rsp_msg, invack_cnt_t invack_cnt, 
 	    coh_msg_t put_msg, hsize_t hsize, addr_breakdown_t req_addr, word_t req_word, 
 	    line_t rsp_line, int fwd_beh, mix_msg_t fwd_msg, state_t fwd_state, cache_id_t fwd_id, 
