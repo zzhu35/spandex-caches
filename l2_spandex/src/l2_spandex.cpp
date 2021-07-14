@@ -701,7 +701,7 @@ void l2_spandex::ctrl()
                                     state_buf[way_hit][i] = SPX_I;
                                 }
                             }
-                            send_inval(fwd_in.addr);
+                            send_inval(fwd_in.addr, hprot_buf[way_hit]);
                         }
                         {
                             HLS_DEFINE_PROTOCOL("send rsp_inv_ack_spdx");
@@ -726,6 +726,7 @@ void l2_spandex::ctrl()
                             if (ack_mask) {
                                 HLS_DEFINE_PROTOCOL("fwd_req_v_rsp_ack");
                                 send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, ack_mask);
+                                send_inval(fwd_in.addr, hprot_buf[way_hit]);
                             }
                         }
                         
@@ -748,6 +749,7 @@ void l2_spandex::ctrl()
                             if (ack_mask) {
                                 HLS_DEFINE_PROTOCOL("fwd_req_v_rsp_ack");
                                 send_rsp_out(RSP_Odata, fwd_in.req_id, true, fwd_in.addr, line_buf[way_hit], ack_mask);
+                                send_inval(fwd_in.addr, hprot_buf[way_hit]);
                             }
                         }
                     }
@@ -803,6 +805,7 @@ void l2_spandex::ctrl()
                             if (rsp_mask) {
                                 HLS_DEFINE_PROTOCOL("fwd_rvk_o_send_rsp_rvk_o");
                                 send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[way_hit], rsp_mask);
+                                send_inval(fwd_in.addr, hprot_buf[way_hit]);
                             }
 
                         }
@@ -953,7 +956,7 @@ void l2_spandex::ctrl()
                             send_req_out(REQ_WB, hprot_buf[evict_way], line_addr_evict, line_buf[evict_way], word_mask);
                             fill_reqs(0, evict_addr_br, 0, 0, 0, SPX_RI, 0, 0, line_buf[evict_way], word_mask, reqs_empty_i);
                         }
-                        send_inval(line_addr_evict);
+                        send_inval(line_addr_evict, hprot_buf[evict_way]);
                     }
                     set_conflict = true;
                     cpu_req_conflict = cpu_req;
@@ -1476,11 +1479,14 @@ void l2_spandex::send_rd_rsp(line_t line)
     l2_rd_rsp.put(rd_rsp);
 }
 
-void l2_spandex::send_inval(line_addr_t addr_inval)
+void l2_spandex::send_inval(line_addr_t addr_inval, hprot_t hprot_inval)
 {
     SEND_INVAL;
 
-    l2_inval.put(addr_inval);
+    l2_inval_t inval_out;
+    inval_out.addr = addr_inval;
+    inval_out.hprot = hprot_inval;
+    l2_inval.put(inval_out);
 }
 
 inline void l2_spandex::send_req_out(coh_msg_t coh_msg, hprot_t hprot, line_addr_t line_addr, line_t line, word_mask_t word_mask)
