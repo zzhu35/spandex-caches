@@ -23,7 +23,8 @@ if {$TECH eq "virtexu"} {
     set_attr default_input_delay      0.1
 }
 if {$TECH eq "virtexup"} {
-    set CLOCK_PERIOD 6.4
+    # set CLOCK_PERIOD 6.4
+    set CLOCK_PERIOD 3.2
     set_attr default_input_delay      0.1
 }
 if {$TECH eq "cmos32soi"} {
