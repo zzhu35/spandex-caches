@@ -643,6 +643,7 @@ void l2_spandex::ctrl()
                                     if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) { // if reqo and we have this word in registered
                                         rsp_mask |= 1 << i;
                                         state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
+                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
                                     }
                                 }
                                 if (rsp_mask) {
