@@ -54,7 +54,7 @@ void l2_spandex_tb::l2_test()
     // preparation variables
     addr_breakdown_t addr, addr1, addr2, addr3, addr4, addr5, addr_evict;
     word_t word, word1, word2, word3, word4;
-    line_t line, req_line, fwd_line;
+    line_t line, line1, req_line, fwd_line;
     l2_cpu_req_t cpu_req, cpu_req1, cpu_req2, cpu_req3, cpu_req4;
     l2_req_out_t req_out;
     cache_id_t id;
@@ -890,6 +890,8 @@ void l2_spandex_tb::l2_test()
     // TEST 10: flush
     ////////////////////////////////////////////////////////////////
     l2_flush_tb.put(0x1);
+    wait();
+    l2_flush_tb.put(0x0);
 
     for (int i = 0; i < N_WB+N_REQS; i++) {
         base_addr = 0x82520100 + 0x10*i;
@@ -906,6 +908,582 @@ void l2_spandex_tb::l2_test()
 
         wait();
     }
+
+    base_addr = 0x82532800;
+    addr.breakdown(base_addr);
+
+    word = 0xcafedeadcafedead;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    word = 0xbeefdeadbeefdead;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0010 /* word_mask */);
+
+    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
+        0 /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 11: Half-word atomics
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x82080100;
+    addr.breakdown(base_addr);
+
+    word = 0x22222222;
+    word1 = 0x1111111111111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD_32 /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        AMO_SWAP /* amo */, 1 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0001 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    // current_valid_state = 2;
+
+    ////////////////////////////////////////////////////////////////
+    // send atomic write for next word also
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x8208010C;
+    addr.breakdown(base_addr);
+
+    word = 0x3333333300000000;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        AMO_SWAP /* amo */, 1 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0010 /* word_mask */);
+
+    word1 = 0x1111111111111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word1;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0010 /* word_mask */, 0 /* invack_cnt */);
+
+    word1 = 0x1111111122222222;
+    line.range(BITS_PER_WORD - 1, 0) = word1;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    // current_valid_state = 3;
+
+    ////////////////////////////////////////////////////////////////
+    // checking lock value - Req_S
+    ////////////////////////////////////////////////////////////////
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    word1 = 0x3333333311111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word1;
+
+    get_rd_rsp(line /* line */);
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 12: LR-SC
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x82080880;
+    addr.breakdown(base_addr);
+
+    word = 0x1111111111111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ_ATOMIC /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0001 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    word = 0x1111111111111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    word = 0x2222222222222222;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_bresp(BRESP_EXOKAY);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // repeat the same but with a forward in between
+    ////////////////////////////////////////////////////////////////
+    put_cpu_req(cpu_req /* &cpu_req */, READ_ATOMIC /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_fwd_in(FWD_REQ_V /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
+        0 /* line */, 0b0001 /* word_mask */);
+
+    get_rsp_out(RSP_V /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    word = 0x3333333333333333;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_bresp(BRESP_OKAY);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // read the modified location
+    ////////////////////////////////////////////////////////////////
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
+
+    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
+        0 /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    word = 0x1111111111111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 13: repeat above test for sub-word granularity LR-SC
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x82080980;
+    addr.breakdown(base_addr);
+
+    word = 0x3333333333333333;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0001 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    word = 0x3333333333333333;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    word = 0x44444444;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_bresp(BRESP_EXOKAY);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // repeat the same but with a forward in between
+    ////////////////////////////////////////////////////////////////
+    word = 0x3333333344444444;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_fwd_in(FWD_REQ_V /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
+        0 /* line */, 0b0001 /* word_mask */);
+
+    get_rsp_out(RSP_V /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    word = 0x55555555;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_bresp(BRESP_OKAY);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // read the modified location
+    ////////////////////////////////////////////////////////////////
+    word = 0x3333333355555555;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD_32 /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
+
+    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
+        0 /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    word = 0x3333333333333333;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 14: repeat above test for sub-word granularity LR-SC
+    // at 4-byte aligned address
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x82080A8C;
+    addr.breakdown(base_addr);
+
+    word = 0x6666666666666666;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0010 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0010 /* word_mask */, 0 /* invack_cnt */);
+
+    word = 0x6666666666666666;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = 0;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    word = 0x7777777700000000;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_bresp(BRESP_EXOKAY);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // repeat the same but with a forward in between
+    ////////////////////////////////////////////////////////////////
+    word = 0x7777777766666666;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_fwd_in(FWD_REQ_V /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
+        0 /* line */, 0b0010 /* word_mask */);
+
+    get_rsp_out(RSP_V /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0010 /* word_mask */);
+
+    wait();
+
+    word = 0x8888888800000000;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_bresp(BRESP_OKAY);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // read the modified location
+    ////////////////////////////////////////////////////////////////
+    word = 0x8888888866666666;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0010 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
+
+    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
+        0 /* line */, 0b0010 /* word_mask */);
+
+    wait();
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    word = 0x6666666666666666;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 15: non-atomic sub-word granularities
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A8200;
+    addr.breakdown(base_addr);
+
+    word = 0x1111111111111111;
+    line1.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line1.range(BITS_PER_WORD - 1, 0) = word;
+
+    word = 0x22222222;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    base_addr = 0x820A820C;
+    addr.breakdown(base_addr);
+    word = 0x2222222200000000;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line1 /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // read the modified word
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A8200;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    word = 0x2222222211111111;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    word = 0x1111111122222222;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // write half-word and byte level data
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A8206;
+    addr.breakdown(base_addr);
+
+    word = 0x2222000000000000;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, HALFWORD /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+    
+    wait();
+
+    base_addr = 0x820A8209;
+    addr.breakdown(base_addr);
+
+    word = 0x0000000000002200;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, BYTE /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+    
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // read the modified word
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A8200;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    word = 0x2222222211112211;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    word = 0x2222111122222222;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // mixing word and sub-word granularity in same line
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A8220;
+    addr.breakdown(base_addr);
+
+    word = 0x1111111111111111;
+    line1.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line1.range(BITS_PER_WORD - 1, 0) = word;
+
+    word = 0x22222222;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    base_addr = 0x820A8228;
+    addr.breakdown(base_addr);
+    word = 0x2222222222222222;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line1 /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // read the modified word
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A8224;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    word = 0x2222222222222222;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    word = 0x1111111122222222;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_rd_rsp(line /* line */);
+
+    wait();
 
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
@@ -926,6 +1504,7 @@ inline void l2_spandex_tb::reset_l2_test()
     l2_fence_tb.reset_put();
     l2_rd_rsp_tb.reset_get();
     l2_inval_tb.reset_get();
+    l2_bresp_tb.reset_get();
     l2_req_out_tb.reset_get();
     l2_fwd_out_tb.reset_get();
     l2_rsp_out_tb.reset_get();
@@ -1066,6 +1645,22 @@ void l2_spandex_tb::get_rd_rsp(line_t line)
 
     if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RD_RSP", rd_rsp);
+}
+
+void l2_spandex_tb::get_bresp(sc_uint<2> gold_bresp_val)
+{
+    sc_uint<2> bresp_val;
+
+    l2_bresp_tb.get(bresp_val);
+
+    if (bresp_val != gold_bresp_val) {
+	CACHE_REPORT_ERROR("get bresp", bresp_val);
+	CACHE_REPORT_ERROR("get bresp gold", gold_bresp_val);
+    error_count++;
+    }
+
+    if (rpt)
+	CACHE_REPORT_VAR(sc_time_stamp(), "BRESP", bresp_val);
 }
 
 void l2_spandex_tb::get_inval(addr_t addr, hprot_t hprot)

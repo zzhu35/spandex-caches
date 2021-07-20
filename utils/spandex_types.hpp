@@ -1259,7 +1259,7 @@ public:
     inline friend ostream & operator<<(ostream& os, const addr_breakdown_t& x) {
         os << hex << "("
            << "line: "      << x.line
-           << "line_addr: " << x.line_addr
+           << ", line_addr: " << x.line_addr
            << ", word: "    << x.word
            << ", tag: "     << x.tag
            << ", set: "     << x.set

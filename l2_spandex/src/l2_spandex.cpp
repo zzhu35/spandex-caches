@@ -172,8 +172,11 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
     bool wb_fill = false;
     for (int i = 0; i < WORDS_PER_LINE; i++)
     {
+        int line_mask = ((1 << BYTES_PER_WORD) - 1);
+        int line_shift = (i * BYTES_PER_WORD);
+        int word_fill = ((wbs[wb_i].bm >> line_shift) & line_mask);
         HLS_UNROLL_LOOP(ON);
-        if ((wbs[wb_i].bm >> (i * BYTES_PER_WORD)) & ((1 << BYTES_PER_WORD) - 1) != 0 && (wbs[wb_i].bm >> (i * BYTES_PER_WORD)) & ((1 << BYTES_PER_WORD) - 1) != (1 << BYTES_PER_WORD) - 1)
+        if ((word_fill != 0) && (word_fill != line_mask))
         {
             wb_fill = true;
             break;
@@ -186,12 +189,8 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
         HLS_DEFINE_PROTOCOL();
         send_req_out(REQ_Odata, wbs[wb_i].hprot, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
         // reqs[i].word stores wb_i
-        fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_WB_FILL, wbs[wb_i].hprot, wb_i, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
-        success = false;
-        return;
-    }
-
-    {
+        fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_WB_FILL, wbs[wb_i].hprot, wbs[wb_i].bm, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
+    } else {
         HLS_DEFINE_PROTOCOL();
         // send reqo
         if (!wbs[wb_i].dcs_en) {
@@ -206,12 +205,12 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
             send_fwd_out(FWD_WTfwd, wbs[wb_i].pred_cid, 1, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
             fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
-
-        // free WB
-        wbs[wb_i].valid = false;
-        wbs_cnt++;
-        wait();
     }
+
+    // free WB
+    wbs[wb_i].valid = false;
+    wbs_cnt++;
+    wait();
 }
 
 
@@ -400,7 +399,19 @@ void l2_spandex::ctrl()
                     HLS_UNROLL_LOOP(ON, "rsp_v");
                     if (rsp_in.word_mask & (1 << i)) {
                         // found a valid bit in response word mask
-                        reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                        if (reqs[reqs_hit_i].state == SPX_WB_FILL) {
+                            for (int j = 0; j < BYTES_PER_WORD; j++)
+                            {
+                                HLS_UNROLL_LOOP(ON);
+                                int word_no_fill = (reqs[reqs_hit_i].word >> ((i << 3) + j));
+                                if ((word_no_fill & 1) == 0) {
+                                    reqs[reqs_hit_i].line.range((i * BITS_PER_WORD) + (j * 8) + 7, (i * BITS_PER_WORD) + (j * 8)) = 
+                                        rsp_in.line.range((i * BITS_PER_WORD) + (j * 8) + 7, (i * BITS_PER_WORD) + (j * 8));
+                                }
+                            }
+                        } else {
+                            reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                        }
                     }
                 }
 
@@ -412,26 +423,15 @@ void l2_spandex::ctrl()
                     // in case RspOdata is for atomic send rd_rsp immediately and clear set_conflict
                     if (reqs[reqs_hit_i].state == SPX_AMO) {
                         send_rd_rsp(reqs[reqs_hit_i].line);
-                        write_word_amo(reqs[reqs_hit_i].line, cpu_req_conflict.word, reqs[reqs_hit_i].w_off, reqs[reqs_hit_i].b_off, reqs[reqs_hit_i].hsize, cpu_req_conflict.amo);
+                        if (reqs[reqs_hit_i].cpu_msg != READ_ATOMIC) {
+                            write_word_amo(reqs[reqs_hit_i].line, cpu_req_conflict.word, reqs[reqs_hit_i].w_off, reqs[reqs_hit_i].b_off, reqs[reqs_hit_i].hsize, cpu_req_conflict.amo);
+                        }
                         set_conflict = false;
                     }
                 
                     if (reqs[reqs_hit_i].state == SPX_IV) send_rd_rsp(reqs[reqs_hit_i].line);
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
-                    if (reqs[reqs_hit_i].state == SPX_WB_FILL)
-                    {
-                        for (int i = 0; i < BYTES_PER_LINE; i++)
-                        {
-                            HLS_UNROLL_LOOP(ON);
-                            // word is wb_i now
-                            if ((wbs[reqs[reqs_hit_i].word].bm >> i) & 1 == 1) {
-                                reqs[reqs_hit_i].line.range((i << 3) + 7, i << 3) = wbs[reqs[reqs_hit_i].word].line.range((i << 3) + 7, i << 3);
-                            }
-                        }
-                        wbs[reqs[reqs_hit_i].word].valid = false;
-                        
-                    }
                     put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_R, reqs_hit_i);
                 }
 
@@ -518,24 +518,24 @@ void l2_spandex::ctrl()
             {
                 if (reqs[reqs_hit_i].state == SPX_IS) {
 
-                        for (int i = 0; i < WORDS_PER_LINE; i++) {
-                            HLS_UNROLL_LOOP(ON);
-                            if (rsp_in.word_mask & (1 << i)) {
-                                // found a valid bit in response word mask
-                                reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
-                                reqs[reqs_hit_i].word_mask |= 1 << i;
-                            }
+                    for (int i = 0; i < WORDS_PER_LINE; i++) {
+                        HLS_UNROLL_LOOP(ON);
+                        if (rsp_in.word_mask & (1 << i)) {
+                            // found a valid bit in response word mask
+                            reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                            reqs[reqs_hit_i].word_mask |= 1 << i;
                         }
+                    }
 
-                        // all words valid now
-                        if (reqs[reqs_hit_i].word_mask == WORD_MASK_ALL){
-                            
-                            HLS_DEFINE_PROTOCOL();
-                            send_rd_rsp(reqs[reqs_hit_i].line);
-                            reqs[reqs_hit_i].state = SPX_I;
-                            reqs_cnt++;
-                            put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_S, reqs_hit_i);
-                        }
+                    // all words valid now
+                    if (reqs[reqs_hit_i].word_mask == WORD_MASK_ALL){
+                        
+                        HLS_DEFINE_PROTOCOL();
+                        send_rd_rsp(reqs[reqs_hit_i].line);
+                        reqs[reqs_hit_i].state = SPX_I;
+                        reqs_cnt++;
+                        put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_S, reqs_hit_i);
+                    }
                 }
                 else if (reqs[reqs_hit_i].state == SPX_II) {
 
@@ -583,6 +583,11 @@ void l2_spandex::ctrl()
             bool empty_way_found;
             l2_way_t empty_way;
             tag_lookup(addr_br, tag_hit, way_hit, empty_way_found, empty_way, word_hit);
+
+            if (ongoing_atomic && addr_br.line_addr == atomic_line_addr) {
+                ongoing_atomic = false;
+            }
+
             if (fwd_stall) {
 
                 SET_CONFLICT;
@@ -941,7 +946,6 @@ void l2_spandex::ctrl()
                 SET_CONFLICT;
 
                 cpu_req_conflict = cpu_req;
-
             } else {
 
                 bool tag_hit, word_hit;
@@ -951,6 +955,10 @@ void l2_spandex::ctrl()
                 bool req_s_needs_evict;
 
                 tag_lookup(addr_br, tag_hit, way_hit, empty_way_found, empty_way, word_hit);
+
+                if (ongoing_atomic && cpu_req.hprot == DATA && (cpu_req.cpu_msg != WRITE_ATOMIC || addr_br.line_addr != atomic_line_addr)) {
+                    ongoing_atomic = false;
+                }
 
                 word_mask_t word_mask_owned = 0;
                 for (int i = 0; i < WORDS_PER_LINE; i++){
@@ -1014,35 +1022,66 @@ void l2_spandex::ctrl()
 
                         if (word_hit && (state_buf[way_hit][addr_br.w_off] == SPX_R)) {
                             if (cpu_req.amo) {
+                                HLS_DEFINE_PROTOCOL("amo_hit");
                                 send_rd_rsp(line_buf[way_hit]);
                                 write_word_amo(line_buf[way_hit], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize, cpu_req.amo);
                                 lines.port1[0][base + way_hit] = line_buf[way_hit];
                             }
                             if (cpu_req.cpu_msg == READ_ATOMIC) {
+                                HLS_DEFINE_PROTOCOL("lr_hit");
                                 send_rd_rsp(line_buf[way_hit]);
-                                // TODO!!! need to go to lock state
+                                ongoing_atomic = true;
+                                atomic_line_addr = addr_br.line_addr;
                             }
                             if (cpu_req.cpu_msg == WRITE_ATOMIC) {
                                 write_word(line_buf[way_hit], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize);
                                 lines.port1[0][base + way_hit] = line_buf[way_hit];
-                                l2_bresp.put(0x01);
-                                // TODO!!! need to restore from lock state
+                                if (ongoing_atomic && addr_br.line_addr == atomic_line_addr) {
+                                    HLS_DEFINE_PROTOCOL("pass_sc");
+                                    l2_bresp.put(BRESP_EXOKAY);
+                                } else {
+                                    HLS_DEFINE_PROTOCOL("fail_sc");
+                                    l2_bresp.put(BRESP_OKAY);
+                                }
+                                
+                                ongoing_atomic = false;
                             }
                         }
                         else
                         {
-                            cpu_req_conflict = cpu_req;
-                            set_conflict = true;
-                            l2_way_t amo_way;
-                            if (tag_hit || empty_way_found) {
+                            if (cpu_req.amo) {
+                                cpu_req_conflict = cpu_req;
+                                set_conflict = true;
+                                l2_way_t amo_way;
+                                if (tag_hit || empty_way_found) {
+                                    amo_way = tag_hit ? way_hit : empty_way;
+                                    HLS_DEFINE_PROTOCOL("send_req_amo");
+                                    // fill_reqs(0, addr_br, 0, amo_way, 0, SPX_AMO, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, amo_way, cpu_req.hsize, SPX_AMO, cpu_req.hprot, 0, line_buf[amo_way], 0, reqs_empty_i);
+                                    send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
+                                    reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
+                                    reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                }
+                            }
+                            if (cpu_req.cpu_msg == READ_ATOMIC) {
+                                cpu_req_conflict = cpu_req;
+                                set_conflict = true;
+                                ongoing_atomic = true;
+                                atomic_line_addr = addr_br.line_addr;
+                                l2_way_t amo_way;
+
                                 amo_way = tag_hit ? way_hit : empty_way;
-                                HLS_DEFINE_PROTOCOL("send_req_amo");
-                                // fill_reqs(0, addr_br, 0, amo_way, 0, SPX_AMO, cpu_req.hprot, 0, 0, 0, reqs_empty_i);
-                                fill_reqs(cpu_req.cpu_msg, addr_br, 0, amo_way, cpu_req.hsize, SPX_AMO, cpu_req.hprot, 0, line_buf[amo_way], 0, reqs_empty_i);
+                                HLS_DEFINE_PROTOCOL("send_req_lr");
                                 send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
+                                fill_reqs(READ_ATOMIC, addr_br, addr_br.tag, amo_way, cpu_req.hsize, SPX_AMO, cpu_req.hprot, 0, line_buf[amo_way], 0, reqs_empty_i);
                                 reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
                                 reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                            }
 
+                            // if SW is written correctly, this should be non-reachable
+                            if (cpu_req.cpu_msg == WRITE_ATOMIC) {
+                                HLS_DEFINE_PROTOCOL("unreachable_sc");
+                                l2_bresp.put(BRESP_OKAY);
                             }
                         }
                     }
@@ -1395,6 +1434,7 @@ inline void l2_spandex::reset_io()
     fwd_stall_ended = false;
     // fwd_in_stalled =
     reqs_fwd_stall_i = 0;
+    ongoing_atomic = false;
     atomic_line_addr = 0;
     reqs_atomic_i = 0;
     ongoing_flush = false;
@@ -1817,6 +1857,10 @@ void l2_spandex::reqs_peek_fwd(addr_breakdown_t addr_br)
         if (reqs[i].tag == addr_br.tag && reqs[i].set == addr_br.set && reqs[i].state != SPX_I){
             fwd_stall = true;
             reqs_fwd_stall_i = i;
+
+            if (ongoing_atomic && reqs[i].cpu_msg == READ_ATOMIC) {
+                ongoing_atomic = false;
+            }
         }
     }
 }
