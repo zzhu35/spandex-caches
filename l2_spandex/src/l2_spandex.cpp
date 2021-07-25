@@ -38,6 +38,12 @@ void l2_spandex::drain_wb()
     }
     drain_in_progress = !((wbs_cnt == N_WB) && mshr_no_reqo);
 
+    if (!drain_in_progress && ongoing_fence) {
+        HLS_DEFINE_PROTOCOL("send_flush_done");
+        flush_done.write(true);
+        wait();
+        flush_done.write(false);
+    }
 }
 
 void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid)
@@ -198,7 +204,6 @@ void l2_spandex::ctrl()
 
     bool is_flush_all;
     bool is_sync;
-    sc_uint<2> is_fence;
     {
         L2_SPANDEX_RESET;
 
@@ -226,8 +231,6 @@ void l2_spandex::ctrl()
         bool do_fwd = false;
         bool do_cpu_req = false;
 
-        bool do_fence = false;
-
         bool can_get_rsp_in = false;
         bool can_get_req_in = false;
         bool can_get_fwd_in = false;
@@ -253,14 +256,14 @@ void l2_spandex::ctrl()
 
             can_get_fence_in = l2_fence.nb_can_get();
             can_get_rsp_in = l2_rsp_in.nb_can_get();
-            can_get_req_in = ((l2_cpu_req.nb_can_get() && (!drain_in_progress)) || set_conflict) && !evict_stall && (reqs_cnt != 0); // if drain in progress, block all cpu requests
+            can_get_req_in = ((l2_cpu_req.nb_can_get() && (!drain_in_progress)) || set_conflict) && !evict_stall && !ongoing_fence && (reqs_cnt != 0); // if drain in progress, block all cpu requests
             can_get_fwd_in = (l2_fwd_in.nb_can_get() && !fwd_stall) || fwd_stall_ended;
             can_get_flush_in = l2_flush.nb_can_get();
 
             if (can_get_fence_in) {
                 l2_fence.nb_get(is_fence);
                 if(is_fence) {
-                    do_fence = true;
+                    ongoing_fence = true;
                 }
             } else if (can_get_flush_in) {
                 l2_flush.nb_get(is_sync);
@@ -319,11 +322,18 @@ void l2_spandex::ctrl()
         }
 #endif
 
-        if (do_fence)
+        if (ongoing_fence && !drain_in_progress)
         {
-            if (is_fence[0]) self_invalidate();
-            if (is_fence[1]) drain_in_progress = true;
-            do_fence = false;
+            if (is_fence[1]) {
+                drain_in_progress = true;
+                is_fence[1] = 0;
+            }
+
+            if (!drain_in_progress) {
+                if (is_fence[0]) self_invalidate();
+                ongoing_fence = false;
+                is_fence = 0;
+            }
         } else if (do_flush) {
             drain_in_progress = true;
             do_ongoing_flush = true;
@@ -1159,6 +1169,7 @@ void l2_spandex::ctrl()
         atomic_line_addr_dbg.write(atomic_line_addr);
         reqs_atomic_i_dbg.write(reqs_atomic_i);
         ongoing_flush_dbg.write(ongoing_flush);
+        ongoing_fence_dbg.write(ongoing_fence);
 
         for (int i = 0; i < N_REQS; i++) {
             REQS_DBG;
@@ -1321,6 +1332,7 @@ inline void l2_spandex::reset_io()
     drain_in_progress_dbg.write(0);
     current_line_dbg.write(0);
     current_status_dbg.write(0);
+    ongoing_fence_dbg.write(0);
 
     // for (int i = 0; i < N_REQS; i++) {
     //     REQS_DBGPUT;
@@ -1360,7 +1372,8 @@ inline void l2_spandex::reset_io()
     flush_way = 0;
     current_set = 0;
     current_valid_state = 1;
-
+    ongoing_fence = false;
+    is_fence = 0;
 }
 
 

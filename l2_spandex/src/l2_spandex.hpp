@@ -81,6 +81,7 @@ public:
     sc_signal< sc_uint<32> > flush_line_dbg;
     sc_signal<sc_uint<2> > current_status_dbg; // 0 idle, 1 cpu req, 2 fwd, 3 resp
     sc_signal<line_addr_t> current_line_dbg;
+    sc_signal< bool > ongoing_fence_dbg;
 
     sc_signal<bool> forced_req_v_dbg;
     bool TEST_inverter;
@@ -273,6 +274,8 @@ private:
     sc_uint<REQS_BITS> reqs_atomic_i;
     bool ongoing_flush;
     uint32_t flush_way, flush_set;
+    bool ongoing_fence;
+    sc_uint<2> is_fence; 
 };
 
 
