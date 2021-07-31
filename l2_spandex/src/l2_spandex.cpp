@@ -559,6 +559,19 @@ void l2_spandex::ctrl()
                             put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_I, reqs_hit_i);
                         }
                 }
+                case RSP_WB_ACK:
+                {
+                    if (reqs[reqs_hit_i].state == SPX_RI || reqs[reqs_hit_i].state == SPX_II)
+                    {
+                        // erase this line when WB complete
+                        // no need to call put_reqs here because there is no state change to either SRAM or xxx_buf
+                        // and state to the SRAM was already updated before the REQ_WB
+                        reqs[reqs_hit_i].state = SPX_I;
+                        reqs_cnt++;
+                    }
+
+                }
+                break;
             }
             break;
 
@@ -659,19 +672,6 @@ void l2_spandex::ctrl()
                             }
                         }
                         success = true;
-                    }
-                    break;
-                    case FWD_WB_ACK:
-                    {
-                        if (reqs[reqs_fwd_stall_i].state == SPX_RI || reqs[reqs_fwd_stall_i].state == SPX_II)
-                        {
-                            // erase this line when WB complete
-                            // no need to call put_reqs here because there is no state change to either SRAM or xxx_buf
-                            reqs[reqs_fwd_stall_i].state = SPX_I;
-                            reqs_cnt++;
-                            success = true;
-                        }
-
                     }
                     break;
                     case FWD_RVK_O:

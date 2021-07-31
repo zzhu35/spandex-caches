@@ -144,6 +144,7 @@ http://rsim.cs.uiuc.edu/
 #define RSP_O          6 // same as fwd_req_o
 #define RSP_WT         7
 #define RSP_WTdata     8
+#define RSP_WB_ACK     9
 
 
 // AMOS

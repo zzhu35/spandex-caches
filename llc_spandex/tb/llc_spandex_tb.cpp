@@ -159,7 +159,7 @@ void llc_spandex_tb::llc_test()
     orig_line = line;
     word = 0xdeadbeefdead2222;
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
-    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_WORD - 1, 0) = 0;
 
     put_req_in(REQ_O /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */,
 		DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b10 /* word_mask */);
@@ -192,7 +192,7 @@ void llc_spandex_tb::llc_test()
     ////////////////////////////////////////////////////////////////
     // new sharing request
     ////////////////////////////////////////////////////////////////
-    line.range(BITS_PER_WORD - 1, 0) = orig_line.range(BITS_PER_WORD - 1, 0);
+    line = orig_line;
 
     put_req_in(REQ_S /* coh_msg */, addr.word /* addr */, 0 /* line */, 1 /* req_id */,
 		DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
@@ -201,7 +201,7 @@ void llc_spandex_tb::llc_test()
 
     put_rsp_in(RSP_S /* rsp_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */, 0b10 /* word_mask */);
 
-    line = orig_line;
+    line.range(BITS_PER_WORD + 3, BITS_PER_WORD) = 0;
 
     get_rsp_out(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
 		1 /* req_id */, 1 /* dest_id */, 0 /* woff */, 0b01 /* word_mask */);

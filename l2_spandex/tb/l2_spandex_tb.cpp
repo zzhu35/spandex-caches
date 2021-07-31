@@ -191,8 +191,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -382,12 +382,6 @@ void l2_spandex_tb::l2_test()
 
     // current_valid_state = 6;
 
-    get_inval(addr.word /* addr */, DATA /* hprot */);    
-
-    wait();
-
-    get_inval(addr.word /* addr */, DATA /* hprot */);    
-
     ////////////////////////////////////////////////////////////////
     // TEST 4: write to this line and try to return with ReqV
     // Note: when we write only one word and send ReqS, we get a WB hit
@@ -439,8 +433,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -508,8 +502,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -559,14 +553,14 @@ void l2_spandex_tb::l2_test()
         wait();
     }
 
-    for (int i = 0; i < WORDS_PER_LINE * L2_WAYS; i++) {
-        base_addr = 0x82520000 + 0x8*i;
-        addr.breakdown(base_addr);
+    // for (int i = 0; i < WORDS_PER_LINE * L2_WAYS; i++) {
+    //     base_addr = 0x82520000 + 0x8*i;
+    //     addr.breakdown(base_addr);
 
-        get_inval(addr.word /* addr */, DATA /* hprot */);
+    //     get_inval(addr.word /* addr */, DATA /* hprot */);
 
-        wait();  
-    }
+    //     wait();  
+    // }
 
     ////////////////////////////////////////////////////////////////
     // we will now send FWD_REQ_V to get nacks for all these lines
@@ -717,12 +711,10 @@ void l2_spandex_tb::l2_test()
     put_fwd_in(FWD_INV_SPDX /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
             0 /* line */, 0b0011 /* word_mask */);
 
-    get_inval(addr.word /* addr */);
-
-    wait();
-
     get_rsp_out(RSP_INV_ACK_SPDX /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             0 /* line */, 0b0011 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     ////////////////////////////////////////////////////////////////
     // repeat the above experiment for fwd_stall
@@ -903,8 +895,8 @@ void l2_spandex_tb::l2_test()
         get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
             DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-        put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-            0 /* line */, 0b0001 /* word_mask */);
+        put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+            0b0001 /* word_mask */, 0 /* invack_cnt */);
 
         wait();
     }
@@ -920,8 +912,8 @@ void l2_spandex_tb::l2_test()
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0010 /* word_mask */);
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -1083,8 +1075,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -1191,8 +1183,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -1300,8 +1292,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0010 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0010 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 

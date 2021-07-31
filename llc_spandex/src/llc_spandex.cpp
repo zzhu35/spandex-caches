@@ -1891,7 +1891,7 @@ void llc_spandex::ctrl()
                         // send response
                         {
                             HLS_DEFINE_PROTOCOL("send_rsp_1330");
-                            send_fwd_out(FWD_WB_ACK, req_in.addr, 0, req_in.req_id, req_in.word_mask);
+                            send_rsp_out(RSP_WB_ACK, req_in.addr, 0, req_in.req_id, req_in.req_id, 0, 0, req_in.word_mask);
 
                         }
                         if (word_owner_mask == 0) break; // in stable states, no owner, no need to do anything
