@@ -312,9 +312,6 @@ void l2_spandex::ctrl()
             } else if (can_get_req_in) { // assuming
                 if (!set_conflict) {
                     get_cpu_req(cpu_req);
-#ifdef L2_DEBUG
-                    TEST_new_req = true;
-#endif
                 } else {
                     cpu_req = cpu_req_conflict;
                 }
@@ -344,7 +341,7 @@ void l2_spandex::ctrl()
 
         if (do_fence)
         {
-            if (is_fence[0]) self_invalidate();
+            // if (is_fence[0]) self_invalidate();
             if (is_fence[1]) drain_in_progress = true;
             do_fence = false;
         } else if (do_flush) {
@@ -940,7 +937,7 @@ void l2_spandex::ctrl()
 
             if(cpu_req.aq){
                 cpu_req.aq = false;
-                self_invalidate();
+                // self_invalidate();
             }
 
             if (set_conflict) {
@@ -957,7 +954,7 @@ void l2_spandex::ctrl()
 
                 tag_lookup(addr_br, tag_hit, way_hit, empty_way_found, empty_way, word_hit);
 
-                if (ongoing_atomic && cpu_req.hprot == DATA && (cpu_req.cpu_msg != WRITE_ATOMIC || addr_br.line_addr != atomic_line_addr)) {
+                if (ongoing_atomic && cpu_req.hprot == DATA && addr_br.line_addr != atomic_line_addr) {
                     ongoing_atomic = false;
                 }
 
@@ -968,6 +965,7 @@ void l2_spandex::ctrl()
                         word_mask_owned |= 1 << i;
                     }
                 }
+
                 // When reqs is tag hit AND when the line is partial owned
                 // We need to write back
                 req_s_needs_evict = tag_hit && !cpu_req.dcs_en && cpu_req.cpu_msg == READ && word_mask_owned && word_mask_owned != WORD_MASK_ALL;
@@ -1014,14 +1012,14 @@ void l2_spandex::ctrl()
                 } else {
 
 
-                    bool wb_hit = false;
-                    sc_uint<WB_BITS> wb_i = 0;
-                    peek_wb(wb_hit, wb_i, addr_br);
-                    bool wb_word_hit = wb_hit && (wbs[wb_i].word_mask & (1 << addr_br.w_off));
+                    // bool wb_hit = false;
+                    // sc_uint<WB_BITS> wb_i = 0;
+                    // peek_wb(wb_hit, wb_i, addr_br);
+                    // bool wb_word_hit = wb_hit && (wbs[wb_i].word_mask & (1 << addr_br.w_off));
 
                     if (cpu_req.amo || cpu_req.cpu_msg == READ_ATOMIC || cpu_req.cpu_msg == WRITE_ATOMIC) {
 
-                        if (word_hit && (state_buf[way_hit][addr_br.w_off] == SPX_R)) {
+                        if (word_hit && (state_buf[way_hit][addr_br.w_off] == SPX_R) && !((cpu_req.cpu_msg == READ_ATOMIC) && (word_mask_owned != WORD_MASK_ALL))) {
                             if (cpu_req.amo) {
                                 HLS_DEFINE_PROTOCOL("amo_hit");
                                 send_rd_rsp(line_buf[way_hit]);
@@ -1035,10 +1033,12 @@ void l2_spandex::ctrl()
                                 atomic_line_addr = addr_br.line_addr;
                             }
                             if (cpu_req.cpu_msg == WRITE_ATOMIC) {
-                                write_word(line_buf[way_hit], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize);
-                                lines.port1[0][base + way_hit] = line_buf[way_hit];
                                 if (ongoing_atomic && addr_br.line_addr == atomic_line_addr) {
                                     HLS_DEFINE_PROTOCOL("pass_sc");
+                                    wait();
+                                    write_word(line_buf[way_hit], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize);
+                                    lines.port1[0][base + way_hit] = line_buf[way_hit];
+                                    wait();
                                     l2_bresp.put(BRESP_EXOKAY);
                                 } else {
                                     HLS_DEFINE_PROTOCOL("fail_sc");
@@ -1069,20 +1069,29 @@ void l2_spandex::ctrl()
                                 set_conflict = true;
                                 ongoing_atomic = true;
                                 atomic_line_addr = addr_br.line_addr;
-                                l2_way_t amo_way;
 
+                                l2_way_t amo_way; 
                                 amo_way = tag_hit ? way_hit : empty_way;
+
+                                word_mask_t amo_wm;
+                                for (int i = 0; i < WORDS_PER_LINE; i++){
+                                    HLS_UNROLL_LOOP(ON);
+                                    amo_wm[i] = !word_mask_owned[i];
+                                }
+
                                 HLS_DEFINE_PROTOCOL("send_req_lr");
-                                send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
+                                send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, amo_wm);
                                 fill_reqs(READ_ATOMIC, addr_br, addr_br.tag, amo_way, cpu_req.hsize, SPX_AMO, cpu_req.hprot, 0, line_buf[amo_way], 0, reqs_empty_i);
-                                reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
-                                reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                reqs[reqs_empty_i].word_mask = amo_wm;
+                                reqs_word_mask_in[reqs_empty_i] = amo_wm;
                             }
 
-                            // if SW is written correctly, this should be non-reachable
+                            // in case the SC misses in the cache due to write back after the LR
                             if (cpu_req.cpu_msg == WRITE_ATOMIC) {
-                                HLS_DEFINE_PROTOCOL("unreachable_sc");
+                                HLS_DEFINE_PROTOCOL("miss_sc");
                                 l2_bresp.put(BRESP_OKAY);
+                                
+                                ongoing_atomic = false;
                             }
                         }
                     }
@@ -1247,6 +1256,7 @@ void l2_spandex::ctrl()
         atomic_line_addr_dbg.write(atomic_line_addr);
         reqs_atomic_i_dbg.write(reqs_atomic_i);
         ongoing_flush_dbg.write(ongoing_flush);
+        ongoing_atomic_dbg.write(ongoing_atomic);
 
         for (int i = 0; i < N_REQS; i++) {
             REQS_DBG;
@@ -1406,6 +1416,7 @@ inline void l2_spandex::reset_io()
     drain_in_progress_dbg.write(0);
     current_line_dbg.write(0);
     current_status_dbg.write(0);
+    ongoing_atomic_dbg.write(0);
 
     // for (int i = 0; i < N_REQS; i++) {
     //     REQS_DBGPUT;
