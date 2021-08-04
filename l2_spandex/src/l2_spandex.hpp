@@ -80,6 +80,9 @@ public:
     sc_signal< sc_uint<32> > flush_line_dbg;
     sc_signal<sc_uint<2> > current_status_dbg; // 0 idle, 1 cpu req, 2 fwd, 3 resp
     sc_signal<line_addr_t> current_line_dbg;
+    sc_signal<word_mask_t> word_mask_owned_dbg;
+    sc_signal<l2_way_t> amo_way_dbg;
+    sc_signal<word_mask_t> amo_wm_dbg;
 
     sc_signal<bool> forced_req_v_dbg;
     bool TEST_inverter;
