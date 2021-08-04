@@ -391,6 +391,9 @@ http://rsim.cs.uiuc.edu/
     HLS_PRESERVE_SIGNAL(current_line_dbg, true); \
     HLS_PRESERVE_SIGNAL(current_status_dbg, true); \
     HLS_PRESERVE_SIGNAL(forced_req_v_dbg, true); \
+    HLS_PRESERVE_SIGNAL(word_mask_owned_dbg, true); \
+    HLS_PRESERVE_SIGNAL(amo_way_dbg, true); \
+    HLS_PRESERVE_SIGNAL(amo_wm_dbg, true); \
     HLS_PRESERVE_SIGNAL(states_dbg, true)
 
 
