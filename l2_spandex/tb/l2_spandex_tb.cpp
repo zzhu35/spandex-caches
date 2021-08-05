@@ -106,7 +106,7 @@ void l2_spandex_tb::l2_test()
     get_rsp_out(RSP_Odata /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
         line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     get_rsp_out(RSP_Odata /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
         line /* line */, 0b0001 /* word_mask */);
@@ -189,7 +189,7 @@ void l2_spandex_tb::l2_test()
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
         0 /* line */, 0b0001 /* word_mask */);
@@ -382,11 +382,11 @@ void l2_spandex_tb::l2_test()
 
     // current_valid_state = 6;
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     wait();
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     ////////////////////////////////////////////////////////////////
     // TEST 4: write to this line and try to return with ReqV
@@ -437,7 +437,7 @@ void l2_spandex_tb::l2_test()
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
         0 /* line */, 0b0001 /* word_mask */);
@@ -506,7 +506,7 @@ void l2_spandex_tb::l2_test()
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    get_inval(addr.word /* addr */);    
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
         0 /* line */, 0b0001 /* word_mask */);
@@ -563,7 +563,7 @@ void l2_spandex_tb::l2_test()
         base_addr = 0x82520000 + 0x8*i;
         addr.breakdown(base_addr);
 
-        // get_inval(addr.word /* addr */, DATA /* hprot */);
+        get_inval(addr.word /* addr */, DATA /* hprot */);
 
         wait();  
     }
@@ -793,7 +793,7 @@ void l2_spandex_tb::l2_test()
     get_rsp_out(RSP_O /* coh_msg */, 2 /* req_id */, 1 /* to_req */, addr.word /* addr */,
             0 /* line */, 0b0010 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     ////////////////////////////////////////////////////////////////
     // TODO now, if there is a ReqV for a single word, we're
@@ -821,7 +821,7 @@ void l2_spandex_tb::l2_test()
     get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -884,7 +884,7 @@ void l2_spandex_tb::l2_test()
     get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     ////////////////////////////////////////////////////////////////
     // TEST 10: flush
@@ -1524,15 +1524,18 @@ void l2_spandex_tb::get_bresp(sc_uint<2> gold_bresp_val)
 	CACHE_REPORT_VAR(sc_time_stamp(), "BRESP", bresp_val);
 }
 
-void l2_spandex_tb::get_inval(addr_t addr)
+void l2_spandex_tb::get_inval(addr_t addr, hprot_t hprot)
 {
     l2_inval_t inval;
     
     l2_inval_tb.get(inval);
 
-    if (inval != addr.range(TAG_RANGE_HI, SET_RANGE_LO)) {
-	CACHE_REPORT_ERROR("get inval", inval);
-	CACHE_REPORT_ERROR("get inval gold", addr.range(TAG_RANGE_HI, SET_RANGE_LO));
+    if (inval.addr != addr.range(TAG_RANGE_HI, SET_RANGE_LO) || inval.hprot != hprot) {
+	CACHE_REPORT_ERROR("get inval.addr", inval.addr);
+	CACHE_REPORT_ERROR("get inval.addr gold", addr.range(TAG_RANGE_HI, SET_RANGE_LO));
+	CACHE_REPORT_ERROR("get inval.hprot", inval.hprot);
+	CACHE_REPORT_ERROR("get inval.hprot gold", hprot);
+    error_count++;
     }
 
     if (rpt)
