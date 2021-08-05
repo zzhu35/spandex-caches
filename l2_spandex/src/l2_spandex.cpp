@@ -1363,10 +1363,6 @@ inline void l2_spandex::reset_io()
     word_mask_owned_dbg.write(0);
     amo_way_dbg.write(0);
     amo_wm_dbg.write(0);
-    line_mask_dbg.write(0);
-    line_shift_dbg.write(0);
-    word_fill_dbg.write(0);
-    wb_fill_dbg.write(0);
 
     // for (int i = 0; i < N_REQS; i++) {
     //     REQS_DBGPUT;
