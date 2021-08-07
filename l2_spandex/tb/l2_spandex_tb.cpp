@@ -382,11 +382,11 @@ void l2_spandex_tb::l2_test()
 
     // current_valid_state = 6;
 
-    get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    wait();
+    // wait();
 
-    get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     ////////////////////////////////////////////////////////////////
     // TEST 4: write to this line and try to return with ReqV
@@ -563,7 +563,7 @@ void l2_spandex_tb::l2_test()
         base_addr = 0x82520000 + 0x8*i;
         addr.breakdown(base_addr);
 
-        get_inval(addr.word /* addr */, DATA /* hprot */);
+        // get_inval(addr.word /* addr */, DATA /* hprot */);
 
         wait();  
     }
@@ -717,7 +717,7 @@ void l2_spandex_tb::l2_test()
     put_fwd_in(FWD_INV_SPDX /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
             0 /* line */, 0b0011 /* word_mask */);
 
-    get_inval(addr.word /* addr */);
+    get_inval(addr.word /* addr */, DATA /* hprot */);    
 
     wait();
 
