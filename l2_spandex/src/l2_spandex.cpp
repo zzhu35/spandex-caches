@@ -271,9 +271,6 @@ void l2_spandex::ctrl()
             } else if (can_get_req_in) { // assuming
                 if (!set_conflict) {
                     get_cpu_req(cpu_req);
-#ifdef L2_DEBUG
-                    TEST_new_req = true;
-#endif
                 } else {
                     cpu_req = cpu_req_conflict;
                 }
