@@ -191,8 +191,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -439,8 +439,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -508,8 +508,8 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
@@ -901,8 +901,8 @@ void l2_spandex_tb::l2_test()
         get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
             DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-        put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-            0 /* line */, 0b0001 /* word_mask */);
+        put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+             0b0001 /* word_mask */, 0 /* invack_cnt */);
 
         wait();
     }
@@ -918,8 +918,8 @@ void l2_spandex_tb::l2_test()
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0010 /* word_mask */);
 
-    put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
-        0 /* line */, 0b0001 /* word_mask */);
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
