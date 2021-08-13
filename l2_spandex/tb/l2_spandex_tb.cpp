@@ -1346,6 +1346,46 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    ////////////////////////////////////////////////////////////////
+    // TEST 15: non-atomic sub-word granularities
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x820A820C;
+    addr.breakdown(base_addr);
+
+    word = 0x2222222200000000;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = 0;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD_32 /* hsize */,
+        base_addr /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    word = 0x1111111111111111;
+    line1.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line1.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0010 /* word_mask */);
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line1 /* line */,
+        0b0010 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    word.range(63,32) = 0x22222222;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_fwd_in(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
+            0 /* line */, 0b0010 /* word_mask */);
+
+    get_rsp_out(RSP_RVK_O /* coh_msg */, 1 /* req_id */, 0 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0010 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     // End simulation

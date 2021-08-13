@@ -30,7 +30,7 @@ void l2_spandex::drain_wb()
     for (int i = 0; i < N_REQS; i++)
     {
         HLS_UNROLL_LOOP(ON, "wb drain");
-        if (reqs[i].state == SPX_XR || reqs[i].state == SPX_XRV)
+        if (reqs[i].state == SPX_XR || reqs[i].state == SPX_XRV || reqs[i].state == SPX_AMO)
         {
             mshr_no_reqo = false;
             break;
@@ -359,6 +359,10 @@ void l2_spandex::ctrl()
                     }
                 }
 
+                if (reqs[reqs_hit_i].hsize < BYTE_BITS && reqs[reqs_hit_i].state != SPX_AMO) {
+                    write_word(reqs[reqs_hit_i].line, cpu_req_conflict.word, reqs[reqs_hit_i].w_off, reqs[reqs_hit_i].b_off, reqs[reqs_hit_i].hsize);
+                }
+
                 reqs[reqs_hit_i].word_mask &= ~(rsp_in.word_mask);
 
                 if (reqs[reqs_hit_i].word_mask == 0) {
@@ -372,13 +376,16 @@ void l2_spandex::ctrl()
                         }
                         set_conflict = false;
                     }
-                
+
+                    if (reqs[reqs_hit_i].hsize < BYTE_BITS && reqs[reqs_hit_i].state != SPX_AMO) {
+                        set_conflict = false;
+                    }
+
                     if (reqs[reqs_hit_i].state == SPX_IV) send_rd_rsp(reqs[reqs_hit_i].line);
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
                     put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_R, reqs_hit_i);
                 }
-
             }
             break;
             // respond AMO one word
@@ -561,6 +568,26 @@ void l2_spandex::ctrl()
                             send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
                             success = true;
                         }
+                        else if (reqs[reqs_fwd_stall_i].state == SPX_XR || reqs[reqs_fwd_stall_i].state == SPX_AMO)
+                        {
+                            word_mask_t rsp_mask = 0;
+                            if (tag_hit) {
+                                for (int i = 0; i < WORDS_PER_LINE; i++)
+                                {
+                                    HLS_UNROLL_LOOP(ON, "1");
+                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
+                                        rsp_mask |= 1 << i;
+                                        state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
+                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
+                                    }
+                                }
+                                if (rsp_mask) {
+                                    HLS_DEFINE_PROTOCOL("fwd_req_o on xr");
+                                    send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
+                                    success = true;
+                                } 
+                            }
+                        }
                     }
                     break;
                     case FWD_REQ_Odata:
@@ -571,6 +598,26 @@ void l2_spandex::ctrl()
                             HLS_DEFINE_PROTOCOL("fwd req o stall rsp o");
                             send_rsp_out(RSP_Odata, fwd_in.req_id, true, fwd_in.addr, reqs[reqs_fwd_stall_i].line, fwd_in.word_mask);
                             success = true;
+                        }
+                        else if (reqs[reqs_fwd_stall_i].state == SPX_XR || reqs[reqs_fwd_stall_i].state == SPX_AMO)
+                        {
+                            word_mask_t rsp_mask = 0;
+                            if (tag_hit) {
+                                for (int i = 0; i < WORDS_PER_LINE; i++)
+                                {
+                                    HLS_UNROLL_LOOP(ON, "1");
+                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
+                                        rsp_mask |= 1 << i;
+                                        state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
+                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
+                                    }
+                                }
+                                if (rsp_mask) {
+                                    HLS_DEFINE_PROTOCOL("fwd_req_odata on xr");
+                                    send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
+                                    success = true;
+                                } 
+                            }
                         }
                     }
                     break;
@@ -614,8 +661,7 @@ void l2_spandex::ctrl()
                             reqs[reqs_fwd_stall_i].state = SPX_I;
                             reqs_cnt++;
                             success = true;
-                        }
-
+                        } 
                     }
                     break;
                     case FWD_RVK_O:
@@ -630,14 +676,14 @@ void l2_spandex::ctrl()
                             if (!reqs[reqs_fwd_stall_i].word_mask) reqs[reqs_fwd_stall_i].state = SPX_II;
                             success = true;
                         }
-                        else if (reqs[reqs_fwd_stall_i].state == SPX_XR)
+                        else if (reqs[reqs_fwd_stall_i].state == SPX_XR || reqs[reqs_fwd_stall_i].state == SPX_AMO)
                         {
                             word_mask_t rsp_mask = 0;
                             if (tag_hit) {
                                 for (int i = 0; i < WORDS_PER_LINE; i++)
                                 {
                                     HLS_UNROLL_LOOP(ON, "1");
-                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) { // if reqo and we have this word in registered
+                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
                                         rsp_mask |= 1 << i;
                                         state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
                                         send_inval(fwd_in.addr, hprot_buf[way_hit]);
@@ -647,11 +693,9 @@ void l2_spandex::ctrl()
                                     HLS_DEFINE_PROTOCOL("fwd_rvk_o_send_rsp_rvk_o");
                                     send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
                                     success = true;
-                                }
-
+                                } 
                             }
-                        }
-
+                        } 
                     }
                     break;
                     case FWD_REQ_S:
@@ -664,6 +708,26 @@ void l2_spandex::ctrl()
                             wait();
                             send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, reqs[reqs_fwd_stall_i].line, fwd_in.word_mask);
                             success = true;
+                        } else if (reqs[reqs_fwd_stall_i].state == SPX_XR || reqs[reqs_fwd_stall_i].state == SPX_AMO) {
+                            word_mask_t rsp_mask = 0;
+                            if (tag_hit) {
+                                for (int i = 0; i < WORDS_PER_LINE; i++)
+                                {
+                                    HLS_UNROLL_LOOP(ON, "1");
+                                    if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
+                                        rsp_mask |= 1 << i;
+                                        state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
+                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
+                                    }
+                                }
+                                if (rsp_mask) {
+                                    HLS_DEFINE_PROTOCOL("fwd_req_s stall for xr");
+                                    send_rsp_out(RSP_S, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
+                                    wait();
+                                    send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
+                                    success = true;
+                                }
+                            }
                         }
                     }
                     break;
@@ -1085,7 +1149,7 @@ void l2_spandex::ctrl()
                                 if (cpu_req.hsize < BYTE_BITS) // partial word write
                                 {
                                     HLS_DEFINE_PROTOCOL("partial word write send req_odata");
-                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, 0, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
                                     send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
                                     reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
                                     reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;

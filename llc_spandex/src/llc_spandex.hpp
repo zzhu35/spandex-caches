@@ -85,6 +85,8 @@ public:
     sc_signal<bool> dbg_dma_write_pending;
     sc_signal< sc_uint<4> > watch_dog;
 
+    sc_signal< llc_req_in_t<CACHE_ID_WIDTH> >	dbg_llc_req_conflict;
+    sc_signal< llc_req_in_t<CACHE_ID_WIDTH> >	dbg_llc_req_stall;
 
 #endif
 

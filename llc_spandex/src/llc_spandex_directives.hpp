@@ -251,6 +251,8 @@ http://rsim.cs.uiuc.edu/
     HLS_PRESERVE_SIGNAL(reqs_dbg, true); \
     HLS_PRESERVE_SIGNAL(dbg_evict_stall, true); \
     HLS_PRESERVE_SIGNAL(dbg_evict_inprogress, true); \
+    HLS_PRESERVE_SIGNAL(dbg_llc_req_conflict, true); \
+    HLS_PRESERVE_SIGNAL(dbg_llc_req_stall, true); \
     HLS_PRESERVE_SIGNAL(dbg_set_conflict, true)
 
 
@@ -449,6 +451,8 @@ http://rsim.cs.uiuc.edu/
     HLS_PRESERVE_SIGNAL(dbg_is_dma_write_to_resume, true); \
     HLS_PRESERVE_SIGNAL(watch_dog, true); \
     HLS_PRESERVE_SIGNAL(dbg_is_dma_req_to_get, true); \
+    HLS_PRESERVE_SIGNAL(dbg_llc_req_conflict, true); \
+    HLS_PRESERVE_SIGNAL(dbg_llc_req_stall, true); \
     HLS_PRESERVE_SIGNAL(dbg_set_conflict, true)
 #else
 #define PRESERVE_SIGNALS

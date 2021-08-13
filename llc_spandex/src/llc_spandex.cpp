@@ -970,6 +970,8 @@ void llc_spandex::ctrl()
         dbg_dma_read_pending.write(dma_read_pending);
         dbg_dma_write_pending.write(dma_write_pending);
 
+        dbg_llc_req_conflict = llc_req_conflict;
+        dbg_llc_req_stall = llc_req_stall;
 #endif
 
         // -----------------------------
