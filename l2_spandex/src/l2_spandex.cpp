@@ -1120,7 +1120,7 @@ void l2_spandex::ctrl()
                         for(int i = 0; i < WORDS_PER_LINE; i++){
                             HLS_UNROLL_LOOP(ON);
                             if(state_buf[way_write][i] == SPX_S){
-                                state_buf[way_write][i] = current_valid_state;
+                                state_buf[way_write][i] = SPX_I;
                             }
                         }
 
