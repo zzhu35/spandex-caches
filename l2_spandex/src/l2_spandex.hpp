@@ -83,6 +83,10 @@ public:
     sc_signal<word_mask_t> word_mask_owned_dbg;
     sc_signal<l2_way_t> amo_way_dbg;
     sc_signal<word_mask_t> amo_wm_dbg;
+    sc_signal< sc_uint<32> > line_mask_dbg;
+    sc_signal< sc_uint<32> > line_shift_dbg;
+    sc_signal< sc_uint<32> > word_fill_dbg;
+    sc_signal<bool> wb_fill_dbg;
 
     sc_signal<bool> forced_req_v_dbg;
     bool TEST_inverter;

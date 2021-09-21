@@ -40,7 +40,7 @@ void l2_spandex::drain_wb()
 
 }
 
-void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid)
+void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid, hsize_t hsize)
 {
     // try to add an entry
     // dispatch to reqs if full line
@@ -88,10 +88,30 @@ void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2
         wbs[i].dcs_en = dcs_en;
         wbs[i].use_owner_pred = use_owner_pred;
         wbs[i].pred_cid = pred_cid;
+        wbs[i].bm = 0;
         wbs_cnt--;
     }
     wbs[i].word_mask |= 1 << addr_br.w_off;
-    wbs[i].line.range((addr_br.w_off + 1) * BITS_PER_WORD - 1, addr_br.w_off * BITS_PER_WORD) = word;
+    // wbs[i].line.range((addr_br.w_off + 1) * BITS_PER_WORD - 1, addr_br.w_off * BITS_PER_WORD) = word;
+    write_word(wbs[i].line, word, addr_br.w_off, addr_br.b_off, hsize);
+
+    wbs[i].bm |= ((1 << (1 << hsize)) - 1) << (addr_br.w_off * BYTES_PER_WORD + addr_br.b_off);
+
+    // if (wbs[i].word_mask == WORD_MASK_ALL) {
+    //     dispatch_wb(hit, i); // just try dispatching, it's ok if fail
+    // }
+
+    // for (int i = 0; i < N_WB; i++)
+    // {
+    //     bool success = false;
+    //     if (wbs[i].valid && wbs[i].word_mask == WORD_MASK_ALL && reqs_cnt > 0)
+    //     {
+    //         // if all valid, dispatch
+    //         dispatch_wb(success, i);
+    //     }
+    //     wait();
+    // }
+
 }
 
 void l2_spandex::peek_wb(bool& hit, sc_uint<WB_BITS>& wb_i, addr_breakdown_t addr_br)
@@ -149,7 +169,37 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
     addr_br.tag = wbs[wb_i].tag;
     line_addr = (addr_br.tag << L2_SET_BITS) | (addr_br.set);
 
+    bool wb_fill = false;
+    for (int i = 0; i < WORDS_PER_LINE; i++)
     {
+        int line_mask = ((1 << BYTES_PER_WORD) - 1);
+        int line_shift = (i * BYTES_PER_WORD);
+        int word_fill = ((wbs[wb_i].bm >> line_shift) & line_mask);
+        HLS_UNROLL_LOOP(ON);
+        if ((word_fill != 0) && (word_fill != line_mask))
+        {
+            wb_fill = true;
+            break;
+        } 
+
+#ifdef L2_DEBUG
+        line_mask_dbg.write(line_mask);
+        line_shift_dbg.write(line_shift);
+        word_fill_dbg.write(word_fill);
+#endif
+    }
+
+#ifdef L2_DEBUG
+    wb_fill_dbg.write(wb_fill);
+#endif
+
+    if (wb_fill)
+    {
+        HLS_DEFINE_PROTOCOL();
+        send_req_out(REQ_Odata, wbs[wb_i].hprot, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
+        // reqs[i].word stores wb_i
+        fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_WB_FILL, wbs[wb_i].hprot, wbs[wb_i].bm, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
+    } else {
         HLS_DEFINE_PROTOCOL();
         // send reqo
         if (!wbs[wb_i].dcs_en) {
@@ -164,12 +214,12 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
             send_fwd_out(FWD_WTfwd, wbs[wb_i].pred_cid, 1, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
             fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
-
-        // free WB
-        wbs[wb_i].valid = false;
-        wbs_cnt++;
-        wait();
     }
+
+    // free WB
+    wbs[wb_i].valid = false;
+    wbs_cnt++;
+    wait();
 }
 
 
@@ -358,7 +408,19 @@ void l2_spandex::ctrl()
                     HLS_UNROLL_LOOP(ON, "rsp_v");
                     if (rsp_in.word_mask & (1 << i)) {
                         // found a valid bit in response word mask
-                        reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                        if (reqs[reqs_hit_i].state == SPX_WB_FILL) {
+                            for (int j = 0; j < BYTES_PER_WORD; j++)
+                            {
+                                HLS_UNROLL_LOOP(ON);
+                                int word_no_fill = (reqs[reqs_hit_i].word >> ((i << 3) + j));
+                                if ((word_no_fill & 1) == 0) {
+                                    reqs[reqs_hit_i].line.range((i * BITS_PER_WORD) + (j * 8) + 7, (i * BITS_PER_WORD) + (j * 8)) = 
+                                        rsp_in.line.range((i * BITS_PER_WORD) + (j * 8) + 7, (i * BITS_PER_WORD) + (j * 8));
+                                }
+                            }
+                        } else {
+                            reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                        }
                     }
                 }
 
@@ -1064,7 +1126,7 @@ void l2_spandex::ctrl()
                                     {
                                         if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
                                             bool success = false;
-                                            add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
+                                            add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid, cpu_req.hsize);
                                             if (!success)
                                             {
                                                 // if wb refused attempted insertion, raise set_conflict
@@ -1082,35 +1144,21 @@ void l2_spandex::ctrl()
                                 }
                         }else{
                             if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
-                                if (cpu_req.hsize < BYTE_BITS) // partial word write
+                            {
+                                bool success = false;
+                                add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid, cpu_req.hsize);
+                                if (!success)
                                 {
-                                    HLS_DEFINE_PROTOCOL("partial word write send req_odata");
-                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, 0, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
-                                    send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
-                                    reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
-                                    reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                    // if wb refused attempted insertion, raise set_conflict
                                     set_conflict = true;
 
+
                                     cpu_req_conflict = cpu_req;
+                                } else {
+                                    state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
                                 }
-                                else
-                                {
-                                    bool success = false;
-                                    add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
-                                    if (!success)
-                                    {
-                                        // if wb refused attempted insertion, raise set_conflict
-                                        set_conflict = true;
-
-
-                                        cpu_req_conflict = cpu_req;
-                                    } else {
-                                        state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
-                                    }
-                                }
-                            }
-                        }
-
+                            } 
+                        } 
                     }
                     // else if read
                     // assuming line granularity read MESI style
@@ -1364,6 +1412,10 @@ inline void l2_spandex::reset_io()
     word_mask_owned_dbg.write(0);
     amo_way_dbg.write(0);
     amo_wm_dbg.write(0);
+    line_mask_dbg.write(0);
+    line_shift_dbg.write(0);
+    word_fill_dbg.write(0);
+    wb_fill_dbg.write(0);
 
     // for (int i = 0; i < N_REQS; i++) {
     //     REQS_DBGPUT;
