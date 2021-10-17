@@ -523,7 +523,6 @@ void l2_spandex::ctrl()
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
                 }
-
             }
             break;
 
@@ -569,6 +568,8 @@ void l2_spandex::ctrl()
                         {
                             HLS_DEFINE_PROTOCOL("send rsp_inv_ack_spdx fwd_stall");
                             send_rsp_out(RSP_INV_ACK_SPDX, 0, 0, fwd_in.addr, 0, WORD_MASK_ALL);
+                            wait();
+                            send_inval(fwd_in.addr, hprot_buf[way_hit]);
                         }
                         success = true;
                     }
@@ -592,7 +593,6 @@ void l2_spandex::ctrl()
                                     if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
                                         rsp_mask |= 1 << i;
                                         state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
-                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
                                     }
                                 }
                                 if (rsp_mask) {
@@ -601,6 +601,11 @@ void l2_spandex::ctrl()
                                     success = true;
                                 } 
                             }
+                        }
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_1");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
                         }
                     }
                     break;
@@ -623,7 +628,6 @@ void l2_spandex::ctrl()
                                     if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
                                         rsp_mask |= 1 << i;
                                         state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
-                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
                                     }
                                 }
                                 if (rsp_mask) {
@@ -632,6 +636,11 @@ void l2_spandex::ctrl()
                                     success = true;
                                 } 
                             }
+                        }
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_2");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
                         }
                     }
                     break;
@@ -688,7 +697,6 @@ void l2_spandex::ctrl()
                                     if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
                                         rsp_mask |= 1 << i;
                                         state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
-                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
                                     }
                                 }
                                 if (rsp_mask) {
@@ -698,6 +706,11 @@ void l2_spandex::ctrl()
                                 } 
                             }
                         } 
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_3");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
+                        }
                     }
                     break;
                     case FWD_REQ_S:
@@ -719,7 +732,6 @@ void l2_spandex::ctrl()
                                     if ((fwd_in.word_mask & (1 << i)) && state_buf[reqs[reqs_fwd_stall_i].way][i] == SPX_R) {
                                         rsp_mask |= 1 << i;
                                         state_buf[reqs[reqs_fwd_stall_i].way][i] = SPX_I;
-                                        send_inval(fwd_in.addr, hprot_buf[way_hit]);
                                     }
                                 }
                                 if (rsp_mask) {
@@ -730,6 +742,11 @@ void l2_spandex::ctrl()
                                     success = true;
                                 }
                             }
+                        }
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_4");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
                         }
                     }
                     break;
@@ -765,11 +782,15 @@ void l2_spandex::ctrl()
                                     state_buf[way_hit][i] = SPX_I;
                                 }
                             }
-                            send_inval(fwd_in.addr, hprot_buf[way_hit]);
                         }
                         {
                             HLS_DEFINE_PROTOCOL("send rsp_inv_ack_spdx");
                             send_rsp_out(RSP_INV_ACK_SPDX, 0, 0, fwd_in.addr, 0, WORD_MASK_ALL);
+                        }
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_5");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
                         }
                     }
                     break;
@@ -790,10 +811,13 @@ void l2_spandex::ctrl()
                             if (ack_mask) {
                                 HLS_DEFINE_PROTOCOL("fwd_req_v_rsp_ack");
                                 send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, ack_mask);
-                                send_inval(fwd_in.addr, hprot_buf[way_hit]);
                             }
                         }
-                        
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_6");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
+                        }
                     }
                     break;
                     case FWD_REQ_Odata:
@@ -813,8 +837,12 @@ void l2_spandex::ctrl()
                             if (ack_mask) {
                                 HLS_DEFINE_PROTOCOL("fwd_req_v_rsp_ack");
                                 send_rsp_out(RSP_Odata, fwd_in.req_id, true, fwd_in.addr, line_buf[way_hit], ack_mask);
-                                send_inval(fwd_in.addr, hprot_buf[way_hit]);
                             }
+                        }
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_7");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
                         }
                     }
                     break;
@@ -869,9 +897,13 @@ void l2_spandex::ctrl()
                             if (rsp_mask) {
                                 HLS_DEFINE_PROTOCOL("fwd_rvk_o_send_rsp_rvk_o");
                                 send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[way_hit], rsp_mask);
-                                send_inval(fwd_in.addr, hprot_buf[way_hit]);
                             }
 
+                        }
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_8");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
                         }
                     }
                     break;
@@ -884,7 +916,7 @@ void l2_spandex::ctrl()
                                 HLS_UNROLL_LOOP(ON, "1");
                                 if ((fwd_in.word_mask & (1 << i)) && state_buf[way_hit][i] == SPX_R) { // if reqo and we have this word in registered
                                     rsp_mask |= 1 << i;
-                                    state_buf[way_hit][i] = SPX_S;
+                                    state_buf[way_hit][i] = SPX_I;
                                 }
                             }
                             if (rsp_mask) {
@@ -895,7 +927,11 @@ void l2_spandex::ctrl()
                             }
 
                         }
-
+                        {
+                            HLS_DEFINE_PROTOCOL("send_invalidate_9");
+                            wait();
+                            send_inval(fwd_in.addr, DATA);
+                        }
                     }
                     break;
                     case FWD_WTfwd:
