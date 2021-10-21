@@ -1050,29 +1050,25 @@ void llc_spandex::ctrl()
         // handle reset flush
         if (is_flush_to_resume) {
             // partial flush (only VALID DATA lines)
-            if (reqs_cnt != 0) {
-                // wait for responses
-            }
-            else {
-                for (int way = 0; way < LLC_WAYS; way++) {
-                    HLS_DEFINE_PROTOCOL("is_flush_to_resume");
-                    line_addr_t line_addr = (tags_buf[way] << LLC_SET_BITS) | (set);
+            for (int way = 0; way < LLC_WAYS; way++) {
+                line_addr_t line_addr = (tags_buf[way] << LLC_SET_BITS) | (set);
 
-                    if (states_buf[way] == LLC_V && dirty_bits_buf[way]) {
-                        // if (owners_buf[way] == 0) {
-                            send_mem_req(WRITE, line_addr, hprots_buf[way], lines_buf[way]);
-                            // Update current set
-                        // } else {
-                        //         addr_breakdown_llc_t addr_br_real;
-                        //         sc_uint<LLC_REQS_BITS> reqs_hit_i;
-                        //         addr_br_real.breakdown(rsp_in.addr << OFFSET_BITS);
-                        //         reqs_lookup(addr_br_real, reqs_hit_i);
-                        //         send_fwd_with_owner_mask(FWD_RVK_O, line_addr, 0, WORD_MASK_ALL, 0);
-                        //         fill_reqs(FWD_RVK_O, 0, addr_br_real, 0, way, LLC_OV, hprots_buf[way], 0, lines_buf[way], owners_buf[way], reqs_hit_i);
-                        // }
-                    } else {
-                        wait();
+                if (states_buf[way] == LLC_V && hprots_buf[way] == DATA) {
+                    HLS_DEFINE_PROTOCOL("is_flush_to_resume");
+                    if (dirty_bits_buf[way]) {
+                        send_mem_req(WRITE, line_addr, hprots_buf[way], lines_buf[way]);
                     }
+
+                    wait();
+
+                    llc_addr_t llc_addr = base + way;
+
+                    states.port1[0][llc_addr]     = LLC_I;
+                    sharers.port1[0][llc_addr]    = 0;
+                    dirty_bits.port1[0][llc_addr] = 0;
+                    owners.port1[0][llc_addr]     = 0;
+                } else {
+                    wait();
                 }
             }
         }
@@ -2173,29 +2169,6 @@ void llc_spandex::ctrl()
                 dirty_bits.port1[0][idx] = 0;
                 sharers.port1[0][idx]    = 0;
 
-            }
-        }
-
-        // Resume flush
-        else if (is_flush_to_resume) {
-            // partial flush (only VALID DATA lines)
-
-            for (int way = 0; way < LLC_WAYS; way++) {
-
-#ifdef LLC_DEBUG
-                dbg_flush_set.write(set);
-                dbg_flush_way.write(way);
-#endif
-                llc_addr_t llc_addr = base + way;
-
-                if (states_buf[way] == LLC_V && hprots_buf[way] == DATA) {
-
-                    states.port1[0][llc_addr]     = LLC_I;
-                    sharers.port1[0][llc_addr]    = 0;
-                    dirty_bits.port1[0][llc_addr] = 0;
-                    owners.port1[0][llc_addr]     = 0;
-
-                }
             }
         }
         else if (is_rsp_to_get || is_req_to_get || is_dma_req_to_get || is_dma_read_to_resume || is_dma_write_to_resume) {
