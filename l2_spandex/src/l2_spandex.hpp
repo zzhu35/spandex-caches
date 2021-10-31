@@ -80,9 +80,19 @@ public:
     sc_signal< sc_uint<32> > flush_line_dbg;
     sc_signal<sc_uint<2> > current_status_dbg; // 0 idle, 1 cpu req, 2 fwd, 3 resp
     sc_signal<line_addr_t> current_line_dbg;
+    sc_signal< bool > ongoing_fence_dbg;
     sc_signal<word_mask_t> word_mask_owned_dbg;
     sc_signal<l2_way_t> amo_way_dbg;
     sc_signal<word_mask_t> amo_wm_dbg;
+
+    sc_signal< uint32_t > entered_main_loop_dbg;
+    sc_signal< uint32_t > entered_can_get_fwd_dbg;
+    sc_signal< uint32_t > entered_do_rsp_dbg;
+    sc_signal< uint32_t > entered_do_req_dbg;
+    sc_signal< uint32_t > entered_do_fwd_stall_dbg;
+    sc_signal< uint32_t > entered_do_fwd_no_stall_dbg;
+    sc_signal< uint32_t > entered_reqs_peek_fwd_dbg;
+    sc_signal< uint32_t > entered_tag_lookup_dbg;
 
     sc_signal<bool> forced_req_v_dbg;
     bool TEST_inverter;
@@ -91,6 +101,7 @@ public:
 
     // Other signals
     sc_out<bool> flush_done;
+    sc_out<bool> acc_flush_done;
 
     // Input ports
     nb_get_initiator<l2_cpu_req_t>	l2_cpu_req;
@@ -141,6 +152,7 @@ public:
     , bookmark("bookmark")
 #endif
     , flush_done("flush_done")
+    , acc_flush_done("acc_flush_done")
     , l2_cpu_req("l2_cpu_req")
     , l2_fwd_in("l2_fwd_in")
     , l2_fwd_out("l2_fwd_out")
@@ -271,6 +283,18 @@ private:
     sc_uint<REQS_BITS> reqs_atomic_i;
     bool ongoing_flush;
     uint32_t flush_way, flush_set;
+    bool ongoing_fence;
+    sc_uint<2> is_fence; 
+    
+    uint32_t entered_main_loop;
+    uint32_t entered_can_get_fwd;
+    uint32_t entered_do_rsp;
+    uint32_t entered_do_req;
+    uint32_t entered_do_fwd_stall;
+    uint32_t entered_do_fwd_no_stall;
+    uint32_t entered_reqs_peek_fwd;
+    uint32_t entered_tag_lookup;
+
 };
 
 

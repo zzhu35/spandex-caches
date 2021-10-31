@@ -31,6 +31,7 @@ public:
 
     // Other signals
     sc_in<bool> flush_done;
+    sc_in<bool> acc_flush_done;
 
     // Input ports
     put_initiator<l2_cpu_req_t> l2_cpu_req_tb;

@@ -390,12 +390,20 @@ http://rsim.cs.uiuc.edu/
     HLS_PRESERVE_SIGNAL(drain_in_progress_dbg, true); \
     HLS_PRESERVE_SIGNAL(current_line_dbg, true); \
     HLS_PRESERVE_SIGNAL(current_status_dbg, true); \
+    HLS_PRESERVE_SIGNAL(ongoing_fence_dbg, true);	\
     HLS_PRESERVE_SIGNAL(forced_req_v_dbg, true); \
     HLS_PRESERVE_SIGNAL(word_mask_owned_dbg, true); \
     HLS_PRESERVE_SIGNAL(amo_way_dbg, true); \
     HLS_PRESERVE_SIGNAL(amo_wm_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_main_loop_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_can_get_fwd_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_do_rsp_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_do_req_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_do_fwd_stall_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_do_fwd_no_stall_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_reqs_peek_fwd_dbg, true); \
+    HLS_PRESERVE_SIGNAL(entered_tag_lookup_dbg, true); \
     HLS_PRESERVE_SIGNAL(states_dbg, true)
-
 
 #else
 

@@ -38,6 +38,12 @@ void l2_spandex::drain_wb()
     }
     drain_in_progress = !((wbs_cnt == N_WB) && mshr_no_reqo);
 
+    if (!drain_in_progress && ongoing_fence) {
+        HLS_DEFINE_PROTOCOL("send_flush_done");
+        acc_flush_done.write(true);
+        wait();
+        acc_flush_done.write(false);
+    }
 }
 
 void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid)
@@ -181,7 +187,6 @@ void l2_spandex::ctrl()
 {
 
     bool is_sync;
-    sc_uint<2> is_fence;
     {
         L2_SPANDEX_RESET;
 
@@ -199,16 +204,17 @@ void l2_spandex::ctrl()
 
 #ifdef L2_DEBUG
         bookmark_tmp = 0;
-        asserts_tmp = 0;
+        asserts_tmp = 0; 
+        entered_main_loop++;
+        entered_main_loop_dbg.write(entered_main_loop);
 #endif
 
+        bool do_fence = false;
         bool do_flush = false;
         bool do_flush_once = false;
         bool do_rsp = false;
         bool do_fwd = false;
         bool do_cpu_req = false;
-
-        bool do_fence = false;
 
         bool can_get_rsp_in = false;
         bool can_get_req_in = false;
@@ -235,10 +241,12 @@ void l2_spandex::ctrl()
 
             can_get_fence_in = l2_fence.nb_can_get();
             can_get_rsp_in = l2_rsp_in.nb_can_get();
-            can_get_req_in = ((l2_cpu_req.nb_can_get() && (!drain_in_progress)) || set_conflict) && !evict_stall && (reqs_cnt != 0); // if drain in progress, block all cpu requests
+            can_get_req_in = ((l2_cpu_req.nb_can_get() && (!drain_in_progress)) || set_conflict) && !evict_stall && !ongoing_fence && (reqs_cnt != 0); // if drain in progress, block all cpu requests
             can_get_fwd_in = (l2_fwd_in.nb_can_get() && !fwd_stall) || fwd_stall_ended;
             can_get_flush_in = l2_flush.nb_can_get();
 
+            // first check if a fence has arrived;
+            // if there is a valid fence, set do_fence
             if (can_get_fence_in) {
                 l2_fence.nb_get(is_fence);
                 if(is_fence) {
@@ -253,11 +261,22 @@ void l2_spandex::ctrl()
             }
             else if (can_get_fwd_in) {
                 if (!fwd_stall) {
+#ifdef L2_DEBUG
+                    entered_can_get_fwd++;
+                    entered_can_get_fwd_dbg.write(entered_can_get_fwd);
+#endif
                     get_fwd_in(fwd_in);
                 } else {
                     fwd_in = fwd_in_stalled;
                 }
                 do_fwd = true;
+            } else if (ongoing_fence && !drain_in_progress) { 
+                // if there is no new fence, flush, response or forward during the fence,
+                // we will check whether drain has completed. if it has, we will invoke
+                // the self-invalidation - a blocking operation - and then set the fence as done.
+                if (is_fence[0]) self_invalidate();
+                ongoing_fence = false;
+                is_fence = 0;
             } else if (do_ongoing_flush && !drain_in_progress) {
                 // if flush has not started, but drain has finished, flush
                 if (!flush_complete) do_flush_once = true;
@@ -298,11 +317,20 @@ void l2_spandex::ctrl()
         }
 #endif
 
+        // if do_fence was set above, we have a valid fence,
+        // so we will set ongoing_fence to true.
+        // this if block will only trigger the first time the fence is
+        // identified.
         if (do_fence)
         {
-            if (is_fence[0]) self_invalidate();
-            if (is_fence[1]) drain_in_progress = true;
-            do_fence = false;
+            ongoing_fence = true;
+
+            // if fence has release, we will set drain_in_progress,
+            // and unset that bit, so that we don't invoke multiple drains
+            if (is_fence[1]) {
+                drain_in_progress = true;
+                is_fence[1] = 0;
+            }
         } else if (do_flush) {
             drain_in_progress = true;
             do_ongoing_flush = true;
@@ -325,6 +353,8 @@ void l2_spandex::ctrl()
 #if L2_DEBUG
             current_line_dbg.write(rsp_in.addr);
             current_status_dbg.write(3);
+            entered_do_rsp++;
+            entered_do_rsp_dbg.write(entered_do_rsp);
 #endif
             current_set = line_br.set;
 
@@ -552,8 +582,11 @@ void l2_spandex::ctrl()
                 ongoing_atomic = false;
             }
 
-            if (fwd_stall) {
-
+            if (fwd_stall) { 
+#if L2_DEBUG
+                entered_do_fwd_stall++;
+                entered_do_fwd_stall_dbg.write(entered_do_fwd_stall);
+#endif
                 SET_CONFLICT;
                 fwd_in_stalled = fwd_in;
                 // try to handle this fwd_in as much as we can and resolve fwd_stall
@@ -770,6 +803,10 @@ void l2_spandex::ctrl()
                     fwd_stall = false;
 
             } else {
+#if L2_DEBUG
+                entered_do_fwd_no_stall++;
+                entered_do_fwd_no_stall_dbg.write(entered_do_fwd_no_stall);
+#endif
                 switch (fwd_in.coh_msg) {
                     case FWD_INV_SPDX:
                     {
@@ -979,6 +1016,8 @@ void l2_spandex::ctrl()
 #if L2_DEBUG
             current_line_dbg.write(addr_br.line_addr);
             current_status_dbg.write(1);
+            entered_do_req++;
+            entered_do_req_dbg.write(entered_do_req);
 #endif
             current_set = addr_br.set;
             reqs_peek_req(addr_br.set, reqs_empty_i);
@@ -1024,7 +1063,7 @@ void l2_spandex::ctrl()
                     evict_way = way_hit;
                 }
 
-                if ((!tag_hit && !empty_way_found) || req_s_needs_evict)
+                if (((!tag_hit && !empty_way_found) || req_s_needs_evict) && !(cpu_req.cpu_msg == WRITE && cpu_req.dcs_en))
                 {
                     // eviction
                     line_addr_t line_addr_evict = (tag_buf[evict_way] << L2_SET_BITS) | (addr_br.set);
@@ -1144,75 +1183,94 @@ void l2_spandex::ctrl()
 
                     else if (cpu_req.cpu_msg == WRITE)
                     {
-                        l2_way_t way_write;
-                        way_write = (tag_hit) ? way_hit : empty_way;
-                        write_word(line_buf[way_write], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize);
-                        lines.port1[0][base + way_write] = line_buf[way_write];
-                        hprots.port1[0][base + way_write] = cpu_req.hprot;
-                        tags.port1[0][base + way_write] = addr_br.tag;
-
-                        // If the line is in Shared state, then set it to Valid
-                        // b/c we cannot have partial Shared line
-                        for(int i = 0; i < WORDS_PER_LINE; i++){
-                            HLS_UNROLL_LOOP(ON);
-                            if(state_buf[way_write][i] == SPX_S){
-                                state_buf[way_write][i] = SPX_I;
-                            }
-                        }
-
-                        if(cpu_req.dcs_en){
-                                switch (cpu_req.dcs){
-                                    case DCS_ReqWTfwd:
-                                    {
-                                        if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
-                                            bool success = false;
-                                            add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
-                                            if (!success)
-                                            {
-                                                // if wb refused attempted insertion, raise set_conflict
-                                                set_conflict = true;
-
-                                                cpu_req_conflict = cpu_req;
-                                            } else {
-                                                state_buf[way_write][addr_br.w_off] = current_valid_state;
-                                            }
-                                        }
-                                    }
-                                    break;
-                                    default:
-                                    break;
-                                }
-                        }else{
-                            if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
-                                if (cpu_req.hsize < BYTE_BITS) // partial word write
-                                {
-                                    HLS_DEFINE_PROTOCOL("partial word write send req_odata");
-                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
-                                    send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
-                                    reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
-                                    reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
-                                    set_conflict = true;
-
-                                    cpu_req_conflict = cpu_req;
-                                }
-                                else
+                        if(cpu_req.dcs_en && !tag_hit) {
+                            switch (cpu_req.dcs){
+                                case DCS_ReqWTfwd:
                                 {
                                     bool success = false;
-                                    add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
+                                    add_wb(success, addr_br, cpu_req.word, 0, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
                                     if (!success)
                                     {
                                         // if wb refused attempted insertion, raise set_conflict
                                         set_conflict = true;
 
+                                        cpu_req_conflict = cpu_req;
+                                    }
+                                }
+                                break;
+                                default:
+                                break;
+                            }
+                        } else {
+                            l2_way_t way_write;
+                            way_write = (tag_hit) ? way_hit : empty_way;
+                            write_word(line_buf[way_write], cpu_req.word, addr_br.w_off, addr_br.b_off, cpu_req.hsize);
+                            lines.port1[0][base + way_write] = line_buf[way_write];
+                            hprots.port1[0][base + way_write] = cpu_req.hprot;
+                            tags.port1[0][base + way_write] = addr_br.tag;
+
+                            // If the line is in Shared state, then set it to Valid
+                            // b/c we cannot have partial Shared line
+                            for(int i = 0; i < WORDS_PER_LINE; i++){
+                                HLS_UNROLL_LOOP(ON);
+                                if(state_buf[way_write][i] == SPX_S){
+                                    state_buf[way_write][i] = SPX_I;
+                                }
+                            }
+
+                            if(cpu_req.dcs_en){
+                                    switch (cpu_req.dcs){
+                                        case DCS_ReqWTfwd:
+                                        {
+                                            if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
+                                                bool success = false;
+                                                add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
+                                                if (!success)
+                                                {
+                                                    // if wb refused attempted insertion, raise set_conflict
+                                                    set_conflict = true;
+
+                                                    cpu_req_conflict = cpu_req;
+                                                } else {
+                                                    state_buf[way_write][addr_br.w_off] = current_valid_state;
+                                                }
+                                            }
+                                        }
+                                        break;
+                                        default:
+                                        break;
+                                    }
+                            }else{
+                                if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
+                                    if (cpu_req.hsize < BYTE_BITS) // partial word write
+                                    {
+                                        HLS_DEFINE_PROTOCOL("partial word write send req_odata");
+                                        fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
+                                        send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
+                                        reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
+                                        reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                        set_conflict = true;
 
                                         cpu_req_conflict = cpu_req;
-                                    } else {
-                                        state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
+                                    }
+                                    else
+                                    {
+                                        bool success = false;
+                                        add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
+                                        if (!success)
+                                        {
+                                            // if wb refused attempted insertion, raise set_conflict
+                                            set_conflict = true;
+
+
+                                            cpu_req_conflict = cpu_req;
+                                        } else {
+                                            state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
+                                        }
                                     }
                                 }
                             }
-                        }
-
+                        } 
                     }
                     // else if read
                     // assuming line granularity read MESI style
@@ -1303,6 +1361,7 @@ void l2_spandex::ctrl()
         reqs_atomic_i_dbg.write(reqs_atomic_i);
         ongoing_flush_dbg.write(ongoing_flush);
         ongoing_atomic_dbg.write(ongoing_atomic);
+        ongoing_fence_dbg.write(ongoing_fence);
 
         for (int i = 0; i < N_REQS; i++) {
             REQS_DBG;
@@ -1424,6 +1483,7 @@ inline void l2_spandex::reset_io()
     /* Reset signals */
 
     flush_done.write(0);
+    acc_flush_done.write(0);
 
 #ifdef L2_DEBUG
     asserts.write(0);
@@ -1466,6 +1526,16 @@ inline void l2_spandex::reset_io()
     word_mask_owned_dbg.write(0);
     amo_way_dbg.write(0);
     amo_wm_dbg.write(0);
+    ongoing_fence_dbg.write(0);
+ 
+    entered_main_loop_dbg.write(0);
+    entered_can_get_fwd_dbg.write(0);
+    entered_do_rsp_dbg.write(0);
+    entered_do_req_dbg.write(0);
+    entered_do_fwd_stall_dbg.write(0);
+    entered_do_fwd_no_stall_dbg.write(0);
+    entered_reqs_peek_fwd_dbg.write(0);
+    entered_tag_lookup_dbg.write(0);
 
     // for (int i = 0; i < N_REQS; i++) {
     //     REQS_DBGPUT;
@@ -1506,6 +1576,15 @@ inline void l2_spandex::reset_io()
     flush_way = 0;
     current_set = 0;
     current_valid_state = 1;
+ 
+    entered_main_loop = 0;
+    entered_can_get_fwd = 0;
+    entered_do_rsp = 0;
+    entered_do_req = 0;
+    entered_do_fwd_stall = 0;
+    entered_do_fwd_no_stall = 0;
+    entered_reqs_peek_fwd = 0;
+    entered_tag_lookup = 0;
 
     // Reset states and ReqS
     {
@@ -1808,6 +1887,11 @@ void l2_spandex::tag_lookup(addr_breakdown_t addr_br, bool &tag_hit, l2_way_t &w
     word_hit = false;
     empty_way_found = false;
 
+#if L2_DEBUG
+    entered_tag_lookup++;
+    entered_tag_lookup_dbg.write(entered_tag_lookup);
+#endif
+
     read_set(addr_br.set);
     evict_way = evict_ways.port2[0][addr_br.set];
     evict_ways.port1[0][addr_br.set] = evict_way + 1;
@@ -1911,6 +1995,11 @@ void l2_spandex::reqs_peek_fwd(addr_breakdown_t addr_br)
     REQS_PEEK_REQ;
 
     fwd_stall = false;
+
+#if L2_DEBUG
+    entered_reqs_peek_fwd++;
+    entered_reqs_peek_fwd_dbg.write(entered_reqs_peek_fwd);
+#endif
 
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_PEEK_REQ_LOOP;
