@@ -204,7 +204,7 @@ void l2_spandex::ctrl()
 
 #ifdef L2_DEBUG
         bookmark_tmp = 0;
-        asserts_tmp = 0; 
+        asserts_tmp = 0;
         entered_main_loop++;
         entered_main_loop_dbg.write(entered_main_loop);
 #endif
@@ -347,6 +347,7 @@ void l2_spandex::ctrl()
 
             line_breakdown_t<l2_tag_t, l2_set_t> line_br;
             sc_uint<REQS_BITS> reqs_hit_i;
+            bool reqs_hit;
 
             line_br.l2_line_breakdown(rsp_in.addr);
 
@@ -360,23 +361,24 @@ void l2_spandex::ctrl()
 
             base = line_br.set << L2_WAY_BITS;
             read_set(line_br.set);
-            reqs_lookup(line_br, reqs_hit_i);
+            reqs_lookup(line_br, reqs_hit_i, reqs_hit);
 
             switch (rsp_in.coh_msg) {
             case RSP_O:
             {
-                reqs[reqs_hit_i].word_mask &= ~(rsp_in.word_mask);
+                if (reqs_hit == true) {
+                    reqs[reqs_hit_i].word_mask &= ~(rsp_in.word_mask);
 
-                if (reqs[reqs_hit_i].word_mask == 0) {
-                    reqs[reqs_hit_i].state = SPX_I;
-                    reqs_cnt++;
+                    if (reqs[reqs_hit_i].word_mask == 0) {
+                        reqs[reqs_hit_i].state = SPX_I;
+                        reqs_cnt++;
+                    }
+
+                    // End fwd stall (should not happen b/c DRF)
+                    if (fwd_stall && reqs_fwd_stall_i == reqs_hit_i) {
+                        fwd_stall_ended = true;
+                    }
                 }
-
-                // End fwd stall (should not happen b/c DRF)
-                if (fwd_stall && reqs_fwd_stall_i == reqs_hit_i) {
-                    fwd_stall_ended = true;
-                }
-
             }
             break;
             case RSP_Odata:
@@ -411,7 +413,7 @@ void l2_spandex::ctrl()
                         set_conflict = false;
                     }
 
-                    if (reqs[reqs_hit_i].state == SPX_IV) send_rd_rsp(reqs[reqs_hit_i].line);
+                    if (reqs[reqs_hit_i].state == SPX_IV || reqs[reqs_hit_i].cpu_msg == READ) send_rd_rsp(reqs[reqs_hit_i].line);
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
                     put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_R, reqs_hit_i);
@@ -469,6 +471,12 @@ void l2_spandex::ctrl()
             {
                 switch (reqs[reqs_hit_i].state)
                 {
+                    case SPX_XRV:
+                    {
+                        HLS_DEFINE_PROTOCOL("send req wt after rsp nack");
+                        send_req_out(REQ_WT, reqs[reqs_hit_i].hprot, (reqs[reqs_hit_i].tag, reqs[reqs_hit_i].set), reqs[reqs_hit_i].line, rsp_in.word_mask);
+                    }
+                    break;
                     case SPX_IV_DCS:
                     {
                         HLS_DEFINE_PROTOCOL("send reqV miss pred");
@@ -582,7 +590,7 @@ void l2_spandex::ctrl()
                 ongoing_atomic = false;
             }
 
-            if (fwd_stall) { 
+            if (fwd_stall) {
 #if L2_DEBUG
                 entered_do_fwd_stall++;
                 entered_do_fwd_stall_dbg.write(entered_do_fwd_stall);
@@ -736,7 +744,7 @@ void l2_spandex::ctrl()
                                     HLS_DEFINE_PROTOCOL("fwd_rvk_o_send_rsp_rvk_o");
                                     send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
                                     success = true;
-                                } 
+                                }
                             }
                         } 
                         {
@@ -785,13 +793,28 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_WTfwd:
                     {
-                        if(reqs[reqs_fwd_stall_i].state == SPX_RI){
-                            HLS_DEFINE_PROTOCOL("fwd_wtfwd on RI send req_wt & rsp_o");
-                            send_req_out(REQ_WT, 1, fwd_in.addr, fwd_in.line, fwd_in.word_mask);
-                            send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
-                            success = true;
+                        word_mask_t nack_mask = 0;
+
+                        for (int i = 0; i < WORDS_PER_LINE; i++)
+                        {
+                            HLS_UNROLL_LOOP(ON, "1");
+                            if(fwd_in.word_mask & (1 << i)){
+                                if((reqs[reqs_fwd_stall_i].word_mask & (1 << i)) && reqs[reqs_fwd_stall_i].state == SPX_RI){
+                                    nack_mask |= 1 << i;
+                                }
+                            }
                         }
+                        {
+                            HLS_DEFINE_PROTOCOL();
+                            if(nack_mask){
+                                wait();
+                                send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, nack_mask);
+                            }
+                        }
+
+                        success = true;
                     }
+
                     break;
                     default:
                     break;
@@ -973,32 +996,34 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_WTfwd:
                     {
+                        word_mask_t nack_mask = 0;
+                        word_mask_t ack_mask = 0;
+
                         // @TODO check WB
-                        word_mask_t word_mask = 0;
                         if(tag_hit){
                             for (int i = 0; i < WORDS_PER_LINE; i++){
                                 HLS_UNROLL_LOOP(ON, "1");
                                 if (fwd_in.word_mask & (1 << i)) {
                                     if (state_buf[way_hit][i] == SPX_R) {
                                         line_buf[way_hit].range(BITS_PER_WORD*(i+1)-1,BITS_PER_WORD*i) = fwd_in.line.range(BITS_PER_WORD*(i+1)-1,BITS_PER_WORD*i);
+                                        ack_mask |= 1 << i;
                                     } else {
-                                        word_mask |= 1 << i;
+                                        nack_mask |= 1 << i;
                                     }
                                 }
                             }
                             lines.port1[0][base + way_hit] = line_buf[way_hit];
-                            if (word_mask) {
-                                HLS_DEFINE_PROTOCOL("fwd_wtfwd_send_req_wt");
-                                send_req_out(REQ_WT, 1, fwd_in.addr, fwd_in.line, word_mask);
+                            if(ack_mask){
+                                send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, ack_mask);
+                            }
+                            if(nack_mask){
+                                wait();
+                                send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, nack_mask);
                             }
                         }else{
-                            // not found in the cache, send req_wt back to llc
+                            // not found in the cache, send nack to sender
                             HLS_DEFINE_PROTOCOL("fwd_wtfwd_send_req_wt2");
-                            send_req_out(REQ_WT, 1, fwd_in.addr, fwd_in.line, fwd_in.word_mask);
-                        }
-                        {
-                            HLS_DEFINE_PROTOCOL("fwd_wtfwd_send_rsp_o");
-                            send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
+                            send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
                         }
                     }
                     break;
@@ -1270,17 +1295,17 @@ void l2_spandex::ctrl()
                                     }
                                 }
                             }
-                        } 
+                        }
                     }
                     // else if read
                     // assuming line granularity read MESI style
                     else if (tag_hit) {
                         HIT_READ;
                         word_mask_t word_mask = 0;
-                        for (int i = 0; i < WORDS_PER_LINE; i ++)
+                        for (int i = 0; i < WORDS_PER_LINE; i++)
                         {
                             HLS_UNROLL_LOOP(ON, "2");
-                            if (state_buf[way_hit][i] < current_valid_state)
+                            if (state_buf[way_hit][i] < current_valid_state || (cpu_req.dcs == DCS_ReqOdata && state_buf[way_hit][i] != SPX_R))
                             {
                                 word_mask |= 1 << i;
                             }
@@ -1292,9 +1317,26 @@ void l2_spandex::ctrl()
                                 send_fwd_out(FWD_REQ_V, cpu_req.pred_cid, 1, addr_br.line_addr, 0, word_mask);
                                 fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
                             }else if(cpu_req.dcs_en){
-                                HLS_DEFINE_PROTOCOL("cpu read req v");
-                                send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, word_mask);
-                                fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
+                                switch (cpu_req.dcs){
+                                    case DCS_ReqV:
+                                    {
+                                        HLS_DEFINE_PROTOCOL("cpu read req v");
+                                        send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, word_mask);
+                                        fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[way_hit], ~word_mask, reqs_empty_i);
+                                    }
+                                    break;
+                                    case DCS_ReqOdata:
+                                    {
+                                        HLS_DEFINE_PROTOCOL("cpu read req o data");
+                                        send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, word_mask);
+                                        fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_XR, cpu_req.hprot, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
+                                        reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
+                                        reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                    }
+                                    break;
+                                    default:
+                                    break;
+                                }
                             }else{
                                 // ReqS, the line will NOT be partial owned
                                 HLS_DEFINE_PROTOCOL("cpu read req s partial v");
@@ -1305,19 +1347,33 @@ void l2_spandex::ctrl()
                         else {
                             send_rd_rsp(line_buf[way_hit]);
                         }
-                        
-
                     }
                     else if (empty_way_found) {
-
                         if(cpu_req.dcs_en && cpu_req.use_owner_pred){
                             HLS_DEFINE_PROTOCOL("cpu read empty way fwd req v");
                             send_fwd_out(FWD_REQ_V, cpu_req.pred_cid, 1, addr_br.line_addr, 0, WORD_MASK_ALL);
                             fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV_DCS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }else if(cpu_req.dcs_en){
-                            HLS_DEFINE_PROTOCOL("cpu read empty way req v");
-                            send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
-                            fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                            switch (cpu_req.dcs){
+                                case DCS_ReqV:
+                                {
+                                    HLS_DEFINE_PROTOCOL("cpu read empty way req v");
+                                    send_req_out(REQ_V, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IV, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                                }
+                                break;
+                                case DCS_ReqOdata:
+                                {
+                                    HLS_DEFINE_PROTOCOL("cpu read empty way req o data");
+                                    send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_XR, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                                    reqs[reqs_empty_i].word_mask = WORD_MASK_ALL;
+                                    reqs_word_mask_in[reqs_empty_i] = WORD_MASK_ALL;
+                                }
+                                break;
+                                default:
+                                break;
+                            }
                         }else{
                             HLS_DEFINE_PROTOCOL("cpu read empty way req s");
                             send_req_out(REQ_S, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
@@ -1510,6 +1566,7 @@ inline void l2_spandex::reset_io()
     empty_found_req_dbg.write(0);
     empty_way_req_dbg.write(0);
     reqs_hit_i_req_dbg.write(0);
+    reqs_hit_dbg.write(0);
     way_hit_fwd_dbg.write(0);
     peek_reqs_i_dbg.write(0);
     peek_reqs_i_flush_dbg.write(0);
@@ -1932,20 +1989,24 @@ void l2_spandex::tag_lookup(addr_breakdown_t addr_br, bool &tag_hit, l2_way_t &w
 }
 
 
-void l2_spandex::reqs_lookup(line_breakdown_t<l2_tag_t, l2_set_t> line_br, sc_uint<REQS_BITS> &reqs_hit_i)
+void l2_spandex::reqs_lookup(line_breakdown_t<l2_tag_t, l2_set_t> line_br, sc_uint<REQS_BITS> &reqs_hit_i, bool &reqs_hit)
 {
     REQS_LOOKUP;
+
+    reqs_hit = false;
 
     for (unsigned int i = 0; i < N_REQS; ++i) {
         REQS_LOOKUP_LOOP;
 
         if (reqs[i].tag == line_br.tag && reqs[i].set == line_br.set && reqs[i].state != SPX_I) {
             reqs_hit_i = i;
+            reqs_hit = true;
         }
     }
 
 #ifdef L2_DEBUG
     reqs_hit_i_req_dbg.write(reqs_hit_i);
+    reqs_hit_dbg.write(reqs_hit);
 #endif
     // REQS_LOOKUP_ASSERT;
 }
