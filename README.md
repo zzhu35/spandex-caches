@@ -17,7 +17,7 @@ For details on how to use ESP, refer to their detailed guide on [building a sing
 
 #### Bare minimum submodules to run all the steps below:
 ```
-git submodule update --init --recursive --remote rtl/caches/esp-caches/  rtl/caches/spandex-caches/ accelerators/stratus_hls/common/inc/ accelerators/chisel/hw rtl/cores/ariane/ariane soft/ariane/riscv-tests/ soft/ariane/linux/ soft/ariane/riscv-pk soft/ariane/opensbi
+git submodule update --init --recursive rtl/caches/esp-caches/  rtl/caches/spandex-caches/ accelerators/stratus_hls/common/inc/ accelerators/chisel/hw rtl/cores/ariane/ariane soft/ariane/riscv-tests/ soft/ariane/linux/ soft/ariane/riscv-pk soft/ariane/opensbi
 ```
 
 #### Generating the RTL from the SystemC caches
