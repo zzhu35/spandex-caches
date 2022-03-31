@@ -23,6 +23,7 @@ public:
 
     // Signals
     sc_signal<bool> flush_done;
+    sc_signal<bool> acc_flush_done;
 
     // Channels
     // To L2 cache
@@ -60,6 +61,7 @@ public:
     	dut->clk(clk);
     	dut->rst(rst);
     	dut->flush_done(flush_done);
+    	dut->acc_flush_done(acc_flush_done);
     	dut->l2_cpu_req(l2_cpu_req_chnl);
     	dut->l2_fwd_in(l2_fwd_in_chnl);
     	dut->l2_rsp_in(l2_rsp_in_chnl);
@@ -80,6 +82,7 @@ public:
     	tb->clk(clk);
     	tb->rst(rst);
         tb->flush_done(flush_done);
+        tb->acc_flush_done(acc_flush_done);
     	tb->l2_cpu_req_tb(l2_cpu_req_chnl);
     	tb->l2_fwd_in_tb(l2_fwd_in_chnl);
     	tb->l2_rsp_in_tb(l2_rsp_in_chnl); 

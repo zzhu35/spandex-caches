@@ -85,7 +85,8 @@ http://rsim.cs.uiuc.edu/
 
 // CPU DCS
 #define DCS_ReqWTfwd    1
-#define DCS_ReqS        2
+#define DCS_ReqV        1
+#define DCS_ReqOdata    2
 
 
 #define ARIANE_AMO_BITS 6

@@ -61,6 +61,7 @@ public:
     sc_signal<bool> empty_found_req_dbg;
     sc_signal<l2_way_t> empty_way_req_dbg;
     sc_signal<sc_uint<REQS_BITS> > reqs_hit_i_req_dbg;
+    sc_signal<bool> reqs_hit_dbg;
     sc_signal<l2_way_t> way_hit_fwd_dbg;
     sc_signal<l2_way_t> peek_reqs_i_dbg;
     sc_signal<l2_way_t> peek_reqs_i_flush_dbg;
@@ -80,9 +81,19 @@ public:
     sc_signal< sc_uint<32> > flush_line_dbg;
     sc_signal<sc_uint<2> > current_status_dbg; // 0 idle, 1 cpu req, 2 fwd, 3 resp
     sc_signal<line_addr_t> current_line_dbg;
+    sc_signal< bool > ongoing_fence_dbg;
     sc_signal<word_mask_t> word_mask_owned_dbg;
     sc_signal<l2_way_t> amo_way_dbg;
     sc_signal<word_mask_t> amo_wm_dbg;
+
+    sc_signal< uint32_t > entered_main_loop_dbg;
+    sc_signal< uint32_t > entered_can_get_fwd_dbg;
+    sc_signal< uint32_t > entered_do_rsp_dbg;
+    sc_signal< uint32_t > entered_do_req_dbg;
+    sc_signal< uint32_t > entered_do_fwd_stall_dbg;
+    sc_signal< uint32_t > entered_do_fwd_no_stall_dbg;
+    sc_signal< uint32_t > entered_reqs_peek_fwd_dbg;
+    sc_signal< uint32_t > entered_tag_lookup_dbg;
 
     sc_signal<bool> forced_req_v_dbg;
     bool TEST_inverter;
@@ -91,6 +102,7 @@ public:
 
     // Other signals
     sc_out<bool> flush_done;
+    sc_out<bool> acc_flush_done;
 
     // Input ports
     nb_get_initiator<l2_cpu_req_t>	l2_cpu_req;
@@ -141,6 +153,7 @@ public:
     , bookmark("bookmark")
 #endif
     , flush_done("flush_done")
+    , acc_flush_done("acc_flush_done")
     , l2_cpu_req("l2_cpu_req")
     , l2_fwd_in("l2_fwd_in")
     , l2_fwd_out("l2_fwd_out")
@@ -207,7 +220,7 @@ public:
     inline void send_req_out(coh_msg_t coh_msg, hprot_t hprot, line_addr_t line_addr, line_t lines, word_mask_t word_mask);
     inline void send_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, line_addr_t line_addr, line_t line, word_mask_t word_mask);
     inline void send_fwd_out(coh_msg_t coh_msg, cache_id_t dst_id, bool to_dst, line_addr_t line_addr, line_t line, word_mask_t word_mask);
-    void send_inval(line_addr_t addr_inval);
+    void send_inval(line_addr_t addr_inval, hprot_t hprot_inval);
     /* Functions to move around buffered lines */
     void fill_reqs(cpu_msg_t cpu_msg, addr_breakdown_t addr_br, l2_tag_t tag_estall, l2_way_t way_hit, 
 		   hsize_t hsize, unstable_state_t state, hprot_t hprot, word_t word, line_t line, word_mask_t word_mask,
@@ -219,7 +232,7 @@ public:
     void read_set(l2_set_t set);
     void tag_lookup(addr_breakdown_t addr_br, bool &tag_hit, l2_way_t &way_hit, bool &empty_way_found, l2_way_t &empty_way, bool &word_hit);
     void reqs_lookup(line_breakdown_t<l2_tag_t, l2_set_t> line_addr_br,
-		     sc_uint<REQS_BITS> &reqs_hit_i);
+		     sc_uint<REQS_BITS> &reqs_hit_i, bool &reqs_hit);
     void reqs_peek_req(l2_set_t set, sc_uint<REQS_BITS> &reqs_i);
     void reqs_peek_flush(l2_set_t set, sc_uint<REQS_BITS> &reqs_i);
     void reqs_peek_fwd(addr_breakdown_t addr_br);
@@ -271,6 +284,18 @@ private:
     sc_uint<REQS_BITS> reqs_atomic_i;
     bool ongoing_flush;
     uint32_t flush_way, flush_set;
+    bool ongoing_fence;
+    sc_uint<2> is_fence; 
+    
+    uint32_t entered_main_loop;
+    uint32_t entered_can_get_fwd;
+    uint32_t entered_do_rsp;
+    uint32_t entered_do_req;
+    uint32_t entered_do_fwd_stall;
+    uint32_t entered_do_fwd_no_stall;
+    uint32_t entered_reqs_peek_fwd;
+    uint32_t entered_tag_lookup;
+
 };
 
 
