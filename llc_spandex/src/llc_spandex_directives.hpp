@@ -23,6 +23,7 @@ http://rsim.cs.uiuc.edu/
     HLS_FLATTEN_ARRAY(sharers_buf);		\
     HLS_FLATTEN_ARRAY(owners_buf);		\
     HLS_FLATTEN_ARRAY(dirty_bits_buf);   \
+    HLS_FLATTEN_ARRAY(fcs_prio_buf);   \
     HLS_FLATTEN_ARRAY(reqs);            \
     HLS_FLATTEN_ARRAY(fwd_coal_word_mask); \
     HLS_FLATTEN_ARRAY(fwd_coal_temp_dest)
@@ -35,7 +36,8 @@ http://rsim.cs.uiuc.edu/
     HLS_MAP_TO_MEMORY(owners, IMP_MEM_NAME_STRING(llc_spandex, owners, LLC_SETS, LLC_WAYS));         \
     HLS_MAP_TO_MEMORY(sharers, IMP_MEM_NAME_STRING(llc_spandex, sharers, LLC_SETS, LLC_WAYS));       \
     HLS_MAP_TO_MEMORY(dirty_bits, IMP_MEM_NAME_STRING(llc_spandex, dirty_bits, LLC_SETS, LLC_WAYS)); \
-    HLS_MAP_TO_MEMORY(evict_ways, IMP_MEM_NAME_STRING(llc_spandex, evict_ways, LLC_SETS, LLC_WAYS))
+    HLS_MAP_TO_MEMORY(evict_ways, IMP_MEM_NAME_STRING(llc_spandex, evict_ways, LLC_SETS, LLC_WAYS)); \
+    HLS_MAP_TO_MEMORY(fcs_prio, IMP_MEM_NAME_STRING(llc_spandex, fcs_prio, LLC_SETS, LLC_WAYS))
 
 #ifdef LLC_DEBUG_TURN_OFF_HERE
 

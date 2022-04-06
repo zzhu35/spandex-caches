@@ -24,6 +24,7 @@ http://rsim.cs.uiuc.edu/
 #include EXP_MEM_INCLUDE_STRING(llc_spandex, owners, LLC_SETS, LLC_WAYS)
 #include EXP_MEM_INCLUDE_STRING(llc_spandex, dirty_bits, LLC_SETS, LLC_WAYS)
 #include EXP_MEM_INCLUDE_STRING(llc_spandex, evict_ways, LLC_SETS, LLC_WAYS)
+#include EXP_MEM_INCLUDE_STRING(llc_spandex, fcs_prio, LLC_SETS, LLC_WAYS)
 
 class llc_spandex : public sc_module
 {
@@ -117,6 +118,7 @@ public:
     EXP_MEM_TYPE_STRING(llc_spandex, sharers, LLC_SETS, LLC_WAYS)<sharers_t, LLC_LINES> sharers;
     EXP_MEM_TYPE_STRING(llc_spandex, dirty_bits, LLC_SETS, LLC_WAYS)<sc_uint<2>, LLC_LINES> dirty_bits;
     EXP_MEM_TYPE_STRING(llc_spandex, evict_ways, LLC_SETS, LLC_WAYS)<llc_way_t, LLC_SETS> evict_ways;
+    EXP_MEM_TYPE_STRING(llc_spandex, fcs_prio, LLC_SETS, LLC_WAYS)<sc_uint<2>, LLC_LINES> fcs_prio;
 
     // Local registers
 
@@ -130,6 +132,7 @@ public:
     word_mask_t  owners_buf[LLC_WAYS];
     sc_uint<2>   dirty_bits_buf[LLC_WAYS];
     llc_way_t	 evict_ways_buf;
+    sc_uint<2>   fcs_prio_buf[LLC_WAYS];
 
     word_mask_t fwd_coal_word_mask[WORDS_PER_LINE];
     cache_id_t fwd_coal_temp_dest[WORDS_PER_LINE];
@@ -189,6 +192,7 @@ public:
 	sharers.clk(this->clk);
 	dirty_bits.clk(this->clk);
 	evict_ways.clk(this->clk);
+	fcs_prio.clk(this->clk);
 
 	// // Mapping to memory resources
         // LLC_MAP_MEMORY;

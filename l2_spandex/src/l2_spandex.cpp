@@ -610,7 +610,7 @@ void l2_spandex::ctrl()
                             HLS_DEFINE_PROTOCOL("send rsp_inv_ack_spdx fwd_stall");
                             send_rsp_out(RSP_INV_ACK_SPDX, 0, 0, fwd_in.addr, 0, WORD_MASK_ALL);
                             wait();
-                            send_inval(fwd_in.addr, hprot_buf[way_hit]);
+                            send_inval(fwd_in.addr, DATA);
                         }
                         success = true;
                     }
@@ -1120,7 +1120,7 @@ void l2_spandex::ctrl()
                             send_req_out(REQ_WB, hprot_buf[evict_way], line_addr_evict, line_buf[evict_way], word_mask);
                             fill_reqs(0, evict_addr_br, 0, 0, 0, SPX_RI, 0, 0, line_buf[evict_way], word_mask, reqs_empty_i);
                         }
-                        send_inval(line_addr_evict, hprot_buf[evict_way]);
+                        send_inval(line_addr_evict, DATA);
                     }
                     set_conflict = true;
                     cpu_req_conflict = cpu_req;
@@ -1270,7 +1270,7 @@ void l2_spandex::ctrl()
                                     if (cpu_req.hsize < BYTE_BITS) // partial word write
                                     {
                                         HLS_DEFINE_PROTOCOL("partial word write send req_odata");
-                                        fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, cpu_req.hprot, 0, line_buf[way_write], 0, reqs_empty_i);
+                                        fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, DATA, 0, line_buf[way_write], 0, reqs_empty_i);
                                         send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
                                         reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
                                         reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
@@ -1328,8 +1328,8 @@ void l2_spandex::ctrl()
                                     case DCS_ReqOdata:
                                     {
                                         HLS_DEFINE_PROTOCOL("cpu read req o data");
-                                        send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, word_mask);
-                                        fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_XR, cpu_req.hprot, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
+                                        send_req_out(REQ_Odata, INSTR, addr_br.line_addr, 0, word_mask);
+                                        fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_XR, INSTR, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
                                         reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
                                         reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
                                     }
@@ -1365,8 +1365,8 @@ void l2_spandex::ctrl()
                                 case DCS_ReqOdata:
                                 {
                                     HLS_DEFINE_PROTOCOL("cpu read empty way req o data");
-                                    send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, WORD_MASK_ALL);
-                                    fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_XR, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
+                                    send_req_out(REQ_Odata, INSTR, addr_br.line_addr, 0, WORD_MASK_ALL);
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_XR, INSTR, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                                     reqs[reqs_empty_i].word_mask = WORD_MASK_ALL;
                                     reqs_word_mask_in[reqs_empty_i] = WORD_MASK_ALL;
                                 }
