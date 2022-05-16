@@ -981,9 +981,9 @@ void l2_spandex::ctrl()
                             }
                             if (rsp_mask) {
                                 HLS_DEFINE_PROTOCOL("send rsp s");
-                                send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[way_hit], rsp_mask);
-                                wait();
                                 send_rsp_out(RSP_S, fwd_in.req_id, true, fwd_in.addr, line_buf[way_hit], rsp_mask);
+                                wait();
+                                send_rsp_out(RSP_RVK_O, fwd_in.req_id, false, fwd_in.addr, line_buf[way_hit], rsp_mask);
                             }
 
                         }
