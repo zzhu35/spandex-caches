@@ -108,9 +108,6 @@ void l2_spandex_tb::l2_test()
 
     get_inval(addr.word /* addr */, DATA /* hprot */);    
 
-    get_rsp_out(RSP_Odata /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
-        line /* line */, 0b0001 /* word_mask */);
-
     wait();
 
     ////////////////////////////////////////////////////////////////
@@ -276,6 +273,10 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    get_inval(addr1.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     ////////////////////////////////////////////////////////////////
     // TEST 3: Read new line with different request types
     // TODO even if the requested data is not full line, in case of
@@ -405,14 +406,14 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
-    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
-        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
-        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
-        0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+    // put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+    //     addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+    //     0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+    //     0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
 
-    get_rd_rsp(line /* line */);
+    // get_rd_rsp(line /* line */);
 
-    wait();
+    // wait();
 
     ////////////////////////////////////////////////////////////////
     // try to return with ReqS
@@ -749,6 +750,8 @@ void l2_spandex_tb::l2_test()
         0b0011 /* word_mask */, 0 /* invack_cnt */);
 
     get_rd_rsp(line /* line */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     ////////////////////////////////////////////////////////////////
     // TEST 8: partial FWD_REQ_O
