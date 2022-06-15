@@ -65,6 +65,7 @@ inline void llc_spandex::reset_io()
     owners.port1.reset();
     sharers.port1.reset();
     dirty_bits.port1.reset();
+    fcs_prio.port1.reset();
 
     tags.port2.reset();
     states.port2.reset();
@@ -73,6 +74,7 @@ inline void llc_spandex::reset_io()
     owners.port2.reset();
     sharers.port2.reset();
     dirty_bits.port2.reset();
+    fcs_prio.port2.reset();
 
     tags.port3.reset();
     states.port3.reset();
@@ -81,6 +83,7 @@ inline void llc_spandex::reset_io()
     owners.port3.reset();
     sharers.port3.reset();
     dirty_bits.port3.reset();
+    fcs_prio.port3.reset();
 
     tags.port4.reset();
     states.port4.reset();
@@ -89,6 +92,7 @@ inline void llc_spandex::reset_io()
     owners.port4.reset();
     sharers.port4.reset();
     dirty_bits.port4.reset();
+    fcs_prio.port4.reset();
 
     tags.port5.reset();
     states.port5.reset();
@@ -97,6 +101,7 @@ inline void llc_spandex::reset_io()
     owners.port5.reset();
     sharers.port5.reset();
     dirty_bits.port5.reset();
+    fcs_prio.port5.reset();
 
 #if (LLC_WAYS >= 8)
 
@@ -107,6 +112,7 @@ inline void llc_spandex::reset_io()
     owners.port6.reset();
     sharers.port6.reset();
     dirty_bits.port6.reset();
+    fcs_prio.port6.reset();
 
     tags.port7.reset();
     states.port7.reset();
@@ -115,6 +121,7 @@ inline void llc_spandex::reset_io()
     owners.port7.reset();
     sharers.port7.reset();
     dirty_bits.port7.reset();
+    fcs_prio.port7.reset();
 
     tags.port8.reset();
     states.port8.reset();
@@ -123,6 +130,7 @@ inline void llc_spandex::reset_io()
     owners.port8.reset();
     sharers.port8.reset();
     dirty_bits.port8.reset();
+    fcs_prio.port8.reset();
 
     tags.port9.reset();
     states.port9.reset();
@@ -131,6 +139,7 @@ inline void llc_spandex::reset_io()
     owners.port9.reset();
     sharers.port9.reset();
     dirty_bits.port9.reset();
+    fcs_prio.port9.reset();
 
 #if (LLC_WAYS >= 16)
 
@@ -229,6 +238,7 @@ inline void llc_spandex::reset_state()
         owners_buf[i] = 0;
         dirty_bits_buf[i] = 0;
         hprots_buf[i] = 0;
+        fcs_prio_buf[i] = 0;
     }
     wait();
     for (int i = 0; i < LLC_N_REQS; i++)
@@ -314,6 +324,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[0 + way_offset] = owners.port2[0][base + 0 + way_offset];
     sharers_buf[0 + way_offset] = sharers.port2[0][base + 0 + way_offset];
     dirty_bits_buf[0 + way_offset] = dirty_bits.port2[0][base + 0 + way_offset];
+    fcs_prio_buf[0 + way_offset] = fcs_prio.port2[0][base + 0 + way_offset];
 
     tags_buf[1 + way_offset] = tags.port3[0][base + 1 + way_offset];
     states_buf[1 + way_offset] = states.port3[0][base + 1 + way_offset];
@@ -322,6 +333,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[1 + way_offset] = owners.port3[0][base + 1 + way_offset];
     sharers_buf[1 + way_offset] = sharers.port3[0][base + 1 + way_offset];
     dirty_bits_buf[1 + way_offset] = dirty_bits.port3[0][base + 1 + way_offset];
+    fcs_prio_buf[1 + way_offset] = fcs_prio.port3[0][base + 1 + way_offset];
 
     tags_buf[2 + way_offset] = tags.port4[0][base + 2 + way_offset];
     states_buf[2 + way_offset] = states.port4[0][base + 2 + way_offset];
@@ -330,6 +342,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[2 + way_offset] = owners.port4[0][base + 2 + way_offset];
     sharers_buf[2 + way_offset] = sharers.port4[0][base + 2 + way_offset];
     dirty_bits_buf[2 + way_offset] = dirty_bits.port4[0][base + 2 + way_offset];
+    fcs_prio_buf[2 + way_offset] = fcs_prio.port4[0][base + 2 + way_offset];
 
     tags_buf[3 + way_offset] = tags.port5[0][base + 3 + way_offset];
     states_buf[3 + way_offset] = states.port5[0][base + 3 + way_offset];
@@ -338,6 +351,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[3 + way_offset] = owners.port5[0][base + 3 + way_offset];
     sharers_buf[3 + way_offset] = sharers.port5[0][base + 3 + way_offset];
     dirty_bits_buf[3 + way_offset] = dirty_bits.port5[0][base + 3 + way_offset];
+    fcs_prio_buf[3 + way_offset] = fcs_prio.port5[0][base + 3 + way_offset];
 
 #if (LLC_WAYS >= 8)
 
@@ -348,6 +362,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[4 + way_offset] = owners.port6[0][base + 4 + way_offset];
     sharers_buf[4 + way_offset] = sharers.port6[0][base + 4 + way_offset];
     dirty_bits_buf[4 + way_offset] = dirty_bits.port6[0][base + 4 + way_offset];
+    fcs_prio_buf[4 + way_offset] = fcs_prio.port6[0][base + 4 + way_offset];
 
     tags_buf[5 + way_offset] = tags.port7[0][base + 5 + way_offset];
     states_buf[5 + way_offset] = states.port7[0][base + 5 + way_offset];
@@ -356,6 +371,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[5 + way_offset] = owners.port7[0][base + 5 + way_offset];
     sharers_buf[5 + way_offset] = sharers.port7[0][base + 5 + way_offset];
     dirty_bits_buf[5 + way_offset] = dirty_bits.port7[0][base + 5 + way_offset];
+    fcs_prio_buf[5 + way_offset] = fcs_prio.port7[0][base + 5 + way_offset];
 
     tags_buf[6 + way_offset] = tags.port8[0][base + 6 + way_offset];
     states_buf[6 + way_offset] = states.port8[0][base + 6 + way_offset];
@@ -364,6 +380,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[6 + way_offset] = owners.port8[0][base + 6 + way_offset];
     sharers_buf[6 + way_offset] = sharers.port8[0][base + 6 + way_offset];
     dirty_bits_buf[6 + way_offset] = dirty_bits.port8[0][base + 6 + way_offset];
+    fcs_prio_buf[6 + way_offset] = fcs_prio.port8[0][base + 6 + way_offset];
 
     tags_buf[7 + way_offset] = tags.port9[0][base + 7 + way_offset];
     states_buf[7 + way_offset] = states.port9[0][base + 7 + way_offset];
@@ -372,6 +389,7 @@ inline void llc_spandex::read_set(const llc_addr_t base, const llc_way_t way_off
     owners_buf[7 + way_offset] = owners.port9[0][base + 7 + way_offset];
     sharers_buf[7 + way_offset] = sharers.port9[0][base + 7 + way_offset];
     dirty_bits_buf[7 + way_offset] = dirty_bits.port9[0][base + 7 + way_offset];
+    fcs_prio_buf[7 + way_offset] = fcs_prio.port9[0][base + 7 + way_offset];
 
 #if (LLC_WAYS >= 16)
 
@@ -495,7 +513,7 @@ void llc_spandex::lookup(llc_tag_t tag, llc_way_t &way, bool &evict)
 
         llc_way_t way = (llc_way_t) i + evict_ways_buf;
 
-        if (states_buf[way] == LLC_V) {
+        if (states_buf[way] == LLC_V && fcs_prio_buf[way] == 0) {
             evict_valid = true;
             evict_way_valid = way;
         }
@@ -970,6 +988,8 @@ void llc_spandex::ctrl()
         dbg_dma_read_pending.write(dma_read_pending);
         dbg_dma_write_pending.write(dma_write_pending);
 
+        dbg_llc_req_conflict = llc_req_conflict;
+        dbg_llc_req_stall = llc_req_stall;
 #endif
 
         // -----------------------------
@@ -1048,29 +1068,25 @@ void llc_spandex::ctrl()
         // handle reset flush
         if (is_flush_to_resume) {
             // partial flush (only VALID DATA lines)
-            if (reqs_cnt != 0) {
-                // wait for responses
-            }
-            else {
-                for (int way = 0; way < LLC_WAYS; way++) {
-                    HLS_DEFINE_PROTOCOL("is_flush_to_resume");
-                    line_addr_t line_addr = (tags_buf[way] << LLC_SET_BITS) | (set);
+            for (int way = 0; way < LLC_WAYS; way++) {
+                line_addr_t line_addr = (tags_buf[way] << LLC_SET_BITS) | (set);
 
-                    if (states_buf[way] == LLC_V && dirty_bits_buf[way]) {
-                        // if (owners_buf[way] == 0) {
-                            send_mem_req(WRITE, line_addr, hprots_buf[way], lines_buf[way]);
-                            // Update current set
-                        // } else {
-                        //         addr_breakdown_llc_t addr_br_real;
-                        //         sc_uint<LLC_REQS_BITS> reqs_hit_i;
-                        //         addr_br_real.breakdown(rsp_in.addr << OFFSET_BITS);
-                        //         reqs_lookup(addr_br_real, reqs_hit_i);
-                        //         send_fwd_with_owner_mask(FWD_RVK_O, line_addr, 0, WORD_MASK_ALL, 0);
-                        //         fill_reqs(FWD_RVK_O, 0, addr_br_real, 0, way, LLC_OV, hprots_buf[way], 0, lines_buf[way], owners_buf[way], reqs_hit_i);
-                        // }
-                    } else {
-                        wait();
+                if (states_buf[way] == LLC_V && hprots_buf[way] == DATA) {
+                    HLS_DEFINE_PROTOCOL("is_flush_to_resume");
+                    if (dirty_bits_buf[way]) {
+                        send_mem_req(WRITE, line_addr, hprots_buf[way], lines_buf[way]);
                     }
+
+                    wait();
+
+                    llc_addr_t llc_addr = base + way;
+
+                    states.port1[0][llc_addr]     = LLC_I;
+                    sharers.port1[0][llc_addr]    = 0;
+                    dirty_bits.port1[0][llc_addr] = 0;
+                    owners.port1[0][llc_addr]     = 0;
+                } else {
+                    wait();
                 }
             }
         }
@@ -1308,6 +1324,8 @@ void llc_spandex::ctrl()
 
                 if (evict) {
                     LLC_EVICT;
+
+                    fcs_prio_buf[way] = 0;
 
                     if (way == evict_ways_buf) {
                         update_evict_ways = true;
@@ -1705,6 +1723,8 @@ void llc_spandex::ctrl()
 
                         case REQ_WTfwd :
 
+                        fcs_prio_buf[way] = 1;
+
                         switch (states_buf[way]) {
 
                             case LLC_I :
@@ -1780,6 +1800,12 @@ void llc_spandex::ctrl()
 
                         case REQ_Odata :
 
+                        // Read with ReqOdata
+                        if (req_in.hprot == INSTR)
+                        {
+                            fcs_prio_buf[way] = 1;
+                        }
+
                         // LLC_REQO;
 
                         switch (states_buf[way]) {
@@ -1828,7 +1854,6 @@ void llc_spandex::ctrl()
                                     }
                                 }
                                 owners_buf[way] |= req_in.word_mask;
-
                             }
                             break;
 
@@ -2173,29 +2198,6 @@ void llc_spandex::ctrl()
 
             }
         }
-
-        // Resume flush
-        else if (is_flush_to_resume) {
-            // partial flush (only VALID DATA lines)
-
-            for (int way = 0; way < LLC_WAYS; way++) {
-
-#ifdef LLC_DEBUG
-                dbg_flush_set.write(set);
-                dbg_flush_way.write(way);
-#endif
-                llc_addr_t llc_addr = base + way;
-
-                if (states_buf[way] == LLC_V && hprots_buf[way] == DATA) {
-
-                    states.port1[0][llc_addr]     = LLC_I;
-                    sharers.port1[0][llc_addr]    = 0;
-                    dirty_bits.port1[0][llc_addr] = 0;
-                    owners.port1[0][llc_addr]     = 0;
-
-                }
-            }
-        }
         else if (is_rsp_to_get || is_req_to_get || is_dma_req_to_get || is_dma_read_to_resume || is_dma_write_to_resume) {
 
             tags.port1[0][llc_addr]       = tags_buf[way];
@@ -2205,6 +2207,7 @@ void llc_spandex::ctrl()
             owners.port1[0][llc_addr]     = owners_buf[way];
             sharers.port1[0][llc_addr]    = sharers_buf[way];
             dirty_bits.port1[0][llc_addr] = dirty_bits_buf[way];
+            fcs_prio.port1[0][llc_addr]   = fcs_prio_buf[way];
 
             if (update_evict_ways)
                 evict_ways.port1[0][set] = evict_ways_buf;

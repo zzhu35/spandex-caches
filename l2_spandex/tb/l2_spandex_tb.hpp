@@ -31,6 +31,7 @@ public:
 
     // Other signals
     sc_in<bool> flush_done;
+    sc_in<bool> acc_flush_done;
 
     // Input ports
     put_initiator<l2_cpu_req_t> l2_cpu_req_tb;
@@ -99,7 +100,7 @@ public:
     void put_rsp_in(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt);
     void get_rd_rsp(line_t line);
     void get_bresp(sc_uint<2> gold_bresp_val);
-    void get_inval(addr_t addr);
+    void get_inval(addr_t addr_inval, hprot_t hprot_inval);
     void op(cpu_msg_t cpu_msg, int beh, int rsp_beh, coh_msg_t rsp_msg, invack_cnt_t invack_cnt, 
 	    coh_msg_t put_msg, hsize_t hsize, addr_breakdown_t req_addr, word_t req_word, 
 	    line_t rsp_line, int fwd_beh, mix_msg_t fwd_msg, state_t fwd_state, cache_id_t fwd_id, 

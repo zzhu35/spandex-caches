@@ -30,3 +30,4 @@ llc_spandex_sharers_1024sets_8ways 8192 16 1w:0r 0w:8r
 llc_spandex_dirty_bits_1024sets_8ways 8192 1 1w:0r 0w:8r
 llc_spandex_evict_ways_1024sets_8ways 1024 3 1w:0r 0w:1r
 llc_spandex_owners_1024sets_8ways 8192 2 1w:0r 0w:8r
+llc_spandex_fcs_prio_1024sets_8ways 8192 1 1w:0r 0w:8r
