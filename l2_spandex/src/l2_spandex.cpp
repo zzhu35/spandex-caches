@@ -1015,6 +1015,8 @@ void l2_spandex::ctrl()
                             lines.port1[0][base + way_hit] = line_buf[way_hit];
                             if(ack_mask){
                                 send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, ack_mask);
+                                wait();
+                                send_inval(fwd_in.addr, DATA);
                             }
                             if(nack_mask){
                                 wait();
