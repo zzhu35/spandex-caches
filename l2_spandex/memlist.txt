@@ -18,3 +18,8 @@ l2_spandex_hprots_512sets_4ways 2048 2 1w:0r 0w:4r
 l2_spandex_lines_512sets_4ways 2048 128 1w:0r 0w:4r
 l2_spandex_states_512sets_4ways 2048 6 1w:0r 0w:4r
 l2_spandex_evict_ways_512sets_4ways 512 2 1w:0r 0w:1r
+l2_spandex_tags_1024sets_4ways 4096 19 1w:0r 0w:4r
+l2_spandex_hprots_1024sets_4ways 4096 2 1w:0r 0w:4r
+l2_spandex_lines_1024sets_4ways 4096 128 1w:0r 0w:4r
+l2_spandex_states_1024sets_4ways 4096 6 1w:0r 0w:4r
+l2_spandex_evict_ways_1024sets_4ways 1024 2 1w:0r 0w:1r
