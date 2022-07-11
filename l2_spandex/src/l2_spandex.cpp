@@ -239,11 +239,15 @@ void l2_spandex::ctrl()
             HLS_DEFINE_PROTOCOL("llc-io-check");
             // HLS_CONSTRAIN_LATENCY(0, HLS_ACHIEVABLE, "l2-io-latency");
 
-            can_get_fence_in = l2_fence.nb_can_get();
+            can_get_fence_in = (!ongoing_fence) ? l2_fence.nb_can_get() : 0;
             can_get_rsp_in = l2_rsp_in.nb_can_get();
             can_get_req_in = ((l2_cpu_req.nb_can_get() && (!drain_in_progress)) || set_conflict) && !evict_stall && !ongoing_fence && (reqs_cnt != 0); // if drain in progress, block all cpu requests
             can_get_fwd_in = (l2_fwd_in.nb_can_get() && !fwd_stall) || fwd_stall_ended;
             can_get_flush_in = l2_flush.nb_can_get();
+
+#ifdef L2_DEBUG
+            can_get_fence_in_dbg.write(can_get_fence_in);
+#endif
 
             // first check if a fence has arrived;
             // if there is a valid fence, set do_fence
@@ -1593,6 +1597,8 @@ inline void l2_spandex::reset_io()
     entered_do_fwd_no_stall_dbg.write(0);
     entered_reqs_peek_fwd_dbg.write(0);
     entered_tag_lookup_dbg.write(0);
+
+    can_get_fence_in_dbg.write(0);
 
     // for (int i = 0; i < N_REQS; i++) {
     //     REQS_DBGPUT;

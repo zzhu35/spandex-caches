@@ -95,6 +95,8 @@ public:
     sc_signal< uint32_t > entered_reqs_peek_fwd_dbg;
     sc_signal< uint32_t > entered_tag_lookup_dbg;
 
+    sc_signal< uint32_t > can_get_fence_in_dbg;
+
     sc_signal<bool> forced_req_v_dbg;
     bool TEST_inverter;
     bool TEST_new_req;
