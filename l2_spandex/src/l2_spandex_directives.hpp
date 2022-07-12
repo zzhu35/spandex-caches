@@ -404,6 +404,7 @@ http://rsim.cs.uiuc.edu/
     HLS_PRESERVE_SIGNAL(entered_do_fwd_no_stall_dbg, true); \
     HLS_PRESERVE_SIGNAL(entered_reqs_peek_fwd_dbg, true); \
     HLS_PRESERVE_SIGNAL(entered_tag_lookup_dbg, true); \
+    HLS_PRESERVE_SIGNAL(can_get_fence_in_dbg, true); \
     HLS_PRESERVE_SIGNAL(states_dbg, true)
 
 #else
