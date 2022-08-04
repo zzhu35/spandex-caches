@@ -2018,8 +2018,10 @@ void llc_spandex::ctrl()
                 if (evict_stall) dma_req_stall = dma_req_in;
             } else {
                 if (evict) {
-                    LLC_EVICT;
-
+                    LLC_EVICT; 
+#ifdef LLC_DEBUG
+                    dbg_evict_addr.write(addr_evict);
+#endif 
                     fcs_prio_buf[way] = 0;
 
                     if (way == evict_ways_buf) {
@@ -2072,10 +2074,8 @@ void llc_spandex::ctrl()
                     dma_req_stall = dma_req_in;
                 } else
                 {
-                    if (!recall_valid && !recall_pending) {
-#ifdef LLC_DEBUG
-                        dbg_evict_addr.write(addr_evict);
-#endif
+                    if (!recall_valid && !recall_pending)
+                    {
                         if (states_buf[way] == LLC_V && owners_buf[way] != 0 && dma_req_in.coh_msg == REQ_DMA_READ_BURST)
                         {
                             send_fwd_with_owner_mask(FWD_REQ_V, dma_addr, MAX_N_L2-1, owners_buf[way], 0);
