@@ -2198,20 +2198,20 @@ void llc_spandex::ctrl()
 
                             }
                         }
-                    }
 
-    #ifdef LLC_DEBUG
-                    dbg_length.write(dma_read_length);
-                    dbg_dma_length.write(dma_length);
-                    dbg_dma_done.write(dma_done);
-                    dbg_dma_addr.write(dma_addr);
-    #endif
-                    dma_addr++;
-                    dma_start   = false;
+#ifdef LLC_DEBUG
+                        dbg_length.write(dma_read_length);
+                        dbg_dma_length.write(dma_length);
+                        dbg_dma_done.write(dma_done);
+                        dbg_dma_addr.write(dma_addr);
+#endif
+                        dma_addr++;
+                        dma_start   = false;
 
-                    if (dma_done) {
-                        dma_read_pending = false;
-                        dma_write_pending = false;
+                        if (dma_done) {
+                            dma_read_pending = false;
+                            dma_write_pending = false;
+                        }
                     }
                 }
             }
