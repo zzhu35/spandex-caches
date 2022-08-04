@@ -990,6 +990,7 @@ void llc_spandex::ctrl()
 
         dbg_llc_req_conflict = llc_req_conflict;
         dbg_llc_req_stall = llc_req_stall;
+        dbg_dma_req_stall = dma_req_stall;
 #endif
 
         // -----------------------------
@@ -1033,6 +1034,7 @@ void llc_spandex::ctrl()
         base = set << LLC_WAY_BITS;
 #ifdef LLC_DEBUG
         dbg_llc_addr.write(llc_addr);
+        dbg_set.write(set);
 #endif
         // Read all ways from set into buffer
         if (look) {
@@ -2216,6 +2218,18 @@ void llc_spandex::ctrl()
             // const line_addr_t new_addr_evict = (tags_buf[way] << LLC_SET_BITS) + set;
             // std::cout << std::hex << "*** way: " << way << " set: " <<  set << " addr: " << new_addr_evict << " state: " << states[llc_addr] << " line: " << lines[llc_addr] << std::endl;
 
+            #ifdef LLC_DEBUG
+                for (int i = 0; i < LLC_LOOKUP_WAYS; i++) {
+                    HLS_UNROLL_LOOP(ON, "buf-output-unroll");
+                    dbg_tags_buf[i]	  = tags_buf[i];
+                    dbg_states_buf[i]     = states_buf[i];
+                    dbg_hprots_buf[i]     = hprots_buf[i];
+                    dbg_lines_buf[i]	  = lines_buf[i];
+                    dbg_sharers_buf[i]   = sharers_buf[i];
+                    dbg_owners_buf[i]     = owners_buf[i];
+                    dbg_dirty_bits_buf[i] = dirty_bits_buf[i];
+                }
+            #endif
         }
 
 
