@@ -2079,35 +2079,9 @@ void llc_spandex::ctrl()
                         }
                     }
 
-                    if (!recall_pending || recall_valid) {
-
+                    if (!recall_pending || recall_valid)
+                    {
                         if (dirty_bits_buf[way]) evict_dirty = true;
-
-                        // if (evict || recall_valid) {
-                        //         owners_buf[way] = 0;
-                        //         sharers_buf[way] = 0;
-                        // }
-
-                        if (evict) {
-                            // Eviction
-
-                            LLC_EVICT;
-
-                            if (way == evict_ways_buf) {
-                                update_evict_ways = true;
-                                evict_ways_buf++;
-                            }
-
-                            if (evict_dirty) {
-                                HLS_DEFINE_PROTOCOL("send_mem_req-6");
-                                send_mem_req(WRITE, addr_evict, hprots_buf[way], lines_buf[way]);
-                            }
-
-                            states_buf[way] = LLC_I;
-
-                        } else if (recall_valid) {
-                            // states_buf[way] = LLC_V;
-                        }
 
                         // Recall complete
                         recall_pending = false;
