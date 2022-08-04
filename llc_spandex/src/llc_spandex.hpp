@@ -88,6 +88,9 @@ public:
 
     sc_signal< llc_req_in_t<CACHE_ID_WIDTH> >	dbg_llc_req_conflict;
     sc_signal< llc_req_in_t<CACHE_ID_WIDTH> >	dbg_llc_req_stall;
+    sc_signal< llc_req_in_t<LLC_COH_DEV_ID_WIDTH> >	dbg_dma_req_stall;
+
+    sc_signal<llc_set_t>	dbg_set;
 
 #endif
 
@@ -247,6 +250,7 @@ private:
     llc_req_in_t<CACHE_ID_WIDTH> llc_req_conflict;
     llc_req_in_t<CACHE_ID_WIDTH> llc_req_stall;
     llc_req_in_t<LLC_COH_DEV_ID_WIDTH> dma_req_in;
+    llc_req_in_t<LLC_COH_DEV_ID_WIDTH> dma_req_stall;
     bool dma_read_pending;
     bool dma_write_pending;
     addr_t dma_addr;
