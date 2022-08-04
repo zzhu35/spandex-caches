@@ -79,6 +79,7 @@ http://rsim.cs.uiuc.edu/
 #define LLC_OWB     9
 #define LLC_SI      10
 #define LLC_WB      11
+#define LLC_WT      12
 
 #define MAX_RETRY 4
 #define MAX_RETRY_BITS ilog2(MAX_RETRY)
