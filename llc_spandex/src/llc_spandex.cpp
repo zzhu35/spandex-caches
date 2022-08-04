@@ -1266,6 +1266,29 @@ void llc_spandex::ctrl()
 
                 }
                 break;
+                
+                case RSP_O:
+                {
+                    reqs[reqs_hit_i].state = LLC_I;
+                    reqs_cnt++;
+                }
+                break;
+
+                case RSP_V:
+                {
+                    for (int i = 0; i < WORDS_PER_LINE; i++) {
+                        HLS_UNROLL_LOOP(ON, "rsp-v");
+                        if (owners_buf[reqs[reqs_hit_i].way] & (1 << i) & rsp_in.word_mask) {
+                            lines_buf[reqs[reqs_hit_i].way].range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                        }
+                    }
+
+                    if (recall_pending && rsp_in.addr == recall_addr) recall_valid = true;
+                    reqs[reqs_hit_i].state = LLC_I;
+                    reqs_cnt++;
+                }
+                break;
+
                 default:
                 break;
             }
