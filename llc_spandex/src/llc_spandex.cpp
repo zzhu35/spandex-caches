@@ -920,7 +920,8 @@ void llc_spandex::ctrl()
 
             } else if (can_get_req_in || evict_stall || set_conflict) {
                 if (evict_stall) {
-                    req_in = llc_req_stall;
+                    if (dma_read_pending || dma_write_pending) dma_req_in = dma_req_stall;
+                    else req_in = llc_req_stall;
                 } else if (set_conflict) {
                     req_in = llc_req_conflict;
                 } else {
@@ -1266,7 +1267,7 @@ void llc_spandex::ctrl()
 
                 }
                 break;
-                
+
                 case RSP_O:
                 {
                     reqs[reqs_hit_i].state = LLC_I;
@@ -1990,6 +1991,8 @@ void llc_spandex::ctrl()
 
             addr_breakdown_llc_t evict_addr_br;
             evict_addr_br.breakdown(addr_evict_real);
+            addr_breakdown_llc_t addr_br_real;
+            addr_br_real.breakdown(dma_addr << OFFSET_BITS);
             sc_uint<LLC_REQS_BITS> reqs_empty_i;
 
 #ifdef LLC_DEBUG
