@@ -91,6 +91,7 @@ public:
     sc_signal< llc_req_in_t<LLC_COH_DEV_ID_WIDTH> >	dbg_dma_req_stall;
 
     sc_signal<llc_set_t>	dbg_set;
+    sc_signal<bool>	dbg_do_get_req;
 
 #endif
 

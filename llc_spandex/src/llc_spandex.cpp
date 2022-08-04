@@ -291,6 +291,7 @@ inline void llc_spandex::reset_state()
     dbg_dma_addr.write(0);
     dbg_dma_read_pending.write(0);
     dbg_dma_write_pending.write(0);
+    dbg_do_get_req.write(0);
 
 //     dbg_length.write(0);
 #endif
@@ -920,8 +921,11 @@ void llc_spandex::ctrl()
 
             } else if (can_get_req_in || evict_stall || set_conflict) {
                 if (evict_stall) {
-                    if (dma_read_pending || dma_write_pending) dma_req_in = dma_req_stall;
-                    else req_in = llc_req_stall;
+                    if (dma_read_pending || dma_write_pending) {
+                        dma_req_in = dma_req_stall;
+                    } else {
+                        req_in = llc_req_stall;
+                    }
                 } else if (set_conflict) {
                     req_in = llc_req_conflict;
                 } else {
@@ -992,6 +996,7 @@ void llc_spandex::ctrl()
         dbg_llc_req_conflict = llc_req_conflict;
         dbg_llc_req_stall = llc_req_stall;
         dbg_dma_req_stall = dma_req_stall;
+        dbg_do_get_req.write(do_get_req);
 #endif
 
         // -----------------------------
@@ -1350,7 +1355,9 @@ void llc_spandex::ctrl()
 
                 if (evict) {
                     LLC_EVICT;
-
+#ifdef LLC_DEBUG
+                    dbg_evict_addr.write(addr_evict);
+#endif
                     fcs_prio_buf[way] = 0;
 
                     if (way == evict_ways_buf) {
