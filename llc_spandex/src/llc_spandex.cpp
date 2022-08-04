@@ -2158,28 +2158,33 @@ void llc_spandex::ctrl()
 
                             }
 
-                            if (misaligned) {
-                                int word_cnt = 0;
+                            if (states_buf[way] == LLC_V && owners_buf[way] != 0) {
+                                send_fwd_with_owner_mask_data(FWD_WTfwd, dma_addr, MAX_N_L2-1, 1 << dma_req_in.word_offset, lines_buf[way], dma_req_in.line);
+                                fill_reqs(FWD_WTfwd, dma_req_in.req_id, addr_br_real, 0, way, LLC_WT, hprots_buf[way], 0, lines_buf[way], 1 << dma_req_in.word_offset, reqs_empty_i);
+                            } else {
+                                if (misaligned) {
+                                    int word_cnt = 0;
 
-                                for (int i = 0; i < WORDS_PER_LINE; i++) {
+                                    for (int i = 0; i < WORDS_PER_LINE; i++) {
 
-                                    HLS_UNROLL_LOOP(ON, "misaligned-dma-start-unroll");
+                                        HLS_UNROLL_LOOP(ON, "misaligned-dma-start-unroll");
 
-                                    if (word_cnt < valid_words && i >= dma_write_woffset) {
-                                        write_word(lines_buf[way], read_word(dma_req_in.line, i), i, 0, WORD);
-                                        word_cnt++;
+                                        if (word_cnt < valid_words && i >= dma_write_woffset) {
+                                            write_word(lines_buf[way], read_word(dma_req_in.line, i), i, 0, WORD);
+                                            word_cnt++;
+                                        }
+
                                     }
+
+                                } else {
+
+                                    lines_buf[way] = dma_req_in.line;
 
                                 }
 
-                            } else {
-
-                                lines_buf[way] = dma_req_in.line;
-
+                                lines_buf[way] = lines_buf[way];
+                                dirty_bits_buf[way] = 1;
                             }
-
-                            lines_buf[way] = lines_buf[way];
-                            dirty_bits_buf[way] = 1;
 
                             if (states_buf[way] == LLC_I) {
                                 states_buf[way] = LLC_V;
