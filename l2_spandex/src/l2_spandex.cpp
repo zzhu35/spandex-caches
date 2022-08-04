@@ -930,11 +930,19 @@ void l2_spandex::ctrl()
                             {
                                 HLS_DEFINE_PROTOCOL("fwd_req_v_rsp_nack/ack");
                                 if (ack_mask) {
-                                    send_rsp_out(RSP_V, fwd_in.req_id, true, fwd_in.addr, line_buf[way_hit], ack_mask);
+                                    if (fwd_in.req_id == MAX_N_L2-1) {
+                                        send_rsp_out(RSP_V, fwd_in.req_id, false, fwd_in.addr, line_buf[way_hit], ack_mask);
+                                    } else {
+                                        send_rsp_out(RSP_V, fwd_in.req_id, true, fwd_in.addr, line_buf[way_hit], ack_mask);
+                                    }
                                 }
                                 if (nack_mask) {
                                     wait();
-                                    send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, nack_mask);
+                                    if (fwd_in.req_id == MAX_N_L2-1) {
+                                        send_rsp_out(RSP_NACK, fwd_in.req_id, false, fwd_in.addr, 0, nack_mask);
+                                    } else {
+                                        send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, nack_mask);
+                                    }
                                 }
                             }
                         }
@@ -1018,11 +1026,19 @@ void l2_spandex::ctrl()
                             }
                             lines.port1[0][base + way_hit] = line_buf[way_hit];
                             if(ack_mask){
-                                send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, ack_mask);
+                                if (fwd_in.req_id == MAX_N_L2-1) {
+                                    send_rsp_out(RSP_O, fwd_in.req_id, false, fwd_in.addr, 0, ack_mask);
+                                } else {
+                                    send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, ack_mask);
+                                }
                             }
                             if(nack_mask){
                                 wait();
-                                send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, nack_mask);
+                                if (fwd_in.req_id == MAX_N_L2-1) {
+                                    send_rsp_out(RSP_NACK, fwd_in.req_id, false, fwd_in.addr, 0, nack_mask);
+                                } else {
+                                    send_rsp_out(RSP_NACK, fwd_in.req_id, true, fwd_in.addr, 0, nack_mask);
+                                }
                             }
                         }else{
                             // not found in the cache, send nack to sender
