@@ -968,6 +968,9 @@ void llc_spandex::ctrl()
                 llc_dma_req_in.nb_get(dma_req_in);
             }
 
+#ifdef LLC_DEBUG
+            dbg_do_get_req.write(do_get_req);
+#endif 
         }
 
 #ifdef LLC_DEBUG
@@ -996,7 +999,6 @@ void llc_spandex::ctrl()
         dbg_llc_req_conflict = llc_req_conflict;
         dbg_llc_req_stall = llc_req_stall;
         dbg_dma_req_stall = dma_req_stall;
-        dbg_do_get_req.write(do_get_req);
 #endif
 
         // -----------------------------
