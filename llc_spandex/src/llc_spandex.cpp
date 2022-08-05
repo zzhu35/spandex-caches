@@ -1174,6 +1174,11 @@ void llc_spandex::ctrl()
                                 reqs[reqs_hit_i].state = LLC_I;
                                 reqs_cnt++;
                                 evict_inprogress = false;
+
+                                if (recall_pending && rsp_in.addr == recall_addr) recall_valid = true;
+#ifdef LLC_DEBUG
+                                dbg_recall_valid.write(recall_valid);
+#endif
                             }
                             break;
                             case LLC_SI:
@@ -1182,6 +1187,11 @@ void llc_spandex::ctrl()
                                 reqs[reqs_hit_i].state = LLC_I;
                                 reqs_cnt++;
                                 evict_inprogress = false;
+
+                                if (recall_pending && rsp_in.addr == recall_addr) recall_valid = true;
+#ifdef LLC_DEBUG
+                                dbg_recall_valid.write(recall_valid);
+#endif
                             }
                             break;
                             default:
@@ -1262,6 +1272,11 @@ void llc_spandex::ctrl()
                                 reqs[reqs_hit_i].state = LLC_I;
                                 reqs_cnt++;
                                 evict_inprogress = false;
+
+                                if (recall_pending && rsp_in.addr == recall_addr) recall_valid = true;
+#ifdef LLC_DEBUG
+                                dbg_recall_valid.write(recall_valid);
+#endif
                             }
                         }
                         break;
@@ -2050,6 +2065,12 @@ void llc_spandex::ctrl()
                                 fill_reqs(FWD_RVK_O, req_in.req_id, evict_addr_br, 0, way, LLC_OWB, hprots_buf[way], 0, lines_buf[way], owners_buf[way], reqs_empty_i); // save this request in reqs buffer
                                 evict_stall = true;
                                 evict_inprogress = true;
+
+                                recall_addr = dma_addr;
+                                recall_pending = true;
+#ifdef LLC_DEBUG
+                                dbg_recall_pending.write(recall_pending);
+#endif
                             }
                         }
                         break;
@@ -2063,6 +2084,12 @@ void llc_spandex::ctrl()
                             reqs[reqs_empty_i].invack_cnt = cnt;
                             evict_stall = true;
                             evict_inprogress = true;
+
+                            recall_addr = dma_addr;
+                            recall_pending = true;
+#ifdef LLC_DEBUG
+                            dbg_recall_pending.write(recall_pending);
+#endif
                         }
                         break;
                         default:
@@ -2155,44 +2182,86 @@ void llc_spandex::ctrl()
 
                             misaligned = (dma_write_woffset != 0 || valid_words != WORDS_PER_LINE);
 
-                            if (states_buf[way] == LLC_I) {
+                            switch (states_buf[way])
+                            {
+                                // here we made sure that this set is all in stable state
+                                // because any request conflict in unstable buffer has been blocked by set_conflict
+                                case LLC_I:
+                                {
+                                    DMA_WRITE_I;
 
-                                DMA_WRITE_I;
-
-                                if (misaligned) {
-                                    HLS_DEFINE_PROTOCOL("send_mem_req-8");
-                                    send_mem_req(READ, dma_addr, dma_req_in.hprot, 0);
-                                    get_mem_rsp(lines_buf[way]);
-                                }
-
-                            }
-
-                            if (states_buf[way] == LLC_V && owners_buf[way] != 0) {
-                                send_fwd_with_owner_mask_data(FWD_WTfwd, dma_addr, MAX_N_L2-1, 1 << dma_req_in.word_offset, lines_buf[way], dma_req_in.line);
-                                fill_reqs(FWD_WTfwd, dma_req_in.req_id, addr_br_real, 0, way, LLC_WT, hprots_buf[way], 0, lines_buf[way], 1 << dma_req_in.word_offset, reqs_empty_i);
-                            } else {
-                                if (misaligned) {
-                                    int word_cnt = 0;
-
-                                    for (int i = 0; i < WORDS_PER_LINE; i++) {
-
-                                        HLS_UNROLL_LOOP(ON, "misaligned-dma-start-unroll");
-
-                                        if (word_cnt < valid_words && i >= dma_write_woffset) {
-                                            write_word(lines_buf[way], read_word(dma_req_in.line, i), i, 0, WORD);
-                                            word_cnt++;
+                                    if (misaligned) {
+                                        HLS_DEFINE_PROTOCOL("send_mem_req-8");
+                                        send_mem_req(READ, dma_addr, dma_req_in.hprot, 0);
+                                        get_mem_rsp(lines_buf[way]);
+                                    }
+                                    {
+                                        if (misaligned) {
+                                            int word_cnt = 0;
+                                            for (int i = 0; i < WORDS_PER_LINE; i++)
+                                            {
+                                                HLS_UNROLL_LOOP(ON, "misaligned-dma-start-unroll");
+                                                if (word_cnt < valid_words && i >= dma_write_woffset)
+                                                {
+                                                    write_word(lines_buf[way], read_word(dma_req_in.line, i), i, 0, WORD);
+                                                    word_cnt++;
+                                                }
+                                            }
+                                        } else {
+                                            lines_buf[way] = dma_req_in.line;
                                         }
 
+                                        lines_buf[way] = lines_buf[way];
+                                        dirty_bits_buf[way] = 1;
                                     }
-
-                                } else {
-
-                                    lines_buf[way] = dma_req_in.line;
-
                                 }
+                                break;
+                                case LLC_S:
+                                {
+                                    for (int i = 0; i < WORDS_PER_LINE; i++) {
+                                        HLS_UNROLL_LOOP(ON, "set-ownermask-1176");
+                                        if (req_in.word_mask & (1 << i)) {
+                                            lines_buf[way].range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = dma_req_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD);
+                                        }
+                                    }
+                                    int cnt = send_inv_with_sharer_list(dma_addr, sharers_buf[way]);
+                                    fill_reqs(FWD_INV_SPDX, dma_req_in.req_id, addr_br_real, 0, way, LLC_SV, hprots_buf[way], 0, lines_buf[way], 1 << dma_req_in.word_offset, reqs_empty_i);
+                                    reqs[reqs_empty_i].invack_cnt = cnt;
+                                    dirty_bits_buf[way] = 1;
+                                }
+                                break;
+                                case LLC_V:
+                                {
+                                    if (owners_buf[way] != 0)
+                                    {
+                                        send_fwd_with_owner_mask_data(FWD_WTfwd, dma_addr, MAX_N_L2-1, 1 << dma_req_in.word_offset, lines_buf[way], dma_req_in.line);
+                                        fill_reqs(FWD_WTfwd, dma_req_in.req_id, addr_br_real, 0, way, LLC_WT, hprots_buf[way], 0, lines_buf[way], 1 << dma_req_in.word_offset, reqs_empty_i);
+                                    }
+                                    else
+                                    {
+                                        if (misaligned) {
+                                            int word_cnt = 0;
 
-                                lines_buf[way] = lines_buf[way];
-                                dirty_bits_buf[way] = 1;
+                                            for (int i = 0; i < WORDS_PER_LINE; i++) {
+
+                                                HLS_UNROLL_LOOP(ON, "misaligned-dma-start-unroll");
+
+                                                if (word_cnt < valid_words && i >= dma_write_woffset) {
+                                                    write_word(lines_buf[way], read_word(dma_req_in.line, i), i, 0, WORD);
+                                                    word_cnt++;
+                                                }
+                                            }
+                                        } else {
+                                            lines_buf[way] = dma_req_in.line;
+                                        }
+
+                                        lines_buf[way] = lines_buf[way];
+                                        dirty_bits_buf[way] = 1;
+                                    }
+                                }
+                                break;
+                                default:
+                                break;
                             }
 
                             if (states_buf[way] == LLC_I) {
@@ -2202,9 +2271,7 @@ void llc_spandex::ctrl()
                             }
 
                             if (dma_req_in.hprot) {
-
                                 dma_done = true;
-
                             }
                         }
 
