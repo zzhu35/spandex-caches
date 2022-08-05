@@ -2066,7 +2066,7 @@ void llc_spandex::ctrl()
                                 evict_stall = true;
                                 evict_inprogress = true;
 
-                                recall_addr = dma_addr;
+                                recall_addr = addr_evict;
                                 recall_pending = true;
 #ifdef LLC_DEBUG
                                 dbg_recall_pending.write(recall_pending);
@@ -2085,7 +2085,7 @@ void llc_spandex::ctrl()
                             evict_stall = true;
                             evict_inprogress = true;
 
-                            recall_addr = dma_addr;
+                            recall_addr = addr_evict;
                             recall_pending = true;
 #ifdef LLC_DEBUG
                             dbg_recall_pending.write(recall_pending);
