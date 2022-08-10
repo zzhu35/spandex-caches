@@ -1995,6 +1995,8 @@ void llc_spandex::ctrl()
 
             bool evict_dirty = false;
 
+            evict_stall = evict_inprogress;
+
             if (is_dma_req_to_get) {
                 DMA_BURST;
 
