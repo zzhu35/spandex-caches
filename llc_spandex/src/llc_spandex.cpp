@@ -2107,7 +2107,7 @@ void llc_spandex::ctrl()
                     {
                         if (states_buf[way] == LLC_V && owners_buf[way] != 0 && dma_req_in.coh_msg == REQ_DMA_READ_BURST)
                         {
-                            send_fwd_with_owner_mask(FWD_REQ_V, dma_addr, MAX_N_L2-1, owners_buf[way], 0);
+                            send_fwd_with_owner_mask(FWD_REQ_V, dma_addr, MAX_N_L2-1, owners_buf[way], lines_buf[way]);
                             fill_reqs(FWD_REQ_V, dma_req_in.req_id, addr_br_real, 0, way, LLC_OV, hprots_buf[way], 0, req_in.line, owners_buf[way], reqs_empty_i);
                             recall_addr = dma_addr;
                             recall_pending = true;
