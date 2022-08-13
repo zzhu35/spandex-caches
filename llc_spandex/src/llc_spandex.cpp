@@ -921,7 +921,7 @@ void llc_spandex::ctrl()
 
             } else if (can_get_req_in || evict_stall || set_conflict) {
                 if (evict_stall) {
-                    if (dma_read_pending || dma_write_pending) {
+                    if (recall_pending) {
                         dma_req_in = dma_req_stall;
                     } else {
                         req_in = llc_req_stall;
@@ -1992,8 +1992,6 @@ void llc_spandex::ctrl()
         }
 
         else if (is_dma_req_to_get || is_dma_read_to_resume || is_dma_write_to_resume) {
-
-            bool evict_dirty = false;
 
             evict_stall = evict_inprogress;
 
