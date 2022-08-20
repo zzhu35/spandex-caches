@@ -677,7 +677,7 @@ void l2_spandex::ctrl()
                                 }
                                 if (rsp_mask) {
                                     HLS_DEFINE_PROTOCOL("fwd_req_odata on xr");
-                                    send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
+                                    send_rsp_out(RSP_Odata, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
                                     success = true;
                                 } 
                             }
@@ -1052,9 +1052,9 @@ void l2_spandex::ctrl()
             reqs_peek_req(addr_br.set, reqs_empty_i);
             base = addr_br.set << L2_WAY_BITS;
 
-            if(cpu_req.aq){
-                cpu_req.aq = false;
-                self_invalidate();
+            if(cpu_req.rl){
+                cpu_req.rl = false;
+                drain_in_progress = true;
             }
 
             if (set_conflict) {
@@ -1384,9 +1384,10 @@ void l2_spandex::ctrl()
                             fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }
                     }
-                    if(cpu_req.rl){
-                        cpu_req.rl = false;
-                        drain_in_progress = true;
+
+                    if(cpu_req.aq){
+                        cpu_req.aq = false;
+                        self_invalidate();
                     }
                 }
             }
