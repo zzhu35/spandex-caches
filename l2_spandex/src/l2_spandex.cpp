@@ -677,7 +677,7 @@ void l2_spandex::ctrl()
                                 }
                                 if (rsp_mask) {
                                     HLS_DEFINE_PROTOCOL("fwd_req_odata on xr");
-                                    send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
+                                    send_rsp_out(RSP_Odata, fwd_in.req_id, true, fwd_in.addr, line_buf[reqs[reqs_fwd_stall_i].way], rsp_mask);
                                     success = true;
                                 } 
                             }
@@ -1052,9 +1052,9 @@ void l2_spandex::ctrl()
             reqs_peek_req(addr_br.set, reqs_empty_i);
             base = addr_br.set << L2_WAY_BITS;
 
-            if(cpu_req.aq){
-                cpu_req.aq = false;
-                self_invalidate();
+            if(cpu_req.rl){
+                cpu_req.rl = false;
+                drain_in_progress = true;
             }
 
             if (set_conflict) {
@@ -1247,55 +1247,31 @@ void l2_spandex::ctrl()
                                 }
                             }
 
-                            if(cpu_req.dcs_en){
-                                    switch (cpu_req.dcs){
-                                        case DCS_ReqWTfwd:
-                                        {
-                                            if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
-                                                bool success = false;
-                                                add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
-                                                if (!success)
-                                                {
-                                                    // if wb refused attempted insertion, raise set_conflict
-                                                    set_conflict = true;
+                            if ((!cpu_req.dcs_en) && ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R))) { // if no hit or not in registered
+                                if (cpu_req.hsize < BYTE_BITS) // partial word write
+                                {
+                                    HLS_DEFINE_PROTOCOL("partial word write send req_odata");
+                                    fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, DATA, 0, line_buf[way_write], 0, reqs_empty_i);
+                                    send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
+                                    reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
+                                    reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                    set_conflict = true;
 
-                                                    cpu_req_conflict = cpu_req;
-                                                } else {
-                                                    state_buf[way_write][addr_br.w_off] = current_valid_state;
-                                                }
-                                            }
-                                        }
-                                        break;
-                                        default:
-                                        break;
-                                    }
-                            }else{
-                                if ((!word_hit) || (state_buf[way_write][addr_br.w_off] != SPX_R)) { // if no hit or not in registered
-                                    if (cpu_req.hsize < BYTE_BITS) // partial word write
+                                    cpu_req_conflict = cpu_req;
+                                }
+                                else
+                                {
+                                    bool success = false;
+                                    add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
+                                    if (!success)
                                     {
-                                        HLS_DEFINE_PROTOCOL("partial word write send req_odata");
-                                        fill_reqs(cpu_req.cpu_msg, addr_br, 0, way_write, cpu_req.hsize, SPX_XR, DATA, 0, line_buf[way_write], 0, reqs_empty_i);
-                                        send_req_out(REQ_Odata, cpu_req.hprot, addr_br.line_addr, 0, 1 << addr_br.w_off);
-                                        reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
-                                        reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                        // if wb refused attempted insertion, raise set_conflict
                                         set_conflict = true;
 
+
                                         cpu_req_conflict = cpu_req;
-                                    }
-                                    else
-                                    {
-                                        bool success = false;
-                                        add_wb(success, addr_br, cpu_req.word, way_write, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
-                                        if (!success)
-                                        {
-                                            // if wb refused attempted insertion, raise set_conflict
-                                            set_conflict = true;
-
-
-                                            cpu_req_conflict = cpu_req;
-                                        } else {
-                                            state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
-                                        }
+                                    } else {
+                                        state_buf[way_write][addr_br.w_off] = SPX_R; // directly go to registered
                                     }
                                 }
                             }
@@ -1384,9 +1360,10 @@ void l2_spandex::ctrl()
                             fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, empty_way, cpu_req.hsize, SPX_IS, cpu_req.hprot, cpu_req.word, line_buf[empty_way], 0, reqs_empty_i);
                         }
                     }
-                    if(cpu_req.rl){
-                        cpu_req.rl = false;
-                        drain_in_progress = true;
+
+                    if(cpu_req.aq){
+                        cpu_req.aq = false;
+                        self_invalidate();
                     }
                 }
             }
