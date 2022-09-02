@@ -2117,8 +2117,6 @@ void llc_spandex::ctrl()
 
                     if (!recall_pending || recall_valid)
                     {
-                        if (dirty_bits_buf[way]) evict_dirty = true;
-
                         // Recall complete
                         recall_pending = false;
                         recall_valid = false;
