@@ -1310,8 +1310,8 @@ void l2_spandex::ctrl()
                                         HLS_DEFINE_PROTOCOL("cpu read req o data");
                                         send_req_out(REQ_Odata, INSTR, addr_br.line_addr, 0, word_mask);
                                         fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_XR, INSTR, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
-                                        reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
-                                        reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                        reqs[reqs_empty_i].word_mask = word_mask;
+                                        reqs_word_mask_in[reqs_empty_i] = word_mask;
                                     }
                                     break;
                                     default:
