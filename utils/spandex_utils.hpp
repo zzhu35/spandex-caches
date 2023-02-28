@@ -41,37 +41,54 @@ inline void write_word_amo(line_t &line, word_t word, word_offset_t w_off, byte_
     uint32_t word_range_hi = b_off_bits + size - 1;
     uint32_t line_range_hi = off_bits + size - 1;
 
-    bool gt = line.range(line_range_hi, off_bits).to_int() > word.range(word_range_hi, b_off_bits).to_int();
-    bool ugt = line.range(line_range_hi, off_bits).to_uint() > word.range(word_range_hi, b_off_bits).to_uint();
+    unsigned long long u_line;
+    unsigned long long u_word;
+    signed   long long s_line;
+    signed   long long s_word;
+
+    if(hsize == WORD_32) {
+        s_line = line.range(line_range_hi, off_bits).to_int();
+        u_line = line.range(line_range_hi, off_bits).to_uint();
+        s_word = word.range(word_range_hi, b_off_bits).to_int();
+        u_word = word.range(word_range_hi, b_off_bits).to_uint();
+    } else {
+        s_line = line.range(line_range_hi, off_bits).to_int64();
+        u_line = line.range(line_range_hi, off_bits).to_uint64();
+        s_word = word.range(word_range_hi, b_off_bits).to_int64();
+        u_word = word.range(word_range_hi, b_off_bits).to_uint64();
+    }
+
+    bool gt = s_line > s_word;
+    bool ugt = u_line > u_word;
 
     switch (amo)
     {
         case AMO_SWAP :
-            line.range(line_range_hi, off_bits) = word.range(word_range_hi, b_off_bits);
+            line.range(line_range_hi, off_bits) = s_word;
             break;
         case AMO_ADD :
-            line.range(line_range_hi, off_bits) = line.range(line_range_hi, off_bits).to_int() + word.range(word_range_hi, b_off_bits).to_int();
+            line.range(line_range_hi, off_bits) = s_line + s_word;
             break;
         case AMO_AND :
-            line.range(line_range_hi, off_bits) = line.range(line_range_hi, off_bits) & ~(word.range(word_range_hi, b_off_bits));
+            line.range(line_range_hi, off_bits) = s_line & ~s_word;
             break;
         case AMO_OR :
-            line.range(line_range_hi, off_bits) = line.range(line_range_hi, off_bits) | word.range(word_range_hi, b_off_bits);
+            line.range(line_range_hi, off_bits) = s_line | s_word;
             break;
         case AMO_XOR :
-            line.range(line_range_hi, off_bits) = line.range(line_range_hi, off_bits) ^ word.range(word_range_hi, b_off_bits);
+            line.range(line_range_hi, off_bits) = s_line ^ s_word;
             break;
         case AMO_MAX :
-            if (!gt) line.range(line_range_hi, off_bits) = word.range(word_range_hi, b_off_bits);
+            if (!gt) line.range(line_range_hi, off_bits) = s_word;
             break;
         case AMO_MAXU :
-            if (!ugt) line.range(line_range_hi, off_bits) = word.range(word_range_hi, b_off_bits);
+            if (!ugt) line.range(line_range_hi, off_bits) = s_word;
             break;
         case AMO_MIN :
-            if (gt) line.range(line_range_hi, off_bits) = word.range(word_range_hi, b_off_bits);
+            if (gt) line.range(line_range_hi, off_bits) = s_word;
             break;
         case AMO_MINU :
-            if (ugt) line.range(line_range_hi, off_bits) = word.range(word_range_hi, b_off_bits);
+            if (ugt) line.range(line_range_hi, off_bits) = s_word;
             break;
 
         default:

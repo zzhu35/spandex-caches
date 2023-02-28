@@ -23,6 +23,27 @@ http://rsim.cs.uiuc.edu/
 #include EXP_MEM_INCLUDE_STRING(l2_spandex, hprots, L2_SETS, L2_WAYS)
 #include EXP_MEM_INCLUDE_STRING(l2_spandex, evict_ways, L2_SETS, L2_WAYS)
 
+#ifdef EN_COVERAGE
+struct coverage_stat {
+    long long count;
+    char *name;
+};
+extern coverage_stat coverages[];
+extern int num_coverages;
+
+#define ADD_COVERAGE(s) { \
+    static bool __coverages_counter_init__ = false; \
+    if(!__coverages_counter_init__) { \
+        coverages[__LINE__].name = s; \
+        coverages[__LINE__].count = 0; \
+        __coverages_counter_init__ = true; \
+    } \
+    coverages[__LINE__].count++; \
+}
+#else
+#define ADD_COVERAGE(s)
+#endif // EN_COVERAGE
+
 class l2_spandex : public sc_module
 {
 

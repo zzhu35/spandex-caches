@@ -15,12 +15,15 @@ http://rsim.cs.uiuc.edu/
 
 void l2_spandex::drain_wb()
 {
+    ADD_COVERAGE("drain_wb_1");
+
     // dispatch to reqs, set drain_in_progress
     // when wb wmpty and reqs_buf has no pending ReqO, reset drain_in_progress
     for (int i = 0; i < N_WB; i++)
     {
         bool success = false;
         if (wbs[i].valid && reqs_cnt > 0) {
+            ADD_COVERAGE("drain_wb_dispatch");
             dispatch_wb(success, i);
             break;
         }
@@ -32,6 +35,7 @@ void l2_spandex::drain_wb()
         HLS_UNROLL_LOOP(ON, "wb drain");
         if (reqs[i].state == SPX_XR || reqs[i].state == SPX_XRV || reqs[i].state == SPX_AMO)
         {
+            ADD_COVERAGE("drain_wb_mshr_has_reqo");
             mshr_no_reqo = false;
             break;
         }
@@ -40,6 +44,7 @@ void l2_spandex::drain_wb()
 
     if (!drain_in_progress && ongoing_fence) {
         HLS_DEFINE_PROTOCOL("send_flush_done");
+        ADD_COVERAGE("drain_wb_send_flush_done");
         acc_flush_done.write(true);
         wait();
         acc_flush_done.write(false);
@@ -52,6 +57,8 @@ void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2
     // dispatch to reqs if full line
     // reset success if wb full && reqs full
 
+    ADD_COVERAGE("add_wb_1");
+
     success = true;
 
     bool hit = false;
@@ -63,9 +70,11 @@ void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2
         wbs[i].dcs_en = dcs_en;
         wbs[i].use_owner_pred = use_owner_pred;
         wbs[i].pred_cid = pred_cid;
-
+        ADD_COVERAGE("add_wb_hit_dcs_override");
     }
     else {
+        ADD_COVERAGE("add_wb_no_hit");
+
         if (wbs_cnt == 0) {
             for (int j = 0; j < N_WB; j++)
             {
@@ -77,13 +86,19 @@ void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2
                     break;
                 }
             }
+            
+            ADD_COVERAGE("add_wb_dispatch");
+
             // try dispatching
             dispatch_wb(success, i);
             // if mshr refuse dispatching, return unsuccess
             if (!success) return;
             wb_evict++;
+
+            ADD_COVERAGE("add_wb_dispatch_success");
         }
         // empty in WB
+        ADD_COVERAGE("add_wb_insert");
         wbs[i].valid = true;
         wbs[i].tag = addr_br.tag;
         wbs[i].set = addr_br.set;
@@ -96,12 +111,17 @@ void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2
         wbs[i].pred_cid = pred_cid;
         wbs_cnt--;
     }
+
+    ADD_COVERAGE("add_wb_final");
+
     wbs[i].word_mask |= 1 << addr_br.w_off;
     wbs[i].line.range((addr_br.w_off + 1) * BITS_PER_WORD - 1, addr_br.w_off * BITS_PER_WORD) = word;
 }
 
 void l2_spandex::peek_wb(bool& hit, sc_uint<WB_BITS>& wb_i, addr_breakdown_t addr_br)
 {
+    ADD_COVERAGE("peek_wb");
+
     HLS_CONSTRAIN_LATENCY(0, HLS_ACHIEVABLE, "l2-peek wb");
     // check wb hit
     for (int i = 0; i < N_WB; i++)
@@ -114,6 +134,7 @@ void l2_spandex::peek_wb(bool& hit, sc_uint<WB_BITS>& wb_i, addr_breakdown_t add
 
         if (wbs[i].valid && (wbs[i].tag == addr_br.tag) && (wbs[i].set == addr_br.set))
         {
+            ADD_COVERAGE("peek_wb_hit");
             hit = true;
             wb_i = i;
             break;
@@ -125,8 +146,11 @@ void l2_spandex::peek_wb(bool& hit, sc_uint<WB_BITS>& wb_i, addr_breakdown_t add
 
 void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
 {
+    ADD_COVERAGE("dispatch_wb");
+
     // dispatch one entry to reqs, sets success
     if (wbs[wb_i].valid == false || reqs_cnt == 0) {
+        ADD_COVERAGE("dispatch_wb_invalid");
         success = false;
         return;
     }
@@ -143,6 +167,7 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
 
         if (reqs[i].tag == wbs[wb_i].tag && reqs[i].set == wbs[wb_i].set && reqs[i].state != SPX_I){
             // found conflict, cannot dispatch WB
+            ADD_COVERAGE("dispatch_wb_conflict");
             success = false;
             return;
         }
@@ -159,14 +184,17 @@ void l2_spandex::dispatch_wb(bool& success, sc_uint<WB_BITS> wb_i)
         HLS_DEFINE_PROTOCOL();
         // send reqo
         if (!wbs[wb_i].dcs_en) {
+            ADD_COVERAGE("dispatch_wb_no_dcs");
             send_req_out(REQ_O, wbs[wb_i].hprot, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
             fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XR, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
         else if (!wbs[wb_i].use_owner_pred) {
+            ADD_COVERAGE("dispatch_wb_no_owner_pred");
             send_req_out(REQ_WTfwd, wbs[wb_i].hprot, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
             fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
         else {
+            ADD_COVERAGE("dispatch_wb_default");
             send_fwd_out(FWD_WTfwd, wbs[wb_i].pred_cid, 1, line_addr, wbs[wb_i].line, wbs[wb_i].word_mask);
             fill_reqs(0, addr_br, 0, wbs[wb_i].way, 0, SPX_XRV, wbs[wb_i].hprot, 0, wbs[wb_i].line, wbs[wb_i].word_mask, reqs_i);
         }
@@ -238,6 +266,7 @@ void l2_spandex::ctrl()
         {
             HLS_DEFINE_PROTOCOL("llc-io-check");
             // HLS_CONSTRAIN_LATENCY(0, HLS_ACHIEVABLE, "l2-io-latency");
+            ADD_COVERAGE("drain_in_progress");
 
             can_get_fence_in = (!ongoing_fence) ? l2_fence.nb_can_get() : 0;
             can_get_rsp_in = l2_rsp_in.nb_can_get();
@@ -252,25 +281,30 @@ void l2_spandex::ctrl()
             // first check if a fence has arrived;
             // if there is a valid fence, set do_fence
             if (can_get_fence_in) {
+                ADD_COVERAGE("can_get_fence");
                 l2_fence.nb_get(is_fence);
                 if(is_fence) {
                     do_fence = true;
                 }
             } else if (can_get_flush_in) {
+                ADD_COVERAGE("can_get_flush");
                 l2_flush.nb_get(is_sync);
                 do_flush = true;
             } else if (can_get_rsp_in) {
+                ADD_COVERAGE("can_get_rsp");
                 get_rsp_in(rsp_in);
                 do_rsp = true;
             }
             else if (can_get_fwd_in) {
                 if (!fwd_stall) {
+                    ADD_COVERAGE("can_get_fwd_no_stall");
 #ifdef L2_DEBUG
                     entered_can_get_fwd++;
                     entered_can_get_fwd_dbg.write(entered_can_get_fwd);
 #endif
                     get_fwd_in(fwd_in);
                 } else {
+                    ADD_COVERAGE("can_get_fwd_stall");
                     fwd_in = fwd_in_stalled;
                 }
                 do_fwd = true;
@@ -278,20 +312,24 @@ void l2_spandex::ctrl()
                 // if there is no new fence, flush, response or forward during the fence,
                 // we will check whether drain has completed. if it has, we will invoke
                 // the self-invalidation - a blocking operation - and then set the fence as done.
+                ADD_COVERAGE("ongoing_fence_1");
                 if (is_fence[0]) self_invalidate();
                 ongoing_fence = false;
                 is_fence = 0;
             } else if (do_ongoing_flush && !drain_in_progress) {
                 // if flush has not started, but drain has finished, flush
+                ADD_COVERAGE("ongoing_flush_1");
                 if (!flush_complete) do_flush_once = true;
                 else if (reqs_cnt == N_REQS)
                 {
+                    ADD_COVERAGE("ongoing_flush_done");
                     do_ongoing_flush = false;
                     flush_done.write(1);
                     wait();
                     flush_done.write(0);
                 }
             } else if (can_get_req_in) { // assuming
+                ADD_COVERAGE("can_get_req");
                 if (!set_conflict) {
                     get_cpu_req(cpu_req);
                 } else {
@@ -327,24 +365,29 @@ void l2_spandex::ctrl()
         // identified.
         if (do_fence)
         {
+            ADD_COVERAGE("do_fence");
             ongoing_fence = true;
 
             // if fence has release, we will set drain_in_progress,
             // and unset that bit, so that we don't invoke multiple drains
             if (is_fence[1]) {
+                ADD_COVERAGE("do_fence_release");
                 drain_in_progress = true;
                 is_fence[1] = 0;
             }
         } else if (do_flush) {
+            ADD_COVERAGE("do_flush");
             drain_in_progress = true;
             do_ongoing_flush = true;
             flush_line = 0;
             flush_complete = false;
         } else if (do_flush_once) {
+            ADD_COVERAGE("do_flush_once");
             // if flush has not started, but drain has finished, flush
             flush();
             
         } else if (do_rsp) {
+            ADD_COVERAGE("do_rsp");
 
             // if (ongoing_flush)
             //     RSP_WHILE_FLUSHING;
@@ -370,7 +413,9 @@ void l2_spandex::ctrl()
             switch (rsp_in.coh_msg) {
             case RSP_O:
             {
+                ADD_COVERAGE("do_rsp_O");
                 if (reqs_hit == true) {
+                    ADD_COVERAGE("do_rsp_O_hit");
                     reqs[reqs_hit_i].word_mask &= ~(rsp_in.word_mask);
 
                     if (reqs[reqs_hit_i].word_mask == 0) {
@@ -387,6 +432,8 @@ void l2_spandex::ctrl()
             break;
             case RSP_Odata:
             {
+                ADD_COVERAGE("do_rsp_Odata");
+
                 for (int i = 0; i < WORDS_PER_LINE; i++) {
                     HLS_UNROLL_LOOP(ON, "rsp_v");
                     if (rsp_in.word_mask & (1 << i)) {
@@ -403,17 +450,21 @@ void l2_spandex::ctrl()
 
                 if (reqs[reqs_hit_i].word_mask == 0) {
                     HLS_DEFINE_PROTOCOL("spandex-resp");
+                    ADD_COVERAGE("do_rsp_Odata_all_received");
 
                     // in case RspOdata is for atomic send rd_rsp immediately and clear set_conflict
                     if (reqs[reqs_hit_i].state == SPX_AMO) {
+                        ADD_COVERAGE("do_rsp_Odata_amo");
                         send_rd_rsp(reqs[reqs_hit_i].line);
                         if (reqs[reqs_hit_i].cpu_msg != READ_ATOMIC) {
+                            ADD_COVERAGE("do_rsp_Odata_amo_read");
                             write_word_amo(reqs[reqs_hit_i].line, cpu_req_conflict.word, reqs[reqs_hit_i].w_off, reqs[reqs_hit_i].b_off, reqs[reqs_hit_i].hsize, cpu_req_conflict.amo);
                         }
                         set_conflict = false;
                     }
 
                     if (reqs[reqs_hit_i].hsize < BYTE_BITS && reqs[reqs_hit_i].state != SPX_AMO) {
+                        ADD_COVERAGE("do_rsp_Odata_no_amo");
                         set_conflict = false;
                     }
 
@@ -427,6 +478,8 @@ void l2_spandex::ctrl()
             // respond AMO one word
             case RSP_WTdata:
             {
+                ADD_COVERAGE("do_rsp_WTdata");
+
                 line_t line = 0;
                 for (int i = 0; i < WORDS_PER_LINE; i++) {
                     HLS_UNROLL_LOOP(ON, "rsp_v");
@@ -449,6 +502,7 @@ void l2_spandex::ctrl()
             break;
             case RSP_V :
             {
+                ADD_COVERAGE("do_rsp_V");
 
                 for (int i = 0; i < WORDS_PER_LINE; i++) {
                     HLS_UNROLL_LOOP(ON, "rsp_v");
@@ -463,6 +517,7 @@ void l2_spandex::ctrl()
                 if (reqs[reqs_hit_i].word_mask == WORD_MASK_ALL){
                     
                     HLS_DEFINE_PROTOCOL("spandex-resp");
+                    ADD_COVERAGE("do_rsp_V_all_valid");
                     send_rd_rsp(reqs[reqs_hit_i].line);
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
@@ -473,30 +528,36 @@ void l2_spandex::ctrl()
             
             case RSP_NACK :
             {
+                ADD_COVERAGE("do_rsp_NACK");
                 switch (reqs[reqs_hit_i].state)
                 {
                     case SPX_XRV:
                     {
                         HLS_DEFINE_PROTOCOL("send req wt after rsp nack");
+                        ADD_COVERAGE("do_rsp_NACK_SPX_XRV");
                         send_req_out(REQ_WT, reqs[reqs_hit_i].hprot, (reqs[reqs_hit_i].tag, reqs[reqs_hit_i].set), reqs[reqs_hit_i].line, rsp_in.word_mask);
                     }
                     break;
                     case SPX_IV_DCS:
                     {
                         HLS_DEFINE_PROTOCOL("send reqV miss pred");
+                        ADD_COVERAGE("do_rsp_NACK_SPX_IV_DCS");
                         send_req_out(REQ_V, reqs[reqs_hit_i].hprot, (reqs[reqs_hit_i].tag, reqs[reqs_hit_i].set), 0, ~reqs[reqs_hit_i].word_mask);
                         reqs[reqs_hit_i].state = SPX_IV;
                     }
                     break;
                     case SPX_IV:
                     {
+                        ADD_COVERAGE("do_rsp_NACK_SPX_IV");
                         reqs[reqs_hit_i].retry++;
                         {
                             HLS_DEFINE_PROTOCOL("send retry");
                             coh_msg_t retry_msg;
                             if (reqs[reqs_hit_i].retry < MAX_RETRY) {
+                                ADD_COVERAGE("do_rsp_NACK_SPX_IV_retry_less");
                                 retry_msg = REQ_V;
                             } else {
+                                ADD_COVERAGE("do_rsp_NACK_SPX_IV_retry_max");
                                 retry_msg = REQ_Odata;
                             }
                             send_req_out(retry_msg, reqs[reqs_hit_i].hprot, (reqs[reqs_hit_i].tag, reqs[reqs_hit_i].set), 0, ~reqs[reqs_hit_i].word_mask);
@@ -509,8 +570,9 @@ void l2_spandex::ctrl()
 
             case RSP_S:
             {
+                ADD_COVERAGE("do_rsp_S");
                 if (reqs[reqs_hit_i].state == SPX_IS) {
-
+                    ADD_COVERAGE("do_rsp_S_SPX_IS");
                     for (int i = 0; i < WORDS_PER_LINE; i++) {
                         HLS_UNROLL_LOOP(ON);
                         if (rsp_in.word_mask & (1 << i)) {
@@ -524,6 +586,7 @@ void l2_spandex::ctrl()
                     if (reqs[reqs_hit_i].word_mask == WORD_MASK_ALL){
                         
                         HLS_DEFINE_PROTOCOL();
+                        ADD_COVERAGE("do_rsp_S_SPX_IS_all_valid");
                         send_rd_rsp(reqs[reqs_hit_i].line);
                         reqs[reqs_hit_i].state = SPX_I;
                         reqs_cnt++;
@@ -531,37 +594,40 @@ void l2_spandex::ctrl()
                     }
                 }
                 else if (reqs[reqs_hit_i].state == SPX_II) {
-
-                        for (int i = 0; i < WORDS_PER_LINE; i++) {
-                            HLS_UNROLL_LOOP(ON);
-                            if (rsp_in.word_mask & (1 << i)) {
-                                // found a valid bit in response word mask
-                                reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
-                                reqs[reqs_hit_i].word_mask |= 1 << i;
-                            }
+                    ADD_COVERAGE("do_rsp_S_SPX_II");
+                    for (int i = 0; i < WORDS_PER_LINE; i++) {
+                        HLS_UNROLL_LOOP(ON);
+                        if (rsp_in.word_mask & (1 << i)) {
+                            // found a valid bit in response word mask
+                            reqs[reqs_hit_i].line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD) = rsp_in.line.range((i + 1) * BITS_PER_WORD - 1, i * BITS_PER_WORD); // write back new data
+                            reqs[reqs_hit_i].word_mask |= 1 << i;
                         }
+                    }
 
-                        // all words valid now
-                        if (reqs[reqs_hit_i].word_mask == WORD_MASK_ALL){
-                            
-                            HLS_DEFINE_PROTOCOL();
-                            send_rd_rsp(reqs[reqs_hit_i].line);
+                    // all words valid now
+                    if (reqs[reqs_hit_i].word_mask == WORD_MASK_ALL){
+                        
+                        HLS_DEFINE_PROTOCOL();
+                        ADD_COVERAGE("do_rsp_S_SPX_II_all_valid");
+                        send_rd_rsp(reqs[reqs_hit_i].line);
 
-                            reqs[reqs_hit_i].state = SPX_I;
-                            reqs_cnt++;
-                            put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_I, reqs_hit_i);
-                        }
+                        reqs[reqs_hit_i].state = SPX_I;
+                        reqs_cnt++;
+                        put_reqs(line_br.set, reqs[reqs_hit_i].way, line_br.tag, reqs[reqs_hit_i].line, reqs[reqs_hit_i].hprot, SPX_I, reqs_hit_i);
+                    }
                 }
             }
             break;
 
             case RSP_WB_ACK:
             {
+                ADD_COVERAGE("do_rsp_WB_ACK");
                 if (reqs[reqs_hit_i].state == SPX_RI || reqs[reqs_hit_i].state == SPX_II)
                 {
                     // erase this line when WB complete
                     // no need to call put_reqs here because there is no state change to either SRAM or xxx_buf
                     // and state to the SRAM was already updated before the REQ_WB
+                    ADD_COVERAGE("do_rsp_WB_ACK_2");
                     reqs[reqs_hit_i].state = SPX_I;
                     reqs_cnt++;
                 }
@@ -570,10 +636,11 @@ void l2_spandex::ctrl()
 
             default:
                 RSP_DEFAULT;
-
+                ADD_COVERAGE("do_rsp_DEFAULT");
             }
 
         } else if (do_fwd) {
+            ADD_COVERAGE("do_fwd");
             addr_breakdown_t addr_br;
             addr_br.breakdown(fwd_in.addr << OFFSET_BITS);
 #if L2_DEBUG
@@ -591,6 +658,7 @@ void l2_spandex::ctrl()
             tag_lookup(addr_br, tag_hit, way_hit, empty_way_found, empty_way, word_hit);
 
             if (ongoing_atomic && addr_br.line_addr == atomic_line_addr) {
+                ADD_COVERAGE("do_fwd_atomic_cancel");
                 ongoing_atomic = false;
             }
 
@@ -600,6 +668,7 @@ void l2_spandex::ctrl()
                 entered_do_fwd_stall_dbg.write(entered_do_fwd_stall);
 #endif
                 SET_CONFLICT;
+                ADD_COVERAGE("do_fwd_fwd_stall");
                 fwd_in_stalled = fwd_in;
                 // try to handle this fwd_in as much as we can and resolve fwd_stall
                 bool success = false;
@@ -607,6 +676,7 @@ void l2_spandex::ctrl()
                 {
                     case FWD_INV_SPDX:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_INV_SPDX");
                         if(reqs[reqs_fwd_stall_i].state == SPX_IS){
                             reqs[reqs_fwd_stall_i].state = SPX_II;
                         }
@@ -621,15 +691,18 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_REQ_O:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_REQ_O");
                         // Not checking word mask here
                         // Fwd Req O only comes from llc, word mask should be correct
                         if(reqs[reqs_fwd_stall_i].state == SPX_RI){
                             HLS_DEFINE_PROTOCOL("fwd req o stall rsp o");
+                            ADD_COVERAGE("do_fwd_fwd_stall_REQ_O_RSP_O");
                             send_rsp_out(RSP_O, fwd_in.req_id, true, fwd_in.addr, 0, fwd_in.word_mask);
                             success = true;
                         }
                         else if (reqs[reqs_fwd_stall_i].state == SPX_XR || reqs[reqs_fwd_stall_i].state == SPX_AMO)
                         {
+                            ADD_COVERAGE("do_fwd_fwd_stall_REQ_O_XR_or_AMO");
                             word_mask_t rsp_mask = 0;
                             if (tag_hit) {
                                 for (int i = 0; i < WORDS_PER_LINE; i++)
@@ -656,6 +729,7 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_REQ_Odata:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_REQ_Odata");
                         // Not checking word mask here
                         // Fwd Req Odata only comes from llc, word mask should be correct
                         if(reqs[reqs_fwd_stall_i].state == SPX_RI){
@@ -691,6 +765,7 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_REQ_V:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_REQ_V");
                         word_mask_t nack_mask = 0;
                         word_mask_t ack_mask = 0;
                         for (int i = 0; i < WORDS_PER_LINE; i++)
@@ -722,6 +797,7 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_RVK_O:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_RVK_O");
                         if (reqs[reqs_fwd_stall_i].state == SPX_RI)
                         {
                             // handle SPX_RI - LLC_OV deadlock
@@ -760,6 +836,7 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_REQ_S:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_REQ_S");
                         // Not checking word mask here
                         // Fwd Req S only comes from llc, word mask should be correct
                         if(reqs[reqs_fwd_stall_i].state == SPX_RI){
@@ -797,6 +874,7 @@ void l2_spandex::ctrl()
                     break;
                     case FWD_WTfwd:
                     {
+                        ADD_COVERAGE("do_fwd_fwd_stall_WTfwd");
                         word_mask_t nack_mask = 0;
 
                         for (int i = 0; i < WORDS_PER_LINE; i++)
@@ -1131,7 +1209,7 @@ void l2_spandex::ctrl()
                 } else { 
                     // All atomic operations
                     if (cpu_req.amo || cpu_req.cpu_msg == READ_ATOMIC || cpu_req.cpu_msg == WRITE_ATOMIC) {
-                        bool amo_hit = word_hit && (state_buf[way_hit][addr_br.w_off] == SPX_R);
+                        bool amo_hit = word_hit && (state_buf[way_hit][addr_br.w_off] == SPX_R);                        
 
                         if (cpu_req.amo) {
                             // AMO
@@ -1153,6 +1231,7 @@ void l2_spandex::ctrl()
                                     reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
                                 }
                             }
+
                         } else if (cpu_req.cpu_msg == READ_ATOMIC) {
                             // LR
                             bool lr_line_owned = (word_mask_owned == WORD_MASK_ALL);
@@ -1282,6 +1361,7 @@ void l2_spandex::ctrl()
                     else if (tag_hit) {
                         HIT_READ;
                         word_mask_t word_mask = 0;
+
                         for (int i = 0; i < WORDS_PER_LINE; i++)
                         {
                             HLS_UNROLL_LOOP(ON, "2");
@@ -1310,8 +1390,8 @@ void l2_spandex::ctrl()
                                         HLS_DEFINE_PROTOCOL("cpu read req o data");
                                         send_req_out(REQ_Odata, INSTR, addr_br.line_addr, 0, word_mask);
                                         fill_reqs(cpu_req.cpu_msg, addr_br, addr_br.tag, way_hit, cpu_req.hsize, SPX_XR, INSTR, cpu_req.word, line_buf[way_hit], 0, reqs_empty_i);
-                                        reqs[reqs_empty_i].word_mask = 1 << addr_br.w_off;
-                                        reqs_word_mask_in[reqs_empty_i] = 1 << addr_br.w_off;
+                                        reqs[reqs_empty_i].word_mask = word_mask;
+                                        reqs_word_mask_in[reqs_empty_i] = word_mask;
                                     }
                                     break;
                                     default:
@@ -1710,7 +1790,7 @@ void l2_spandex::send_inval(line_addr_t addr_inval, hprot_t hprot_inval)
 
 inline void l2_spandex::send_req_out(coh_msg_t coh_msg, hprot_t hprot, line_addr_t line_addr, line_t line, word_mask_t word_mask)
 {
-    // SEND_REQ_OUT;
+    SEND_REQ_OUT;
 
     l2_req_out_t req_out;
 
@@ -1729,7 +1809,7 @@ inline void l2_spandex::send_req_out(coh_msg_t coh_msg, hprot_t hprot, line_addr
 
 inline void l2_spandex::send_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, line_addr_t line_addr, line_t line, word_mask_t word_mask)
 {
-    // SEND_RSP_OUT;
+    SEND_RSP_OUT;
 
     l2_rsp_out_t rsp_out;
 
@@ -1748,7 +1828,7 @@ inline void l2_spandex::send_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool 
 
 inline void l2_spandex::send_fwd_out(coh_msg_t coh_msg, cache_id_t dst_id, bool to_dst, line_addr_t line_addr, line_t line, word_mask_t word_mask)
 {
-    // SEND_FWD_OUT;
+    SEND_FWD_OUT;
 
     l2_fwd_out_t fwd_out;
 
@@ -2174,3 +2254,6 @@ void l2_spandex::flush()
     flush_line_dbg.write(flush_line);
 #endif
 }
+
+coverage_stat coverages[__LINE__] = {0};
+int num_coverages = __LINE__ - 1;
