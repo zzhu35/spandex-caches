@@ -22,6 +22,7 @@ llc_spandex_sharers_1024sets_16ways 16384 16 1w:0r 0w:16r
 llc_spandex_dirty_bits_1024sets_16ways 16384 1 1w:0r 0w:16r
 llc_spandex_evict_ways_1024sets_16ways 1024 4 1w:0r 0w:1r
 llc_spandex_owners_1024sets_16ways 16384 2 1w:0r 0w:16r
+llc_spandex_fcs_prio_1024sets_16ways 16384 1 1w:0r 0w:16r
 llc_spandex_tags_1024sets_8ways 8192 18 1w:0r 0w:8r
 llc_spandex_states_1024sets_8ways 8192 2 1w:0r 0w:8r
 llc_spandex_hprots_1024sets_8ways 8192 2 1w:0r 0w:8r
