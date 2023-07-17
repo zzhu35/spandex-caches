@@ -2255,5 +2255,7 @@ void l2_spandex::flush()
 #endif
 }
 
+#ifdef EN_COVERAGE
 coverage_stat coverages[__LINE__] = {0};
 int num_coverages = __LINE__ - 1;
+#endif
