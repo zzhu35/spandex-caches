@@ -41,14 +41,6 @@ void l2_spandex::drain_wb()
         }
     }
     drain_in_progress = !((wbs_cnt == N_WB) && mshr_no_reqo);
-
-    if (!drain_in_progress && ongoing_fence) {
-        HLS_DEFINE_PROTOCOL("send_flush_done");
-        ADD_COVERAGE("drain_wb_send_flush_done");
-        acc_flush_done.write(true);
-        wait();
-        acc_flush_done.write(false);
-    }
 }
 
 void l2_spandex::add_wb(bool& success, addr_breakdown_t addr_br, word_t word, l2_way_t way, hprot_t hprot, bool dcs_en, bool use_owner_pred, cache_id_t pred_cid)
@@ -316,6 +308,9 @@ void l2_spandex::ctrl()
                 if (is_fence[0]) self_invalidate();
                 ongoing_fence = false;
                 is_fence = 0;
+                acc_flush_done.write(true);
+                wait();
+                acc_flush_done.write(false);
             } else if (do_ongoing_flush && !drain_in_progress) {
                 // if flush has not started, but drain has finished, flush
                 ADD_COVERAGE("ongoing_flush_1");
