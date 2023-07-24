@@ -1304,6 +1304,36 @@ void l2_spandex::ctrl()
                                 default:
                                 break;
                             }
+                        } else if(cpu_req.dcs_en && state_buf[way_hit][addr_br.w_off] != SPX_R) {
+                            switch (cpu_req.dcs){
+                                case DCS_ReqWTfwd:
+                                {
+                                    bool success = false;
+                                    add_wb(success, addr_br, cpu_req.word, 0, cpu_req.hprot, cpu_req.dcs_en, cpu_req.use_owner_pred, cpu_req.pred_cid);
+                                    if (!success)
+                                    {
+                                        // if wb refused attempted insertion, raise set_conflict
+                                        set_conflict = true;
+
+                                        cpu_req_conflict = cpu_req;
+                                    }
+
+                                    state_buf[way_hit][addr_br.w_off] = SPX_I;
+
+                                    for(int i = 0; i < WORDS_PER_LINE; i++) {
+                                        HLS_UNROLL_LOOP(ON);
+                                        if(state_buf[way_hit][i] == SPX_S){
+                                            state_buf[way_hit][i] = SPX_I;
+                                        }
+                                    }
+
+                                    line_addr_t line_addr_inval = (tag_buf[way_hit] << L2_SET_BITS) | (addr_br.set);
+                                    send_inval(line_addr_inval, DATA);
+                                }
+                                break;
+                                default:
+                                break;
+                            }
                         } else {
                             l2_way_t way_write;
                             way_write = (tag_hit) ? way_hit : empty_way;
@@ -1360,7 +1390,7 @@ void l2_spandex::ctrl()
                         for (int i = 0; i < WORDS_PER_LINE; i++)
                         {
                             HLS_UNROLL_LOOP(ON, "2");
-                            if (state_buf[way_hit][i] < current_valid_state || (cpu_req.dcs == DCS_ReqOdata && state_buf[way_hit][i] != SPX_R))
+                            if ((!cpu_req.dcs_en && state_buf[way_hit][i] < current_valid_state) || (cpu_req.dcs == DCS_ReqV && state_buf[way_hit][i] < current_valid_state && !word_hit) || (cpu_req.dcs == DCS_ReqOdata && state_buf[way_hit][i] != SPX_R))
                             {
                                 word_mask |= 1 << i;
                             }
