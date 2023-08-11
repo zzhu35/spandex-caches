@@ -2,20 +2,25 @@ VIVADO = $(XILINX_VIVADO)
 ESP_ROOT = ../../../..
 WORKAREA ?= .
 PROJECT = l2_spandex
+UVM_HOME = $(VCS_HOME)/etc/uvm
 
 CC_OPTS += -full64 -nc -sverilog -kdb -debug_access+all
 CC_OPTS += '+define+XILINX_FPGA'
 CC_OPTS += '+warn=noSIOB'
 CC_OPTS += '+warn=noPCWM-W'
 CC_OPTS += '+warn=noIPC'
+CC_OPTS += -ntb_opts uvm
+CC_OPTS += -timescale=1ps/1ps
 
 INCDIR ?=
 INCDIR += '+incdir+../common/defs'
 INCDIR += '+incdir+.'
+INCDIR += '+incdir+${UVM_HOME}'
 
 L2_SRC ?=
 L2_SRC += rtl/*.sv
 L2_SRC += ../common/rtl/*.sv
+L2_SRC += ${UVM_HOME}/uvm_pkg.sv
 
 MEM_SRC ?= 
 MEM_SRC += $(ESP_ROOT)/rtl/techmap/unisim/mem/*.v
@@ -24,7 +29,8 @@ MEM_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
 MEM_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
 
 L2_TB ?= 
-L2_TB += tb/l2_tb_top.sv
+L2_TB += tb/*.sv
+L2_TB += tb/seq_items/*.sv
 
 DUMP_VPD?=
 
