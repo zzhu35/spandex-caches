@@ -1,72 +1,47 @@
-# Copyright (c) 2011-2022 Columbia University, System Level Design Group
-# SPDC-License-Identifier: Apache-2.0
-
 VIVADO = $(XILINX_VIVADO)
-ESP_ROOT ?= ../../../..
-ACCEL = $(ESP_ROOT)/accelerators/stratus_hls/common/inc
+ESP_ROOT = ../../../..
+WORKAREA ?= .
+PROJECT = l2_spandex
 
-FLAGS ?=
-FLAGS += -NOWarn SCK505
-FLAGS += -SCTOP sc_main
-FLAGS += -DCLOCK_PERIOD=12.5
-FLAGS += -DRTL_CACHE
-FLAGS += -DSTATS_ENABLE
-FLAGS += -TOP glbl
-FLAGS += -access +R
-FLAGS += -ncvlog_args,"-define XILINX_FPGA"
+CC_OPTS += -full64 -nc -sverilog -kdb -debug_access+all
+CC_OPTS += '+define+XILINX_FPGA'
+CC_OPTS += '+warn=noSIOB'
+CC_OPTS += '+warn=noPCWM-W'
+CC_OPTS += '+warn=noIPC'
 
 INCDIR ?=
-INCDIR += -I$(ACCEL)
-INCDIR += -I../systemc/common/caches
-INCDIR += -I../systemc/llc/tb
-INCDIR += -I../systemc/l2/tb
-INCDIR += -I$(STRATUS_PATH)/share/stratus/include
-INCDIR += +incdir+../common/defs
-INCDIR += +incdir+.
-
-L2_TB ?=
-L2_TB +=../systemc/l2_spandex/tb/l2_spandex_tb.cpp
-L2_TB += sim/sc_main.cpp
-
-L2_COSIM_SRC ?=
-L2_COSIM_SRC += sim/l2_wrap.cpp
+INCDIR += '+incdir+../common/defs'
+INCDIR += '+incdir+.'
 
 L2_SRC ?=
 L2_SRC += rtl/*.sv
+L2_SRC += ../common/rtl/*.sv
 
-RTL_SRC ?=
-RTL_SRC += $(ESP_ROOT)/rtl/techmap/virtex7/mem/*.v
-RTL_SRC += $(VIVADO)/data/verilog/src/glbl.v
-RTL_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
-RTL_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
-RTL_SRC += ../common/rtl/*.sv
+MEM_SRC ?= 
+MEM_SRC += $(ESP_ROOT)/rtl/techmap/unisim/mem/*.v
+MEM_SRC += $(VIVADO)/data/verilog/src/glbl.v
+MEM_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
+MEM_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
 
-l2-sim: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
-	cp cache_cfg.svh ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/`/#/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
-	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) $^
-	rm ../systemc/common/caches/cache_cfg.hpp
+L2_TB ?= 
+L2_TB += tb/l2_tb_top.sv
 
-l2-sim-gui: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
-	cp cache_cfg.svh ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/`/#/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
-	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) -GUI $^
-	rm ../systemc/common/caches/cache_cfg.hpp
+DUMP_VPD?=
+
+all: clean l2-compile l2-run
+
+l2-compile: $(L2_TB) $(L2_SRC) $(MEM_SRC)
+	$(VCS_HOME)/bin/vcs $^ $(INCDIR) $(CC_OPTS) -o $(WORKAREA)/$(PROJECT).simv
+
+l2-run:
+	$(WORKAREA)/$(PROJECT).simv
 
 clean:
-	rm -rf 			\
-		*.log 		\
-		*.so 		\
-		INCA_libs	\
-		.simvision	\
-		*.key		\
-		*.shm		\
-		*.err 		\
-        *.diag		\
-		../systemc/common/caches/cache_cfg.hpp
+	rm -rf *DB DVEfiles *novas* csrc *simv *daidir \
+			*log *Log ucli.key *vpd *fsdb \
+			check_fsearch_db fsearch.stat \
+			verdi_config_file \
+			../systemc/common/caches/cache_cfg.hpp \
+			work.lib*
 
-.PHONY: sc-sim sc-sim-gui clean
+.PHONY: clean

@@ -10,3 +10,17 @@ INCA_libs
 *.err
 *.diag
 xcelium.d
+*.swp
+*DB
+DVEfiles
+*novas*
+csrc
+*simv
+*daidir
+*log
+*Log
+ucli.key
+*vpd
+*fsdb*
+*fsearch*
+*verdi*
