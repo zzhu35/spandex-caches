@@ -23,6 +23,7 @@ INCDIR += -I../systemc/l2_spandex/tb
 INCDIR += -I../systemc/utils
 INCDIR += -I$(STRATUS_PATH)/share/stratus/include
 INCDIR += +incdir+../common/defs
+INCDIR += +incdir+../utils
 INCDIR += +incdir+.
 
 L2_TB ?=

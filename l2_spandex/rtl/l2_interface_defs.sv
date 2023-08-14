@@ -1,22 +1,28 @@
 // Copyright (c) 2011-2022 Columbia University, System Level Design Group
 // SPDX-License-Identifier: Apache-2.0
 
-`include "cache_consts.svh"
-`include "cache_types.svh"
+`include "spandex_consts.svh"
+`include "spandex_types.svh"
 
 /* L1 to L2 */
 
 // L1 request
 interface l2_cpu_req_t;
-	cpu_msg_t cpu_msg;
-    hsize_t  hsize;
+    cpu_msg_t cpu_msg;
+    hsize_t hsize;
     hprot_t hprot;
     addr_t addr;
     word_t word;
     amo_t amo;
+    logic aq;
+    logic rl;
+    logic dcs_en;
+    logic use_owner_pred;
+    dcs_t dcs;
+    cache_id_t pred_cid;
 
-    modport in (input cpu_msg, hsize, hprot, addr, word, amo);
-    modport out (output cpu_msg, hsize, hprot, addr, word, amo);
+    modport in (input cpu_msg, hsize, hprot, addr, word, amo, aq, rl, dcs_en, use_owner_pred, dcs, pred_cid);
+    modport out (output cpu_msg, hsize, hprot, addr, word, amo, aq, rl, dcs_en, use_owner_pred, dcs, pred_cid);
 
 endinterface
 
@@ -36,21 +42,24 @@ interface  l2_fwd_in_t;
     mix_msg_t coh_msg;
     line_addr_t addr;
     cache_id_t req_id;
+    line_t line;
+    word_mask_t word_mask;
 
-    modport in (input coh_msg, addr, req_id);
-    modport out (output coh_msg, addr, req_id);
+    modport in (input coh_msg, addr, req_id, line, word_mask);
+    modport out (output coh_msg, addr, req_id, line, word_mask);
 
 endinterface
 
 // responses
 interface l2_rsp_in_t;
-    coh_msg_t		coh_msg;	// data, e-data, inv-ack, put-ack
-    line_addr_t		addr;
-    line_t		line;
-    invack_cnt_t	invack_cnt;
+    coh_msg_t coh_msg;
+    line_addr_t addr;
+    line_t line;
+    word_mask_t word_mask;
+    invack_cnt_t invack_cnt;
 
-    modport in (input coh_msg, addr, line, invack_cnt);
-    modport out (output coh_msg, addr, line, invack_cnt);
+    modport in (input coh_msg, addr, line, word_mask, invack_cnt);
+    modport out (output coh_msg, addr, line, word_mask, invack_cnt);
 
 endinterface
 
@@ -58,26 +67,42 @@ endinterface
 
 // responses
 interface l2_rsp_out_t;
-    coh_msg_t	coh_msg;	// gets, getm, puts, putm
-    cache_id_t  req_id;
-    logic[1:0]  to_req;
-    line_addr_t	addr;
-    line_t	line;
+    coh_msg_t coh_msg;
+    cache_id_t req_id;
+    logic[1:0] to_req;
+    line_addr_t addr;
+    line_t line;
+    word_mask_t word_mask;
 
-    modport in (input coh_msg, req_id, to_req, addr, line);
-    modport out (output coh_msg, req_id, to_req, addr, line);
+    modport in (input coh_msg, req_id, to_req, addr, line, word_mask);
+    modport out (output coh_msg, req_id, to_req, addr, line, word_mask);
 
 endinterface
 
 // requests
 interface l2_req_out_t;
-    coh_msg_t	coh_msg;	// gets, getm, puts, putm
-    hprot_t	hprot;
-    line_addr_t	addr;
-    line_t	line;
+    coh_msg_t coh_msg;
+    hprot_t hprot;
+    line_addr_t addr;
+    line_t line;
+    word_mask_t word_mask;
 
-    modport in (input coh_msg, hprot, addr, line);
-    modport out (output coh_msg, hprot, addr, line);
+    modport in (input coh_msg, hprot, addr, line, word_mask);
+    modport out (output coh_msg, hprot, addr, line, word_mask);
+
+endinterface
+
+// forwards
+interface  l2_fwd_out_t;
+    coh_msg_t coh_msg;
+    cache_id_t req_id;
+    logic[1:0] to_req;
+    line_addr_t addr;
+    line_t line;
+    word_mask_t word_mask;
+
+    modport in (input coh_msg, req_id, to_req, addr, line, word_mask);
+    modport out (output coh_msg, req_id, to_req, addr, line, word_mask);
 
 endinterface
 
@@ -106,8 +131,8 @@ interface addr_breakdown_t;
 endinterface
 
 interface l2_inval_t;
-    l2_inval_addr_t     addr;
-    hprot_t             hprot;
+    l2_inval_addr_t addr;
+    hprot_t hprot;
 
     modport in(input addr, hprot);
     modport out(output addr, hprot);
