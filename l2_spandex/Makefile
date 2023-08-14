@@ -23,7 +23,7 @@ INCDIR += -I../systemc/l2_spandex/tb
 INCDIR += -I../systemc/utils
 INCDIR += -I$(STRATUS_PATH)/share/stratus/include
 INCDIR += +incdir+../common/defs
-INCDIR += +incdir+../utils
+INCDIR += +incdir+../utils/defs
 INCDIR += +incdir+.
 
 L2_TB ?=
@@ -41,7 +41,7 @@ RTL_SRC += $(ESP_ROOT)/rtl/techmap/virtex7/mem/*.v
 RTL_SRC += $(VIVADO)/data/verilog/src/glbl.v
 RTL_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
 RTL_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
-RTL_SRC += ../common/rtl/*.sv
+RTL_SRC += ../utils/rtl/*.sv
 
 l2-sim: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
 	cp cache_cfg.svh ../systemc/utils/cache_cfg.hpp
@@ -49,7 +49,6 @@ l2-sim: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
 	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
 	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
 	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) $^
-	rm ../systemc/common/caches/cache_cfg.hpp
 
 l2-sim-gui: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
 	cp cache_cfg.svh ../systemc/utils/cache_cfg.hpp
@@ -57,7 +56,6 @@ l2-sim-gui: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
 	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
 	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
 	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) -GUI $^
-	rm ../systemc/common/caches/cache_cfg.hpp
 
 clean:
 	rm -rf 			\

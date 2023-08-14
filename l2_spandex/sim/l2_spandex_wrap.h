@@ -173,12 +173,12 @@ public:
     , l2_fence_valid("l2_fence_valid")
     , l2_fence_data("l2_fence_data")
     , l2_fence_ready("l2_fence_ready")
+    , flush_done("flush_done")
     , acc_flush_done("acc_flush_done")
-, flush_done("flush_done")
 #ifdef STATS_ENABLE
-        , l2_stats_valid ("l2_stats_valid")
-        , l2_stats_data("l2_stats_data")
-        , l2_stats_ready("l2_stats_ready")
+    , l2_stats_ready("l2_stats_ready")
+    , l2_stats_valid("l2_stats_valid")
+    , l2_stats_data("l2_stats_data")
 #endif
 {}
 

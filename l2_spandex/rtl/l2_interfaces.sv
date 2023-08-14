@@ -20,10 +20,15 @@ module l2_interfaces(
     input logic l2_flush_valid,
     input logic l2_flush_ready_int,
     input logic l2_flush_i,
+    input logic l2_fence_valid,
+    input logic l2_fence_ready_int,
+    input logic[1:0] l2_fence_i,
     input logic l2_req_out_valid_int,
     input logic l2_req_out_ready,
     input logic l2_rsp_out_valid_int,
     input logic l2_rsp_out_ready,
+    input logic l2_fwd_out_valid_int,
+    input logic l2_fwd_out_ready,
     input logic l2_rd_rsp_valid_int,
     input logic l2_rd_rsp_ready,
     input logic l2_inval_valid_int,
@@ -43,6 +48,7 @@ module l2_interfaces(
     l2_rsp_in_t.in l2_rsp_in_i,
     l2_req_out_t.in l2_req_out_o,
     l2_rsp_out_t.in l2_rsp_out_o,
+    l2_fwd_out_t.in l2_fwd_out_o,
     l2_rd_rsp_t.in l2_rd_rsp_o,
     l2_inval_t.in l2_inval_o,
 
@@ -54,10 +60,14 @@ module l2_interfaces(
     output logic l2_rsp_in_valid_int,
     output logic l2_flush_ready,
     output logic l2_flush_valid_int,
+    output logic l2_fence_ready,
+    output logic l2_fence_valid_int,
     output logic l2_req_out_ready_int,
     output logic l2_req_out_valid,
     output logic l2_rsp_out_ready_int,
     output logic l2_rsp_out_valid,
+    output logic l2_fwd_out_ready_int,
+    output logic l2_fwd_out_valid,
     output logic l2_rd_rsp_ready_int,
     output logic l2_rd_rsp_valid,
     output logic l2_inval_ready_int,
@@ -72,6 +82,7 @@ module l2_interfaces(
 
     l2_req_out_t.out l2_req_out,
     l2_rsp_out_t.out l2_rsp_out,
+    l2_fwd_out_t.out l2_fwd_out,
     l2_rd_rsp_t.out l2_rd_rsp,
     l2_cpu_req_t.out l2_cpu_req,
     l2_fwd_in_t.out l2_fwd_in,
@@ -239,6 +250,30 @@ module l2_interfaces(
 
     assign l2_flush_next = (!l2_flush_valid_tmp) ? l2_flush_i : l2_flush_tmp;
 
+    //L2 FENCE
+    logic l2_fence_valid_tmp;
+    logic[1:0] l2_fence_tmp, l2_fence_next;
+
+    interface_controller l2_fence_intf(
+        .clk(clk),
+        .rst(rst),
+        .ready_in(l2_fence_ready_int),
+        .valid_in(l2_fence_valid),
+        .ready_out(l2_fence_ready),
+        .valid_out(l2_fence_valid_int),
+        .valid_tmp(l2_fence_valid_tmp)
+    );
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            l2_fence_tmp <= 0;
+        end else if (l2_fence_valid && l2_fence_ready && !l2_fence_ready_int) begin
+            l2_fence_tmp <= l2_fence_i;
+        end
+    end
+
+    assign l2_fence_next = (!l2_fence_valid_tmp) ? l2_fence_i : l2_fence_tmp;
+
     //L2 REQ OUT
     logic l2_req_out_valid_tmp;
     l2_req_out_t l2_req_out_tmp();
@@ -313,6 +348,45 @@ module l2_interfaces(
     assign l2_rsp_out.addr = (!l2_rsp_out_valid_tmp) ? l2_rsp_out_o.addr : l2_rsp_out_tmp.addr;
     assign l2_rsp_out.line = (!l2_rsp_out_valid_tmp) ? l2_rsp_out_o.line : l2_rsp_out_tmp.line;
     assign l2_rsp_out.word_mask = (!l2_rsp_out_valid_tmp) ? l2_rsp_out_o.word_mask : l2_rsp_out_tmp.word_mask;
+
+    //L2 FWD OUT
+    logic l2_fwd_out_valid_tmp;
+    l2_fwd_out_t l2_fwd_out_tmp();
+
+    interface_controller l2_fwd_out_intf(
+        .clk(clk),
+        .rst(rst),
+        .ready_in(l2_fwd_out_ready),
+        .valid_in(l2_fwd_out_valid_int),
+        .ready_out(l2_fwd_out_ready_int),
+        .valid_out(l2_fwd_out_valid),
+        .valid_tmp(l2_fwd_out_valid_tmp)
+    );
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            l2_fwd_out_tmp.coh_msg <= 0;
+            l2_fwd_out_tmp.req_id <= 0;
+            l2_fwd_out_tmp.to_req <= 0;
+            l2_fwd_out_tmp.addr <= 0;
+            l2_fwd_out_tmp.line <= 0;
+            l2_fwd_out_tmp.word_mask <= 0;
+        end else if (l2_fwd_out_valid_int && l2_fwd_out_ready_int && !l2_fwd_out_ready) begin
+            l2_fwd_out_tmp.coh_msg <= l2_fwd_out_o.coh_msg;
+            l2_fwd_out_tmp.req_id <= l2_fwd_out_o.req_id;
+            l2_fwd_out_tmp.to_req <= l2_fwd_out_o.to_req;
+            l2_fwd_out_tmp.addr <= l2_fwd_out_o.addr;
+            l2_fwd_out_tmp.line <= l2_fwd_out_o.line;
+            l2_fwd_out_tmp.word_mask <= l2_fwd_out_o.word_mask;
+        end
+    end
+
+    assign l2_fwd_out.coh_msg = (!l2_fwd_out_valid_tmp) ? l2_fwd_out_o.coh_msg : l2_fwd_out_tmp.coh_msg;
+    assign l2_fwd_out.req_id = (!l2_fwd_out_valid_tmp) ? l2_fwd_out_o.req_id : l2_fwd_out_tmp.req_id;
+    assign l2_fwd_out.to_req = (!l2_fwd_out_valid_tmp) ? l2_fwd_out_o.to_req : l2_fwd_out_tmp.to_req;
+    assign l2_fwd_out.addr = (!l2_fwd_out_valid_tmp) ? l2_fwd_out_o.addr : l2_fwd_out_tmp.addr;
+    assign l2_fwd_out.line = (!l2_fwd_out_valid_tmp) ? l2_fwd_out_o.line : l2_fwd_out_tmp.line;
+    assign l2_fwd_out.word_mask = (!l2_fwd_out_valid_tmp) ? l2_fwd_out_o.word_mask : l2_fwd_out_tmp.word_mask;
 
     //L2 RD RSP
     logic l2_rd_rsp_valid_tmp;

@@ -74,6 +74,33 @@ void l2_spandex_tb::l2_test()
     error_count = 0;
 
     ////////////////////////////////////////////////////////////////
+    // TEST 0: setting a lock - AMO_SWAP
+    ////////////////////////////////////////////////////////////////
+    addr.breakdown(base_addr);
+
+    word = 0x1;
+    line = 0x1;
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
+
+    // End simulation
+    sc_stop();
+
+    ////////////////////////////////////////////////////////////////
     // TEST 1: setting a lock - AMO_SWAP
     ////////////////////////////////////////////////////////////////
     addr.breakdown(base_addr);

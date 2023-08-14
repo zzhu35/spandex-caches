@@ -911,8 +911,8 @@ public:
     l2_set_t set;
     l2_way_t way;
     hprot_t hprot;
-    word_mask_t word_mask;
     line_t line;
+    word_mask_t word_mask;
     bool    dcs_en;
     bool    use_owner_pred;
     cache_id_t pred_cid;

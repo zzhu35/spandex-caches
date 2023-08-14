@@ -130,11 +130,22 @@ module l2_rtl_top(
     assign l2_rsp_out_data_line = l2_rsp_out.line;
     assign l2_rsp_out_data_word_mask = l2_rsp_out.word_mask;
 
+    l2_fwd_out_t l2_fwd_out();
+    assign l2_fwd_out_data_coh_msg = l2_fwd_out.coh_msg;
+    assign l2_fwd_out_data_req_id = l2_fwd_out.req_id;
+    assign l2_fwd_out_data_to_req = l2_fwd_out.to_req;
+    assign l2_fwd_out_data_addr = l2_fwd_out.addr;
+    assign l2_fwd_out_data_line = l2_fwd_out.line;
+    assign l2_fwd_out_data_word_mask = l2_fwd_out.word_mask;
+
     l2_rd_rsp_t l2_rd_rsp();
     assign l2_rd_rsp_data_line = l2_rd_rsp.line;
 
     logic l2_flush_i;
     assign l2_flush_i = l2_flush_data;
+
+    logic[1:0] l2_fence_i;
+    assign l2_fence_i = l2_fence_data;
 
     l2_inval_t l2_inval();
     assign l2_inval_data_addr = l2_inval.addr;

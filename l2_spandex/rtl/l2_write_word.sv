@@ -2,8 +2,8 @@
 // SPDC-License-Identifier: Apache-2.0
 
 `timescale 1ps / 1ps 
-`include "cache_consts.svh"
-`include "cache_types.svh"
+`include "spandex_consts.svh"
+`include "spandex_types.svh"
 
 module l2_write_word(
     input logic clk, 

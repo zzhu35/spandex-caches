@@ -17,9 +17,12 @@ module l2_core(
     input logic l2_rsp_in_valid,
     input logic l2_req_out_ready,
     input logic l2_rsp_out_ready,
+    input logic l2_fwd_out_ready,
     input logic l2_rd_rsp_ready,
     input logic l2_flush_valid,
     input logic l2_flush_i,
+    input logic l2_fence_valid,
+    input logic[1:0] l2_fence_i,
     input logic l2_inval_ready,
     input logic l2_bresp_ready,
 
@@ -32,15 +35,19 @@ module l2_core(
     output logic l2_rsp_in_ready,
     output logic l2_req_out_valid,
     output logic l2_rsp_out_valid,
+    output logic l2_fwd_out_valid,
     output logic l2_rd_rsp_valid,
     output logic l2_flush_ready,
+    output logic l2_fence_ready,
     output logic l2_inval_valid,
     output logic flush_done,
+    output logic acc_flush_done,
     output logic l2_bresp_valid,
     output bresp_t l2_bresp,
 
     l2_req_out_t.out l2_req_out,
     l2_rsp_out_t.out l2_rsp_out,
+    l2_fwd_out_t.out l2_fwd_out,
     l2_rd_rsp_t.out l2_rd_rsp,
     l2_inval_t.out l2_inval
 
@@ -56,6 +63,7 @@ module l2_core(
     l2_fwd_in_t l2_fwd_in();
     l2_rsp_in_t l2_rsp_in();
     l2_rsp_out_t l2_rsp_out_o();
+    l2_fwd_out_t l2_fwd_out_o();
     l2_req_out_t l2_req_out_o();
     l2_rd_rsp_t l2_rd_rsp_o();
     l2_inval_t l2_inval_o();
@@ -68,6 +76,7 @@ module l2_core(
     logic l2_cpu_req_valid_int, l2_fwd_in_valid_int, l2_rsp_in_valid_int, l2_flush_valid_int;
     logic l2_rsp_out_valid_int, l2_req_out_valid_int, l2_inval_valid_int, l2_rd_rsp_valid_int;
     logic l2_bresp_valid_int, l2_bresp_ready_int;
+    logic l2_fwd_out_valid_int, l2_fwd_out_ready_int, l2_fence_valid_int, l2_fence_ready_int;
     logic decode_en, lookup_en, rd_mem_en;
     logic fwd_stall, fwd_stall_ended, ongoing_flush, set_conflict, evict_stall, ongoing_atomic, idle;
     logic set_cpu_req_conflict, set_fwd_in_stalled;
