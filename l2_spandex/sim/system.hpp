@@ -40,14 +40,14 @@ public:
     // LLC cache instance
     l2_wrapper_conv	*dut;
     // LLC testbench module
-    l2_tb      *tb;
+    l2_spandex_tb      *tb;
 
     // Constructor
     SC_CTOR(system_t)
     {
 	// Modules
 	dut = new l2_wrapper_conv("l2_wrapper_conv");
-	tb  = new l2_tb("l2_tb");
+	tb  = new l2_spandex_tb("l2_spandex_tb");
 
 	// Binding L2 cache
 	dut->clk(clk);

@@ -6,8 +6,8 @@
 
 #include "systemc.h"
 #include <cynw_flex_channels.h>
-#include "cache_types.hpp"
-#include "cache_consts.hpp"
+#include "spandex_types.hpp"
+#include "spandex_consts.hpp"
 
 class l2_rtl_top : public ncsc_foreign_module 
 {
