@@ -10,3 +10,4 @@ INCA_libs
 *.err
 *.diag
 xcelium.d
+cache_cfg.hpp

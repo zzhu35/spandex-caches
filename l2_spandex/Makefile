@@ -44,18 +44,18 @@ RTL_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
 RTL_SRC += ../common/rtl/*.sv
 
 l2-sim: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
-	cp cache_cfg.svh ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/`/#/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
+	cp cache_cfg.svh ../systemc/utils/cache_cfg.hpp
+	sed -i 's/`/#/g' ../systemc/utils/cache_cfg.hpp
+	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
+	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
 	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) $^
 	rm ../systemc/common/caches/cache_cfg.hpp
 
 l2-sim-gui: $(L2_TB) $(L2_COSIM_SRC) $(RTL_SRC) $(L2_SRC)
-	cp cache_cfg.svh ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/`/#/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
-	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/common/caches/cache_cfg.hpp
+	cp cache_cfg.svh ../systemc/utils/cache_cfg.hpp
+	sed -i 's/`/#/g' ../systemc/utils/cache_cfg.hpp
+	sed -i 's/BIG_ENDIAN/ENDIAN_BIG_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
+	sed -i 's/LITTLE_ENDIAN/ENDIAN_LITTLE_ENDIAN/g' ../systemc/utils/cache_cfg.hpp
 	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) -GUI $^
 	rm ../systemc/common/caches/cache_cfg.hpp
 
@@ -70,6 +70,6 @@ clean:
 		*.err 		\
         *.diag		\
 		xcelium.d   \
-		../systemc/common/caches/cache_cfg.hpp
+		../systemc/utils/cache_cfg.hpp
 
 .PHONY: sc-sim sc-sim-gui clean
