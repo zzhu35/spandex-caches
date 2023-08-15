@@ -15,7 +15,6 @@
 `endif
 
 `ifdef ARIANE
-`define LLSC
 `define LITTLE_ENDIAN
 `define BYTE_BITS    3
 `define WORD_BITS    1

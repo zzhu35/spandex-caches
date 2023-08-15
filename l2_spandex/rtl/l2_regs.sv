@@ -44,12 +44,6 @@ module l2_regs (
     output logic [`L2_WAY_BITS:0] flush_way,
     output logic [`REQS_BITS-1:0] fwd_stall_i,
     output logic [`REQS_BITS_P1-1:0] reqs_cnt
-
-`ifdef LLSC
-    , input logic clr_ongoing_atomic_set_conflict_instr,
-    input logic set_ongoing_atomic_set_conflict_instr,
-    output logic ongoing_atomic_set_conflict_instr
-`endif
     );
 
     always_ff @(posedge clk or negedge rst) begin
@@ -126,11 +120,7 @@ module l2_regs (
         end else if (clr_fwd_stall_ended) begin
             fwd_stall_ended <= 1'b0;
         end else if ((wr_en_put_reqs && fwd_stall && (fwd_stall_i == reqs_i
-                    || (put_reqs_atomic  && fwd_stall_i == reqs_atomic_i)))
-`ifdef LLSC
-                    || (fwd_stall && lr_to_xmw && (fwd_stall_i == reqs_i))
-`endif
-        ) begin
+                    || (put_reqs_atomic  && fwd_stall_i == reqs_atomic_i)))) begin
             fwd_stall_ended <= 1'b1;
         end
     end
@@ -154,18 +144,6 @@ module l2_regs (
             evict_stall <= 1'b1;
         end
     end
-
-`ifdef LLSC
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            ongoing_atomic_set_conflict_instr <= 1'b0;
-        end else if (clr_ongoing_atomic_set_conflict_instr) begin
-            ongoing_atomic_set_conflict_instr <= 1'b0;
-        end else if (set_ongoing_atomic_set_conflict_instr) begin
-            ongoing_atomic_set_conflict_instr <= 1'b1;
-        end
-    end
-`endif
 
 endmodule
 
