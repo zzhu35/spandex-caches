@@ -101,6 +101,8 @@ module l2_core(
     logic [`REQS_BITS-1:0] reqs_i, fwd_stall_i_wr_data, fwd_stall_i, reqs_i_next, reqs_atomic_i;
     logic [`REQS_BITS_P1-1:0] reqs_cnt;
     logic lr_to_xmw;  //allow forwards to be served between RISC-V LR/SC
+    logic wr_req_word_mask;
+
 
     addr_t cpu_req_addr;
     mix_msg_t fwd_in_coh_msg;
@@ -138,6 +140,8 @@ module l2_core(
     line_t line_wr_data_req;
     invack_cnt_calc_t invack_cnt_wr_data_req;
     amo_t amo_wr_data_req;
+    word_mask_t word_mask_wr_data_req;
+    word_mask_t word_mask_shared, word_mask_owned;
 
 `ifdef STATS_ENABLE
     logic l2_stats_ready_int, l2_stats_valid_int, l2_stats_o;

@@ -2,7 +2,7 @@
 # SPDC-License-Identifier: Apache-2.0
 
 VIVADO = $(XILINX_VIVADO)
-ESP_ROOT ?= ../../../..
+ESP_ROOT = ../../../..
 ACCEL = $(ESP_ROOT)/accelerators/stratus_hls/common/inc
 
 FLAGS ?=

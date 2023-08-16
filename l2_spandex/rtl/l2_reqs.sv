@@ -19,6 +19,7 @@ module l2_reqs(
     input logic wr_req_line,
     input logic wr_req_invack_cnt,
     input logic wr_req_tag,
+    input logic wr_req_word_mask,
     input logic [2:0] reqs_op_code,
     input logic [`REQS_BITS-1:0] reqs_atomic_i,
     input cpu_msg_t cpu_msg_wr_data_req,
@@ -33,6 +34,7 @@ module l2_reqs(
     input unstable_state_t state_wr_data_req,
     input word_t word_wr_data_req,
     input amo_t  amo_wr_data_req,
+    input word_mask_t word_mask_wr_data_req,
 
     addr_breakdown_t.in addr_br,
     addr_breakdown_t.in addr_br_reqs,
@@ -154,6 +156,17 @@ module l2_reqs(
                     end
                 end
             end
+
+            // word_mask
+            always_ff @(posedge clk or negedge rst) begin
+                if (!rst) begin
+                    reqs[i].word_mask <= 0;
+                end else if (wr_req_word_mask) begin
+                    if (reqs_i == i) begin
+                        reqs[i].word_mask <= word_mask_wr_data_req;
+                    end
+                end
+            end
         end
     endgenerate
 
@@ -170,6 +183,7 @@ module l2_reqs(
             `L2_REQS_LOOKUP : begin
                 for (int i = 0; i < `N_REQS; i++) begin
                     if (reqs[i].tag == line_br.tag && reqs[i].set == line_br.set && reqs[i].state != `INVALID) begin
+                        reqs_hit_next = 1'b1;
                         reqs_i_next = i;
                     end
                 end

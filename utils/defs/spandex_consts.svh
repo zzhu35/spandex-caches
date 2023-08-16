@@ -3,6 +3,7 @@
 
 `include "cache_consts.svh"
 
+`define WORD_MASK_ALL ((1 << `WORDS_PER_LINE) - 1)
 `define DCS_WIDTH 2
 
 `ifdef COH_MSG_TYPE_WIDTH
@@ -22,19 +23,19 @@
 
 // Ongoing transaction buffers
 `define LLC_N_REQS          4 // affects LLC_REQS_BITS
-`define LLC_REQS_BITS       (ilog2(LLC_N_REQS)) // depends on LLC_N_REQS
-`define LLC_REQS_BITS_P1    (LLC_REQS_BITS + 1) // depends on LLC_N_REQS + 1
+`define LLC_REQS_BITS       (ilog2(`LLC_N_REQS)) // depends on LLC_N_REQS
+`define LLC_REQS_BITS_P1    (`LLC_REQS_BITS + 1) // depends on LLC_N_REQS + 1
 
 `define SPX_NUM_STATE               8
-`define SPX_STABLE_STATE_BITS       ilog2(SPX_NUM_STATE)
+`define SPX_STABLE_STATE_BITS       ilog2(`SPX_NUM_STATE)
 `define LLC_STABLE_STATE_BITS       2
 `define LLC_UNSTABLE_STATE_BITS     4 // depends on # of unstable states
 
 // DeNovo states
 `define SPX_I       0
-`define SPX_MAX_V   (SPX_S - 1)
-`define SPX_S       (SPX_NUM_STATE - 2)
-`define SPX_R       (SPX_NUM_STATE - 1)
+`define SPX_MAX_V   (`SPX_S - 1)
+`define SPX_S       (`SPX_NUM_STATE - 2)
+`define SPX_R       (`SPX_NUM_STATE - 1)
 
 // DeNovo Transient state
 `define SPX_IV      1

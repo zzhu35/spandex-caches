@@ -4,7 +4,7 @@
 `define __CACHES_CFG_SVH__
 
 //define CPU ARCH here
-`define LEON
+`define ARIANE
 
 `ifdef LEON
 `define BIG_ENDIAN

@@ -24,27 +24,43 @@ module l2_lookup(
     output logic empty_way_found_next, 
     output l2_way_t way_hit,
     output l2_way_t empty_way, 
-    output l2_way_t way_hit_next
+    output l2_way_t way_hit_next,
+    output word_mask_t word_mask_shared,
+    output word_mask_t word_mask_owned
     );
 
     l2_way_t empty_way_next; 
+    word_mask_t word_mask_shared_next;
+    word_mask_t word_mask_owned_next;
 
     always_comb begin 
         way_hit_next = 0;
         tag_hit_next = 1'b0; 
         empty_way_next = 0; 
         empty_way_found_next = 1'b0; 
+        word_mask_shared_next = 0;
+        word_mask_owned_next = 0;
         if (lookup_en) begin 
             case(lookup_mode) 
                 `L2_LOOKUP : begin 
                     for (int i = `L2_WAYS-1; i >= 0; i--) begin
-                        if (tags_buf[i] == addr_br.tag && states_buf[i] != `INVALID) begin 
+                        if (tags_buf[i] == addr_br.tag && states_buf[i] != `SPX_I) begin 
                             tag_hit_next = 1'b1; 
                             way_hit_next = i; 
                         end
-                        if (states_buf[i] == `INVALID) begin 
+                        if (states_buf[i] == `SPX_I) begin 
                             empty_way_found_next = 1'b1; 
                             empty_way_next = i; 
+                        end
+                    end
+                    if (tag_hit_next) begin
+                        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                            if (states_buf[i] == `SPX_R) begin
+                                word_mask_owned_next[i] = 1'b1;
+                                word_mask_shared_next[i] = 1'b1;
+                            end else if (states_buf[i] == `SPX_S) begin
+                                word_mask_shared_next[i] = 1'b1;
+                            end
                         end
                     end
                 end
@@ -66,11 +82,15 @@ module l2_lookup(
             tag_hit <= 1'b0; 
             empty_way <= 0; 
             empty_way_found <= 1'b0; 
+            word_mask_owned <= 0;
+            word_mask_shared <= 0;  
         end else if (lookup_en) begin 
             way_hit <= way_hit_next;
             tag_hit <= tag_hit_next; 
             empty_way <= empty_way_next; 
             empty_way_found <= empty_way_found_next;  
+            word_mask_owned <= word_mask_owned_next;  
+            word_mask_shared <= word_mask_shared_next;  
         end
     end
 
