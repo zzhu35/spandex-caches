@@ -785,19 +785,13 @@ module l2_fsm(
                 // If all words requested have been received, 
                 // update the reqs entry state and increment the reqs_cnt
                 if (word_mask_wr_data_req == `WORD_MASK_ALL) begin
-                    l2_rd_rsp_valid_int = 1'b1;
-                    l2_rd_rsp_o.line = l2_rsp_in.line;
+                    send_rd_rsp(l2_rsp_in.line);
                     wr_req_state = 1'b1;
                     state_wr_data_req = `SPX_I;
                     wr_en_put_reqs = 1'b1;
 
                     // put_reqs - Update the RAMs
-                    set_in = line_br.set;
-                    way = reqs[reqs_i].way;
-                    wr_data_tag = line_br.tag;
-                    wr_data_line = reqs[reqs_i].line;
-                    wr_data_hprot = reqs[reqs_i].hprot;
-                    wr_data_state = `SPX_S;
+                    put_reqs(line_br.set, reqs[reqs_i].way, line_br.tag, reqs[reqs_i].line, reqs[reqs_i].hprot, `SPX_S);
 
                     // Wiat for read response to be accepted before incrementing the reqs_cnt
                     if (l2_rd_rsp_ready_int) begin
@@ -1240,6 +1234,10 @@ module l2_fsm(
                 hprot_wr_data_req = l2_cpu_req.hprot;
                 word_wr_data_req = l2_cpu_req.word;
                 amo_wr_data_req = l2_cpu_req.amo;
+                // TODO: Fix this so that when the response is received,
+                // the correct value that's currently in L2 memory and
+                // the response that is received, and the new value to be
+                // written (if applicable) are all considered.
                 line_wr_data_req = 0;
             end
 //             CPU_REQ_REQS_LOOKUP : begin
@@ -1520,5 +1518,30 @@ module l2_fsm(
 //             end
         endcase
     end
+
+    function void send_rd_rsp;
+        input line_t line;
+
+        l2_rd_rsp_valid_int = 1'b1;
+        l2_rd_rsp_o.line = line;
+    endfunction
+
+    function void put_reqs;
+        input l2_set_t set;
+        input l2_way_t way;
+        input l2_tag_t tag;
+        input line_t line;
+        input hprot_t hprot;
+        input state_t state;
+
+        set_in = set;
+        way = way;
+        wr_data_tag = tag;
+        wr_data_line = line;
+        wr_data_hprot = hprot;
+        // TODO: If we're doing state at word granularity, the state for a line
+        // needs to be read-modify-written back.
+        wr_data_state = state;
+    endfunction
 
 endmodule
