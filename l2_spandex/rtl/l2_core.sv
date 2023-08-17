@@ -125,7 +125,7 @@ module l2_core(
     hprot_t hprots_buf[`L2_WAYS];
     state_t states_buf[`L2_WAYS];
 
-    state_t wr_data_state, rd_data_state[`L2_WAYS];
+    state_t wr_data_state[`WORDS_PER_LINE], rd_data_state[`L2_WAYS][`WORDS_PER_LINE];
     line_t wr_data_line, rd_data_line[`L2_WAYS];
     hprot_t wr_data_hprot, rd_data_hprot[`L2_WAYS];
     l2_tag_t wr_data_tag, rd_data_tag[`L2_WAYS];

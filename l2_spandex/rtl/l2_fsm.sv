@@ -46,7 +46,7 @@ module l2_fsm(
     input var reqs_buf_t reqs[`N_REQS],
     input var state_t states_buf[`L2_WAYS],
     input var hprot_t hprots_buf[`L2_WAYS],
-    input var state_t rd_data_state[`L2_NUM_PORTS],
+    input var state_t rd_data_state[`L2_NUM_PORTS][`WORDS_PER_LINE],
     input var hprot_t rd_data_hprot[`L2_NUM_PORTS],
     input var line_t lines_buf[`L2_WAYS],
     input var l2_tag_t tags_buf[`L2_WAYS],
@@ -98,7 +98,7 @@ module l2_fsm(
     output logic lr_to_xmw,
     output logic [2:0] reqs_op_code,
     output logic[`REQS_BITS-1:0]  reqs_atomic_i,
-    output state_t wr_data_state,
+    output state_t wr_data_state[`WORDS_PER_LINE],
     output unstable_state_t state_wr_data_req,
     output line_t wr_data_line,
     output line_t line_wr_data_req,
@@ -730,7 +730,7 @@ module l2_fsm(
         case (state)
             RESET : begin
                 wr_rst = 1'b1;
-                wr_data_state = `INVALID;
+                wr_data_state = 0;
                 set_in = rst_set;
             end
             DECODE : begin

@@ -24,19 +24,19 @@ module l2_localmem (
     input l2_tag_t wr_data_tag,
     input hprot_t wr_data_hprot, 
     input l2_way_t wr_data_evict_way,  
-    input state_t wr_data_state,
+    input state_t wr_data_state[`WORDS_PER_LINE],
    
     output line_t rd_data_line[`L2_NUM_PORTS],
     output l2_tag_t rd_data_tag[`L2_NUM_PORTS],
     output hprot_t rd_data_hprot[`L2_NUM_PORTS],
     output l2_way_t rd_data_evict_way,
-    output state_t rd_data_state[`L2_NUM_PORTS]
+    output state_t rd_data_state[`L2_NUM_PORTS][`WORDS_PER_LINE]
     );
     
     //for following 2 use BRAM data width to aviod warnings, only copy relevant bits to output data 
     logic [23:0] rd_data_tag_tmp[`L2_NUM_PORTS][`L2_TAG_BRAMS_PER_WAY]; 
     logic [3:0] rd_data_evict_way_tmp[`L2_EVICT_WAY_BRAMS]; 
-    state_t rd_data_state_tmp[`L2_NUM_PORTS][`L2_STATE_BRAMS_PER_WAY]; 
+    state_t rd_data_state_tmp[`L2_NUM_PORTS][`L2_STATE_BRAMS_PER_WAY][`WORDS_PER_LINE]; 
     line_t rd_data_line_tmp[`L2_NUM_PORTS][`L2_LINE_BRAMS_PER_WAY]; 
     hprot_t rd_data_hprot_tmp[`L2_NUM_PORTS][`L2_HPROT_BRAMS_PER_WAY]; 
     
@@ -185,41 +185,43 @@ module l2_localmem (
             end
             //state memory 
             //need 3 bits for state - 4096x4 BRAM
-            for (j = 0; j < `L2_STATE_BRAMS_PER_WAY; j++) begin
-                 if (`BRAM_8192_ADDR_WIDTH > (`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS) + 1) begin 
-                    BRAM_8192x2 state_bram( 
-                        .CLK(clk), 
-                        .A0({{(`BRAM_8192_ADDR_WIDTH - (`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS) - 1){1'b0}}, 
-                                1'b0, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
-                        .D0(wr_data_state), 
-                        .Q0(rd_data_state_tmp[2*i][j]),
-                        .WE0(wr_en_port[2*i] & wr_en_state_bank[j]),
-                        .CE0(rd_en),
-                        .A1({{(`BRAM_8192_ADDR_WIDTH - (`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS) - 1){1'b0}}, 
-                                1'b1, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
-                        .D1(wr_data_state), 
-                        .Q1(rd_data_state_tmp[2*i+1][j]), 
-                        .WE1(wr_en_port[2*i+1] & wr_en_state_bank[j]),
-                        .CE1(rd_en),
-                        .WEM0(),
-                        .WEM1());
-                    
-                end else begin 
-                    BRAM_8192x2 state_bram( 
-                        .CLK(clk), 
-                        .A0({1'b0, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
-                        .D0(wr_data_state), 
-                        .Q0(rd_data_state_tmp[2*i][j]),
-                        .WE0(wr_en_port[2*i] & wr_en_state_bank[j]),
-                        .CE0(rd_en),
-                        .A1({1'b1, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
-                        .D1(wr_data_state), 
-                        .Q1(rd_data_state_tmp[2*i+1][j]), 
-                        .WE1(wr_en_port[2*i+1] & wr_en_state_bank[j]),
-                        .CE1(rd_en),
-                        .WEM0(),
-                        .WEM1());
-                end 
+            for (k = 0; k < `WORDS_PER_LINE; k++) begin
+                for (j = 0; j < `L2_STATE_BRAMS_PER_WAY; j++) begin
+                     if (`BRAM_8192_ADDR_WIDTH > (`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS) + 1) begin 
+                        BRAM_8192x2 state_bram( 
+                            .CLK(clk), 
+                            .A0({{(`BRAM_8192_ADDR_WIDTH - (`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS) - 1){1'b0}}, 
+                                    1'b0, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
+                            .D0(wr_data_state[k]), 
+                            .Q0(rd_data_state_tmp[2*i][j][k]),
+                            .WE0(wr_en_port[2*i] & wr_en_state_bank[j]),
+                            .CE0(rd_en),
+                            .A1({{(`BRAM_8192_ADDR_WIDTH - (`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS) - 1){1'b0}}, 
+                                    1'b1, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
+                            .D1(wr_data_state[k]), 
+                            .Q1(rd_data_state_tmp[2*i+1][j][k]), 
+                            .WE1(wr_en_port[2*i+1] & wr_en_state_bank[j]),
+                            .CE1(rd_en),
+                            .WEM0(),
+                            .WEM1());
+
+                    end else begin 
+                        BRAM_8192x2 state_bram( 
+                            .CLK(clk), 
+                            .A0({1'b0, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
+                            .D0(wr_data_state[k]), 
+                            .Q0(rd_data_state_tmp[2*i][j][k]),
+                            .WE0(wr_en_port[2*i] & wr_en_state_bank[j]),
+                            .CE0(rd_en),
+                            .A1({1'b1, set_in[(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS - 1):0]}),
+                            .D1(wr_data_state[k]), 
+                            .Q1(rd_data_state_tmp[2*i+1][j][k]), 
+                            .WE1(wr_en_port[2*i+1] & wr_en_state_bank[j]),
+                            .CE1(rd_en),
+                            .WEM0(),
+                            .WEM1());
+                    end 
+                end
             end
             //tag memory 
             //need ~15-20 bits for tag - 2048x8 BRAM
@@ -361,19 +363,23 @@ module l2_localmem (
                
         if (`L2_STATE_BRAMS_PER_WAY == 1) begin 
             always_comb begin
-                for (int i = 0; i < `L2_NUM_PORTS; i++) begin 
-                    rd_data_state[i] = rd_data_state_tmp[i][0]; 
+                for (int k = 0; k < `WORDS_PER_LINE; k++) begin 
+                    for (int i = 0; i < `L2_NUM_PORTS; i++) begin 
+                        rd_data_state[i][k] = rd_data_state_tmp[i][0][k]; 
+                    end
                 end
             end
         end else begin 
             always_comb begin
-                for (int i = 0; i < `L2_NUM_PORTS; i++) begin 
-                    rd_data_state[i] = rd_data_state_tmp[i][0];
-                    for (int j = 1; j < `L2_STATE_BRAMS_PER_WAY; j++) begin 
-                        if (j == set_in[(`L2_SET_BITS-1):(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS)]) begin 
-                            rd_data_state[i] = rd_data_state_tmp[i][j];
-                        end
-                    end 
+                for (int k = 0; k < `WORDS_PER_LINE; k++) begin 
+                    for (int i = 0; i < `L2_NUM_PORTS; i++) begin 
+                        rd_data_state[i][k] = rd_data_state_tmp[i][0][k];
+                        for (int j = 1; j < `L2_STATE_BRAMS_PER_WAY; j++) begin 
+                            if (j == set_in[(`L2_SET_BITS-1):(`L2_SET_BITS - `L2_STATE_BRAM_INDEX_BITS)]) begin 
+                                rd_data_state[i][k] = rd_data_state_tmp[i][j][k];
+                            end
+                        end 
+                    end
                 end
             end
         end 
