@@ -121,7 +121,7 @@ module l2_fsm(
     localparam DECODE = 5'b00001;
 
     localparam RSP_LOOKUP = 5'b00010;
-    localparam RSP_O_HANDLER = 5'b00011;
+    localparam RSP_ODATA_HANDLER = 5'b00011;
     localparam RSP_S_HANDLER = 5'b00100;
 
     localparam FWD_REQS_LOOKUP = 5'b01000;
@@ -218,8 +218,8 @@ module l2_fsm(
                 // was earlier.
                 if (mshr_hit_next) begin
                     case(l2_rsp_in.coh_msg)
-                        `RSP_O : begin
-                            next_state = RSP_O_HANDLER;
+                        `RSP_Odata : begin
+                            next_state = RSP_ODATA_HANDLER;
                         end
                         `RSP_S : begin
                             next_state = RSP_S_HANDLER;
@@ -230,7 +230,7 @@ module l2_fsm(
                     endcase
                 end
             end
-            RSP_O_HANDLER : begin
+            RSP_ODATA_HANDLER : begin
                 next_state = DECODE;
             end
             RSP_S_HANDLER : begin
@@ -478,19 +478,34 @@ module l2_fsm(
             // If we want to do line granularity REQ_O, we need to take care of read-modify-write
             // of the words that the CPU did not update.
             // The other option to implement line granularity with the current protocol, is to use REQ_Odata.
-            RSP_O_HANDLER : begin
+            RSP_ODATA_HANDLER : begin
+                // Assign only valid words from response to the MSHR line.
+                write_line_helper(mshr[mshr_i].line, l2_rsp_in.line, l2_rsp_in.word_mask, update_mshr_value_line);
+                update_mshr_line = 1'b1;
+                // Clear words in response from the pending MSHR word_mask.
                 update_mshr_value_word_mask = mshr[mshr_i].word_mask & ~l2_rsp_in.word_mask;
                 update_mshr_word_mask = 1'b1;
 
                 // If all words requested have been received, 
                 // update the reqs entry state and increment the reqs_cnt
                 if (~update_mshr_value_word_mask) begin
+                    // Write the original value to be written from the input request
+                    write_word_helper (
+                        /* line_in */ update_mshr_value_line,
+                        /* word */ mshr[mshr_i].word,
+                        /* w_off */ mshr[mshr_i].w_off,
+                        /* b_off */ mshr[mshr_i].b_off,
+                        /* hsize */ mshr[mshr_i].hsize,
+                        /* line_out */ update_mshr_value_line
+                    );
+                    update_mshr_line = 1'b1;
+                
                     // Update the RAMs and clear entry
                     clear_mshr_entry (
                         /* set */ line_br.set,
                         /* way */ mshr[mshr_i].way,
                         /* tag */ line_br.tag,
-                        /* line */ mshr[mshr_i].line,
+                        /* line */ update_mshr_value_line,
                         /* hprot */  mshr[mshr_i].hprot,
                         /* state */ `SPX_R,
                         /* word_mask_reg */ mshr[mshr_i].word_mask_reg
@@ -502,23 +517,24 @@ module l2_fsm(
                 end
             end
             RSP_S_HANDLER : begin
-                // Update the reqs entry line and word mask only for valid words in the response.
-                update_mshr_value_line = l2_rsp_in.line;
+                // Assign only valid words from response to the MSHR line.
+                write_line_helper(mshr[mshr_i].line, l2_rsp_in.line, l2_rsp_in.word_mask, update_mshr_value_line);
                 update_mshr_line = 1'b1;
-                update_mshr_value_word_mask = mshr[mshr_i].word_mask | l2_rsp_in.word_mask;
+                // Clear words in response from the pending MSHR word_mask.
+                update_mshr_value_word_mask = mshr[mshr_i].word_mask & ~l2_rsp_in.word_mask;
                 update_mshr_word_mask = 1'b1;
 
                 // If all words requested have been received, send the response,
                 // update the reqs entry and increment the reqs_cnt
-                if (update_mshr_value_word_mask == `WORD_MASK_ALL) begin
-                    send_rd_rsp(/* line */ l2_rsp_in.line);
+                if (~update_mshr_value_word_mask) begin
+                    send_rd_rsp(/* line */ update_mshr_value_line);
 
                     // Update the RAMs and clear entry
                     clear_mshr_entry (
                         /* set */ line_br.set,
                         /* way */ mshr[mshr_i].way,
                         /* tag */ line_br.tag,
-                        /* line */ mshr[mshr_i].line,
+                        /* line */ update_mshr_value_line,
                         /* hprot */  mshr[mshr_i].hprot,
                         /* state */ `SPX_S,
                         /* word_mask_reg */ mshr[mshr_i].word_mask_reg
@@ -563,9 +579,9 @@ module l2_fsm(
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
                         /* way */ way_hit,
-                        /* line */ lines_buf[way_hit],
                         /* state */ `SPX_IS,
                         /* word */ l2_cpu_req.word,
+                        /* line */ lines_buf[way_hit],
                         /* amo */ 'h0,
                         /* word_mask */ 'h0 
                     );
@@ -600,9 +616,9 @@ module l2_fsm(
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
                         /* way */ way_hit,
-                        /* line */ lines_buf[way_hit],
                         /* state */ `SPX_XR,
                         /* word */ l2_cpu_req.word,
+                        /* line */ lines_buf[way_hit],
                         /* amo */ 'h0,
                         /* word_mask */ `WORD_MASK_ALL
                     );
@@ -611,7 +627,7 @@ module l2_fsm(
                 // TODO: REQ_O currently using WORD_MASK_ALL. Need to change to
                 // word granularity at some point.
                 send_req_out (
-                    /* coh_msg */ `REQ_O,
+                    /* coh_msg */ `REQ_Odata,
                     /* hprot */ l2_cpu_req.hprot,
                     /* line_addr */ addr_br.line_addr,
                     /* line */ lines_buf[way_hit],
@@ -638,7 +654,7 @@ module l2_fsm(
                                 /* way */ empty_way,
                                 /* state */ `SPX_IS,
                                 /* word */ l2_cpu_req.word,
-                                /* line */ 'h0,
+                                /* line */ lines_buf[empty_way],
                                 /* amo */ l2_cpu_req.amo,
                                 /* word_mask */ `WORD_MASK_ALL
                             );                            
@@ -662,18 +678,18 @@ module l2_fsm(
                                 /* way */ empty_way,
                                 /* state */ `SPX_XR,
                                 /* word */ l2_cpu_req.word,
-                                /* line */ 'h0,
+                                /* line */ lines_buf[empty_way],
                                 /* amo */ l2_cpu_req.amo,
-                                /* word_mask */ `WORD_MASK_ALL
+                                /* word_mask */ ~word_mask_owned_next
                             );
                         end
 
                         send_req_out (
-                            /* coh_msg */ `REQ_O,
+                            /* coh_msg */ `REQ_Odata,
                             /* hprot */ l2_cpu_req.hprot,
                             /* line_addr */ addr_br.line_addr,
                             /* line */ 'h0,
-                            /* word_mask */ `WORD_MASK_ALL 
+                            /* word_mask */ ~word_mask_owned_next 
                         );
                     end
                 endcase
@@ -753,6 +769,8 @@ module l2_fsm(
         update_mshr_value_state = state;
         update_mshr_value_word = l2_cpu_req.word;
         update_mshr_value_amo = amo;
+        // word_mask_reg stores the original requested value of word_mask,
+        // as word_mask can be altered as responses are serviced.
         update_mshr_value_word_mask = word_mask;
         update_mshr_value_word_mask_reg = word_mask;
         add_mshr_entry = 1'b1;
@@ -772,6 +790,23 @@ module l2_fsm(
         write_word_b_off_in = b_off;
         write_word_hsize_in = hsize;
         line_out = write_word_line_out;
+    endfunction
+
+    function void write_line_helper;
+        input line_t line_orig;
+        input line_t line_in;
+        input word_mask_t word_mask_i;
+        output line_t line_out;
+
+        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+            if (word_mask_i[i]) begin
+                line_out[i * `BITS_PER_WORD +: `BITS_PER_WORD] =
+                    line_in[i * `BITS_PER_WORD +: `BITS_PER_WORD];
+            end else begin
+                line_out[i * `BITS_PER_WORD +: `BITS_PER_WORD] =
+                    line_orig[i * `BITS_PER_WORD +: `BITS_PER_WORD];
+            end
+        end
     endfunction
 
 endmodule
