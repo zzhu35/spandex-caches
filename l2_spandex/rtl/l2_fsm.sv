@@ -487,8 +487,12 @@ module l2_fsm(
                 if (~update_mshr_value_word_mask) begin
                     // Update the RAMs and clear entry
                     clear_mshr_entry (
-                        /* set */ line_br.set, /* way */ mshr[mshr_i].way, /* tag */ line_br.tag,
-                        /* line */ mshr[mshr_i].line, /* hprot */  mshr[mshr_i].hprot, /* state */ `SPX_R,
+                        /* set */ line_br.set,
+                        /* way */ mshr[mshr_i].way,
+                        /* tag */ line_br.tag,
+                        /* line */ mshr[mshr_i].line,
+                        /* hprot */  mshr[mshr_i].hprot,
+                        /* state */ `SPX_R,
                         /* word_mask_reg */ mshr[mshr_i].word_mask_reg
                     );
 
@@ -511,8 +515,12 @@ module l2_fsm(
 
                     // Update the RAMs and clear entry
                     clear_mshr_entry (
-                        /* set */ line_br.set, /* way */ mshr[mshr_i].way, /* tag */ line_br.tag,
-                        /* line */ mshr[mshr_i].line, /* hprot */  mshr[mshr_i].hprot, /* state */ `SPX_S,
+                        /* set */ line_br.set,
+                        /* way */ mshr[mshr_i].way,
+                        /* tag */ line_br.tag,
+                        /* line */ mshr[mshr_i].line,
+                        /* hprot */  mshr[mshr_i].hprot,
+                        /* state */ `SPX_S,
                         /* word_mask_reg */ mshr[mshr_i].word_mask_reg
                     );
 
@@ -550,35 +558,65 @@ module l2_fsm(
             CPU_REQ_READ_REQ : begin
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
-                        /* cpu_req */ l2_cpu_req.cpu_msg, /* hprot */ l2_cpu_req.hprot, /* hsize */ l2_cpu_req.hsize, /* tag */ addr_br.tag,
-                        /* way */ way_hit, /* line */ lines_buf[way_hit], /* state */ `SPX_IS, /* word */ l2_cpu_req.word,
-                        /* amo */ 1'b0, /* word_mask */ 0 
+                        /* cpu_req */ l2_cpu_req.cpu_msg,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* tag */ addr_br.tag,
+                        /* way */ way_hit,
+                        /* line */ lines_buf[way_hit],
+                        /* state */ `SPX_IS,
+                        /* word */ l2_cpu_req.word,
+                        /* amo */ 'h0,
+                        /* word_mask */ 'h0 
                     );
                 end
 
-                send_req_out (/* coh_msg */ `REQ_S, /* hprot */ l2_cpu_req.hprot, /* line_addr */ addr_br.line_addr,
-                                /* line */ 0, /* word_mask */ `WORD_MASK_ALL);
+                send_req_out (
+                    /* coh_msg */ `REQ_S,
+                    /* hprot */ l2_cpu_req.hprot,
+                    /* line_addr */ addr_br.line_addr,
+                    /* line */ 0,
+                    /* word_mask */ `WORD_MASK_ALL
+                );
             end
             CPU_REQ_WRITE_NOREQ : begin
                 lmem_set_in = addr_br.set;
                 lmem_way_in = way_hit;
-                write_word_helper (/* line_in */ lines_buf[way_hit], /* word */ l2_cpu_req.word, /* w_off */ addr_br.w_off,
-                                        /* b_off */ addr_br.b_off, /* hsize */ l2_cpu_req.hsize, /* line_out */ lmem_wr_data_line);
+                write_word_helper (
+                    /* line_in */ lines_buf[way_hit],
+                    /* word */ l2_cpu_req.word,
+                    /* w_off */ addr_br.w_off,
+                    /* b_off */ addr_br.b_off,
+                    /* hsize */ l2_cpu_req.hsize,
+                    /* line_out */ lmem_wr_data_line
+                );
                 lmem_wr_en_line = 1'b1;
             end
             CPU_REQ_WRITE_REQ : begin
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
-                        /* cpu_req */ l2_cpu_req.cpu_msg, /* hprot */ l2_cpu_req.hprot, /* hsize */ l2_cpu_req.hsize, /* tag */ addr_br.tag,
-                        /* way */ way_hit, /* line */ lines_buf[way_hit], /* state */ `SPX_XR, /* word */ l2_cpu_req.word,
-                        /* amo */ 1'b0, /* word_mask */ `WORD_MASK_ALL
+                        /* cpu_req */ l2_cpu_req.cpu_msg,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* tag */ addr_br.tag,
+                        /* way */ way_hit,
+                        /* line */ lines_buf[way_hit],
+                        /* state */ `SPX_XR,
+                        /* word */ l2_cpu_req.word,
+                        /* amo */ 'h0,
+                        /* word_mask */ `WORD_MASK_ALL
                     );
                 end
 
                 // TODO: REQ_O currently using WORD_MASK_ALL. Need to change to
                 // word granularity at some point.
-                send_req_out (/* coh_msg */ `REQ_O, /* hprot */ l2_cpu_req.hprot, /* line_addr */ addr_br.line_addr,
-                                /* line */ lines_buf[way_hit], /* word_mask */ `WORD_MASK_ALL);
+                send_req_out (
+                    /* coh_msg */ `REQ_O,
+                    /* hprot */ l2_cpu_req.hprot,
+                    /* line_addr */ addr_br.line_addr,
+                    /* line */ lines_buf[way_hit],
+                    /* word_mask */ `WORD_MASK_ALL
+                );
             end
             CPU_REQ_EMPTY_WAY : begin
                 // TODO: READ_ATOMIC temporarily removed.
@@ -593,26 +631,50 @@ module l2_fsm(
                     `READ : begin
                         if (l2_req_out_ready_int) begin
                             fill_mshr_entry (
-                                /* cpu_req */ l2_cpu_req.cpu_msg, /* hprot */ l2_cpu_req.hprot, /* hsize */ l2_cpu_req.hsize, /* tag */ addr_br.tag,
-                                /* way */ empty_way, /* state */ `SPX_IS, /* word */ l2_cpu_req.word, /* line */ 0,
-                                /* amo */ l2_cpu_req.amo, /* word_mask */ `WORD_MASK_ALL
+                                /* cpu_req */ l2_cpu_req.cpu_msg,
+                                /* hprot */ l2_cpu_req.hprot,
+                                /* hsize */ l2_cpu_req.hsize,
+                                /* tag */ addr_br.tag,
+                                /* way */ empty_way,
+                                /* state */ `SPX_IS,
+                                /* word */ l2_cpu_req.word,
+                                /* line */ 'h0,
+                                /* amo */ l2_cpu_req.amo,
+                                /* word_mask */ `WORD_MASK_ALL
                             );                            
                         end
 
-                        send_req_out (/* coh_msg */ `REQ_S, /* hprot */ l2_cpu_req.hprot, /* line_addr */ addr_br.line_addr,
-                                        /* line */ 0, /* word_mask */ `WORD_MASK_ALL );
+                        send_req_out (
+                            /* coh_msg */ `REQ_S,
+                            /* hprot */ l2_cpu_req.hprot,
+                            /* line_addr */ addr_br.line_addr,
+                            /* line */ 0,
+                            /* word_mask */ `WORD_MASK_ALL
+                        );
                     end
                     `WRITE : begin
                         if (l2_req_out_ready_int) begin
                             fill_mshr_entry (
-                                /* cpu_req */ l2_cpu_req.cpu_msg, /* hprot */ l2_cpu_req.hprot, /* hsize */ l2_cpu_req.hsize, /* tag */ addr_br.tag,
-                                /* way */ empty_way, /* state */ `SPX_XR, /* word */ l2_cpu_req.word, /* line */ 0,
-                                /* amo */ l2_cpu_req.amo, /* word_mask */ `WORD_MASK_ALL
+                                /* cpu_req */ l2_cpu_req.cpu_msg,
+                                /* hprot */ l2_cpu_req.hprot,
+                                /* hsize */ l2_cpu_req.hsize,
+                                /* tag */ addr_br.tag,
+                                /* way */ empty_way,
+                                /* state */ `SPX_XR,
+                                /* word */ l2_cpu_req.word,
+                                /* line */ 'h0,
+                                /* amo */ l2_cpu_req.amo,
+                                /* word_mask */ `WORD_MASK_ALL
                             );
                         end
 
-                        send_req_out (/* coh_msg */ `REQ_O, /* hprot */ l2_cpu_req.hprot, /* line_addr */ addr_br.line_addr,
-                                        /* line */ 0, /* word_mask */ `WORD_MASK_ALL );
+                        send_req_out (
+                            /* coh_msg */ `REQ_O,
+                            /* hprot */ l2_cpu_req.hprot,
+                            /* line_addr */ addr_br.line_addr,
+                            /* line */ 'h0,
+                            /* word_mask */ `WORD_MASK_ALL 
+                        );
                     end
                 endcase
             end
