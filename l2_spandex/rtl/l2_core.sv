@@ -104,6 +104,7 @@ module l2_core(
     line_addr_t rsp_in_addr, fwd_in_addr;
     mshr_buf_t mshr[`N_MSHR];
     word_mask_t word_mask_shared, word_mask_owned, word_mask_shared_next, word_mask_owned_next;
+    word_mask_t word_mask_owned_evict, word_mask_owned_evict_next;
 
     byte_offset_t write_word_b_off_in;
     hsize_t write_word_hsize_in;

@@ -15,6 +15,8 @@ module l2_input_decoder (
     input addr_t cpu_req_addr,
     // To check if new request can be tracked
     input logic [`REQS_BITS_P1-1:0] mshr_cnt,
+    // State registers from regs/others
+    input logic evict_stall, 
     // Accept the new input now
     output logic do_rsp_next,
     output logic do_fwd_next,
@@ -62,7 +64,7 @@ module l2_input_decoder (
                 l2_fwd_in_ready_int = 1'b1;
             // TODO: Add ongoing_flush logic
             // TODO: cpu_req: add set_conflict, evict_stall, ongoing_atomic checks
-            end else if (l2_cpu_req_valid_int && mshr_cnt != 0) begin
+            end else if (l2_cpu_req_valid_int && mshr_cnt != 0 && !evict_stall) begin
                 do_cpu_req_next = 1'b1;
                 // TODO: Check set_conflict here before setting l2_cpu_req_ready_int
                 l2_cpu_req_ready_int = 1'b1; 

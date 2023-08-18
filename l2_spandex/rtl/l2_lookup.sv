@@ -13,6 +13,7 @@ module l2_lookup (
     // Bufs values used to check cache hit or miss
     input l2_tag_t tags_buf[`L2_WAYS],
     input state_t states_buf[`L2_WAYS][`WORDS_PER_LINE],
+    input l2_way_t evict_way_buf,
     line_breakdown_l2_t.in line_br,
     addr_breakdown_t.in addr_br,
     // Current and registered signals for hit/miss/empty
@@ -29,18 +30,21 @@ module l2_lookup (
     output word_mask_t word_mask_shared,
     output word_mask_t word_mask_shared_next,
     output word_mask_t word_mask_owned,
-    output word_mask_t word_mask_owned_next
+    output word_mask_t word_mask_owned_next,
+    output word_mask_t word_mask_owned_evict,
+    output word_mask_t word_mask_owned_evict_next
     );
 
     logic line_present;
 
     always_comb begin
-        way_hit_next = 0;
+        way_hit_next = 'h0;
         tag_hit_next = 1'b0;
-        empty_way_next = 0;
+        empty_way_next = 'h0;
         empty_way_found_next = 1'b0;
-        word_mask_shared_next = 0;
-        word_mask_owned_next = 0;
+        word_mask_shared_next = 'h0;
+        word_mask_owned_next = 'h0;
+        word_mask_owned_evict_next = 'h0;
         line_present = 1'b0;
 
         if (lookup_en) begin
@@ -48,6 +52,8 @@ module l2_lookup (
                 // Check if incoming request hits or misses in cache
                 `L2_LOOKUP : begin
                     for (int i = `L2_WAYS-1; i >= 0; i--) begin
+                        line_present = 1'b0;
+
                         for (int j = 0; j < `WORDS_PER_LINE; j++) begin
                             if (states_buf[i][j] > `SPX_I) begin
                                 line_present = 1'b1;
@@ -57,20 +63,32 @@ module l2_lookup (
                         if (tags_buf[i] == addr_br.tag && line_present) begin
                             tag_hit_next = 1'b1;
                             way_hit_next = i;
-                        end else if (!line_present) begin
+                        end
+                        
+                        if (!line_present) begin
                             empty_way_found_next = 1'b1;
                             empty_way_next = i;
                         end
                     end
 
+                    // Check how many words in the line are in owned or shared state
                     if (tag_hit_next) begin
-                        // Check how many words in the line are in owned or shared state
                         for (int j = 0; j < `WORDS_PER_LINE; j++) begin
                             if (states_buf[way_hit_next][j] == `SPX_R) begin
                                 word_mask_owned_next[j] = 1'b1;
                                 word_mask_shared_next[j] = 1'b1;
                             end else if (states_buf[way_hit_next][j] == `SPX_S) begin
                                 word_mask_shared_next[j] = 1'b1;
+                            end
+                        end
+                    end
+
+                    // If neither hit nor empty way available, check number of owned words
+                    // in way to be evicted.
+                    if (!tag_hit_next && !empty_way_found_next) begin
+                        for (int j = 0; j < `WORDS_PER_LINE; j++) begin
+                            if (states_buf[evict_way_buf][j] == `SPX_R) begin
+                                word_mask_owned_evict_next[j] = 1'b1;
                             end
                         end
                     end
@@ -102,6 +120,7 @@ module l2_lookup (
             empty_way_found <= 1'b0;
             word_mask_shared <= 0;
             word_mask_owned <= 0;
+            word_mask_owned_evict <= 0;
         end else if (lookup_en) begin
             way_hit <= way_hit_next;
             tag_hit <= tag_hit_next;
@@ -109,6 +128,7 @@ module l2_lookup (
             empty_way_found <= empty_way_found_next;
             word_mask_shared <= word_mask_shared_next;
             word_mask_owned <= word_mask_owned_next;
+            word_mask_owned_evict <= word_mask_owned_evict_next;
         end
     end
 

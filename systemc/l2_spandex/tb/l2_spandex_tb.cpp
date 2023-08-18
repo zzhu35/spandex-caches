@@ -74,7 +74,7 @@ void l2_spandex_tb::l2_test()
     error_count = 0;
 
     ////////////////////////////////////////////////////////////////
-    // TEST 0
+    // TEST 0 - Write + Read back
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 0!"); 
     addr.breakdown(base_addr);
@@ -113,7 +113,7 @@ void l2_spandex_tb::l2_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 0.1
+    // TEST 0.1 - Write (hit) + Read back
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 0.1!"); 
     base_addr = 0x82508258;
@@ -140,7 +140,7 @@ void l2_spandex_tb::l2_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 0.2
+    // TEST 0.2 - Write (hit) WORD_32 aligned + Read back
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 0.2!"); 
     base_addr = 0x82508254;
@@ -167,7 +167,7 @@ void l2_spandex_tb::l2_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 0.3
+    // TEST 0.3 - Read + Write (miss) + Read back
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 0.3!"); 
     base_addr = 0x82508260;
@@ -223,7 +223,7 @@ void l2_spandex_tb::l2_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 0.4
+    // TEST 0.4 - Read + Write (miss) WORD_32 aligned + Read back
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 0.4!"); 
     base_addr = 0x82508270;
@@ -279,7 +279,167 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    ////////////////////////////////////////////////////////////////
+    // TEST 0.5 - Read L2_WAYS+1 times + evict + Read back 1st
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.5!"); 
+    base_addr = 0x82508280;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < L2_WAYS+1; i++) {
+
+        put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+        wait();
+
+        line = i+1;
+
+        put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+        wait();
+
+        get_rd_rsp(line /* line */);
+
+        addr.tag_incr(1);
+    }
+
+    base_addr = 0x82508280;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    line = 0x1;
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    get_rd_rsp(line /* line */);
+
+    base_addr = 0x82508270;
+    addr.breakdown(base_addr);
+
+    word = 0x4444444444444444;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = 0x0000000544444444;
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+    
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 0.6 - Write L2_WAYS+1 times + evict (write-back)
+    // + Read back 1st
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.6!"); 
+    base_addr = 0x82508380;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < L2_WAYS; i++) {
+        word = i+1;
+
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+        wait();
+
+        line = 0;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+        put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+        addr.tag_incr(1);
+    }
+
+    word = L2_WAYS+1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+        
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x1;
+
+    base_addr = 0x82508380;
+    addr.breakdown(base_addr);
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    addr.tag_incr(L2_WAYS);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+2;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    base_addr = 0x82508380;
+    addr.breakdown(base_addr);
+
+    addr.tag_incr(1);
+
+    for (int i = 0; i < L2_WAYS; i++) {
+        put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        wait();
+
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+3;
+        line.range(BITS_PER_WORD - 1, 0) = i+2;
+
+        get_rd_rsp(line /* line */);
+
+        addr.tag_incr(1);
+    }
+
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
+
+    wait();
 
     // End simulation
     sc_stop();

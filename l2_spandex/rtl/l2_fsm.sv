@@ -35,15 +35,20 @@ module l2_fsm(
     input word_mask_t word_mask_shared_next,
     input word_mask_t word_mask_owned,
     input word_mask_t word_mask_owned_next,
+    input word_mask_t word_mask_owned_evict,
+    input word_mask_t word_mask_owned_evict_next,
     input line_t write_word_line_out,
     // Bufs populated from the current set in RAMs.
     input state_t states_buf[`L2_WAYS][`WORDS_PER_LINE],
     input hprot_t hprots_buf[`L2_WAYS],
     input line_t lines_buf[`L2_WAYS],
     input l2_tag_t tags_buf[`L2_WAYS],
+    input l2_way_t evict_way_buf,
     // Localmem outputs
     input state_t lmem_rd_data_state[`L2_NUM_PORTS][`WORDS_PER_LINE],
     input hprot_t lmem_rd_data_hprot[`L2_NUM_PORTS],
+    // State registers from regs/others
+    input logic evict_stall, 
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -95,10 +100,12 @@ module l2_fsm(
     output logic lmem_wr_en_state,
     output logic lmem_wr_en_line,
     output logic lmem_wr_en_clear_mshr,
+    output logic lmem_wr_en_evict_way,
     output state_t lmem_wr_data_state[`WORDS_PER_LINE],
     output line_t lmem_wr_data_line,
     output hprot_t lmem_wr_data_hprot,
     output l2_tag_t lmem_wr_data_tag,
+    output l2_way_t lmem_wr_data_evict_way, 
     output l2_set_t lmem_set_in,
     output l2_way_t lmem_way_in,
     // outputs to write_word
@@ -107,6 +114,9 @@ module l2_fsm(
     output byte_offset_t write_word_b_off_in,
     output hsize_t write_word_hsize_in,
     output line_t write_word_line_in,
+    // Outputs to regs to register states
+    output logic clr_evict_stall,
+    output logic set_evict_stall,
 
     output bresp_t l2_bresp_o,
 
@@ -123,6 +133,7 @@ module l2_fsm(
     localparam RSP_LOOKUP = 5'b00010;
     localparam RSP_ODATA_HANDLER = 5'b00011;
     localparam RSP_S_HANDLER = 5'b00100;
+    localparam RSP_WB_ACK_HANDLER = 5'b00101;
 
     localparam FWD_REQS_LOOKUP = 5'b01000;
     localparam FWD_TAG_LOOKUP = 5'b01001;
@@ -169,7 +180,8 @@ module l2_fsm(
 
     // TODO: Removed ready_bits till it is clear that we need them too.
 
-    // TODO: Removed evict_way_tmp.
+    // Store the way to be evicted till evict_stall is removed.
+    l2_way_t evict_way_reg;
 
     // FSM 1
     // Decide which state to go to next;
@@ -224,6 +236,9 @@ module l2_fsm(
                         `RSP_S : begin
                             next_state = RSP_S_HANDLER;
                         end
+                        `RSP_WB_ACK : begin
+                            next_state = RSP_WB_ACK_HANDLER;
+                        end
                         default : begin
                             next_state = DECODE;
                         end
@@ -251,6 +266,9 @@ module l2_fsm(
                     // TODO: Add new state to handle SPX_II
                     next_state = DECODE;
                 end
+            end
+            RSP_WB_ACK_HANDLER : begin
+                next_state = DECODE;
             end
             // -------------------
             // Forward handler
@@ -361,7 +379,13 @@ module l2_fsm(
             end
             CPU_REQ_EVICT : begin
                 // TODO: Removed ready_bits check
-                next_state = DECODE;
+                if (word_mask_owned_evict) begin
+                    if (l2_req_out_ready_int) begin
+                        next_state = CPU_REQ_REQS_LOOKUP;
+                    end
+                end else begin
+                    next_state = CPU_REQ_REQS_LOOKUP;
+                end
             end
         endcase
     end
@@ -380,6 +404,9 @@ module l2_fsm(
 
         rd_set_into_bufs = 1'b0;
 
+        set_evict_stall = 1'b0;
+        clr_evict_stall = 1'b0;
+
         add_mshr_entry = 1'b0;
         update_mshr_state = 1'b0;
         update_mshr_line = 1'b0;
@@ -388,36 +415,36 @@ module l2_fsm(
         update_mshr_word_mask_reg = 1'b0;
         mshr_op_code = `L2_MSHR_IDLE;
         incr_mshr_cnt = 1'b0;
-        update_mshr_value_cpu_msg = 0;
-        update_mshr_value_hprot = 0;
-        update_mshr_value_hsize = 0;
-        update_mshr_value_tag = 0;
-        update_mshr_value_way = 0;
-        update_mshr_value_line = 0;
-        update_mshr_value_state = 0;
-        update_mshr_value_word = 0;
-        update_mshr_value_amo = 0;
-        update_mshr_value_word_mask = 0;
-        update_mshr_value_word_mask_reg = 0;
+        update_mshr_value_cpu_msg = 'h0;
+        update_mshr_value_hprot = 'h0;
+        update_mshr_value_hsize = 'h0;
+        update_mshr_value_tag = 'h0;
+        update_mshr_value_way = 'h0;
+        update_mshr_value_line = 'h0;
+        update_mshr_value_state = 'h0;
+        update_mshr_value_word = 'h0;
+        update_mshr_value_amo = 'h0;
+        update_mshr_value_word_mask = 'h0;
+        update_mshr_value_word_mask_reg = 'h0;
 
         l2_req_out_valid_int = 1'b0;
-        l2_req_out_o.coh_msg = 0;
-        l2_req_out_o.hprot = 0;
-        l2_req_out_o.addr = 0;
-        l2_req_out_o.line = 0;
-        l2_req_out_o.word_mask = 0;
+        l2_req_out_o.coh_msg = 'h0;
+        l2_req_out_o.hprot = 'h0;
+        l2_req_out_o.addr = 'h0;
+        l2_req_out_o.line = 'h0;
+        l2_req_out_o.word_mask = 'h0;
 
         l2_rsp_out_valid_int = 1'b0;
-        l2_rsp_out_o.coh_msg = 0;
-        l2_rsp_out_o.req_id = 0;
+        l2_rsp_out_o.coh_msg = 'h0;
+        l2_rsp_out_o.req_id = 'h0;
         l2_rsp_out_o.to_req = 1'b0;
-        l2_rsp_out_o.addr = 0;
-        l2_rsp_out_o.line = 0;
-        l2_rsp_out_o.word_mask = 0;
+        l2_rsp_out_o.addr = 'h0;
+        l2_rsp_out_o.line = 'h0;
+        l2_rsp_out_o.word_mask = 'h0;
 
-        l2_rd_rsp_o.line = 0;
+        l2_rd_rsp_o.line = 'h0;
         l2_rd_rsp_valid_int = 1'b0;
-        l2_inval_o.addr = 0;
+        l2_inval_o.addr = 'h0;
         l2_inval_o.hprot = 1'b0;
         l2_inval_valid_int = 1'b0;
         l2_bresp_valid_int = 1'b0;
@@ -426,34 +453,38 @@ module l2_fsm(
         lmem_wr_rst = 1'b0;
         lmem_wr_en_state = 1'b0;
         lmem_wr_en_line = 1'b0;
+        lmem_wr_en_evict_way = 1'b0;
         lmem_wr_en_clear_mshr = 1'b0;
         for (int i = 0; i < `WORDS_PER_LINE; i++) begin
             lmem_wr_data_state[i] = 'h0;
         end
-        lmem_wr_data_line = 0;
-        lmem_wr_data_hprot = 0;
-        lmem_wr_data_tag = 0;
-        lmem_set_in = 0;
-        lmem_way_in = 0;
+        lmem_wr_data_line = 'h0;
+        lmem_wr_data_hprot = 'h0;
+        lmem_wr_data_tag = 'h0;
+        lmem_wr_data_evict_way = 'h0;
+        lmem_set_in = 'h0;
+        lmem_way_in = 'h0;
 
-        write_word_word_in = 0;
-        write_word_w_off_in = 0;
-        write_word_b_off_in = 0;
-        write_word_hsize_in = 0;
-        write_word_line_in = 0;
+        write_word_word_in = 'h0;
+        write_word_w_off_in = 'h0;
+        write_word_b_off_in = 'h0;
+        write_word_hsize_in = 'h0;
+        write_word_line_in = 'h0;
 
-        addr_br_reqs.line = 0;
-        addr_br_reqs.line_addr = 0;
-        addr_br_reqs.word = 0;
-        addr_br_reqs.tag = 0;
-        addr_br_reqs.set = 0;
-        addr_br_reqs.w_off = 0;
-        addr_br_reqs.b_off = 0;
+        addr_br_reqs.line = 'h0;
+        addr_br_reqs.line_addr = 'h0;
+        addr_br_reqs.word = 'h0;
+        addr_br_reqs.tag = 'h0;
+        addr_br_reqs.set = 'h0;
+        addr_br_reqs.w_off = 'h0;
+        addr_br_reqs.b_off = 'h0;
 
-        addr_tmp = 0;
-        line_addr_tmp = 0;
-        state_tmp = 0;
-        coh_msg_tmp = 0;
+        addr_tmp = 'h0;
+        line_addr_tmp = 'h0;
+        state_tmp = 'h0;
+        coh_msg_tmp = 'h0;
+
+        evict_way_reg = 'h0;
 
         case (state)
             RESET : begin
@@ -548,6 +579,30 @@ module l2_fsm(
                     end
                 end
             end
+            RSP_WB_ACK_HANDLER : begin
+                // Once response to write-back is received:
+                if (evict_stall) begin
+                    // clear the state
+                    lmem_set_in = mshr[mshr_i].set;
+                    lmem_way_in = mshr[mshr_i].way;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end
+                    lmem_wr_en_state = 1'b1;
+
+                    // update the evict way
+                    lmem_wr_en_evict_way = 1'b1;
+                    lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
+
+                    // release evict_stall.
+                    clr_evict_stall = 1'b1;
+                end
+
+                // clear MSHR entry
+                update_mshr_state = 1'b1;
+                update_mshr_value_state = `SPX_I;
+                incr_mshr_cnt = 1'b1;
+            end
             FWD_REQS_LOOKUP : begin
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = line_br.set;
@@ -574,7 +629,7 @@ module l2_fsm(
             CPU_REQ_READ_REQ : begin
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
-                        /* cpu_req */ l2_cpu_req.cpu_msg,
+                        /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
@@ -583,7 +638,7 @@ module l2_fsm(
                         /* word */ l2_cpu_req.word,
                         /* line */ lines_buf[way_hit],
                         /* amo */ 'h0,
-                        /* word_mask */ 'h0 
+                        /* word_mask */ 'h0
                     );
                 end
 
@@ -611,7 +666,7 @@ module l2_fsm(
             CPU_REQ_WRITE_REQ : begin
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
-                        /* cpu_req */ l2_cpu_req.cpu_msg,
+                        /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
@@ -647,7 +702,7 @@ module l2_fsm(
                     `READ : begin
                         if (l2_req_out_ready_int) begin
                             fill_mshr_entry (
-                                /* cpu_req */ l2_cpu_req.cpu_msg,
+                                /* cpu_msg */ l2_cpu_req.cpu_msg,
                                 /* hprot */ l2_cpu_req.hprot,
                                 /* hsize */ l2_cpu_req.hsize,
                                 /* tag */ addr_br.tag,
@@ -671,7 +726,7 @@ module l2_fsm(
                     `WRITE : begin
                         if (l2_req_out_ready_int) begin
                             fill_mshr_entry (
-                                /* cpu_req */ l2_cpu_req.cpu_msg,
+                                /* cpu_msg */ l2_cpu_req.cpu_msg,
                                 /* hprot */ l2_cpu_req.hprot,
                                 /* hsize */ l2_cpu_req.hsize,
                                 /* tag */ addr_br.tag,
@@ -689,10 +744,57 @@ module l2_fsm(
                             /* hprot */ l2_cpu_req.hprot,
                             /* line_addr */ addr_br.line_addr,
                             /* line */ 'h0,
-                            /* word_mask */ ~word_mask_owned_next 
+                            /* word_mask */ ~word_mask_owned_next
                         );
                     end
                 endcase
+            end
+            CPU_REQ_EVICT: begin
+                // Store the evict_way in a different register.
+                evict_way_reg = evict_way_buf;
+                
+                // Use word_mask_owned_evict from l2_lookup to know whether to evict or not.
+                if (word_mask_owned_evict) begin
+                    // If owned, add MSHR entry and write-back the data if req_out is ready,
+                    // and set evict_stall in l2_regs.
+                    if (l2_req_out_ready_int) begin
+                        fill_mshr_entry (
+                            /* cpu_msg */ 1'b0,
+                            /* hprot */ hprots_buf[evict_way_reg],
+                            /* hsize */ 'h0,
+                            /* tag */ tags_buf[evict_way_reg],
+                            /* way */ evict_way_reg,
+                            /* state */ `SPX_RI,
+                            /* word */ 'h0,
+                            /* line */ lines_buf[evict_way_reg],
+                            /* amo */ 'h0,
+                            /* word_mask */ word_mask_owned_evict
+                        );
+                    end
+
+                    send_req_out (
+                        /* coh_msg */ `REQ_WB,
+                        /* hprot */ hprots_buf[evict_way_reg],
+                        /* line_addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
+                        /* line */ lines_buf[evict_way_reg],
+                        /* word_mask */ word_mask_owned_evict
+                    );
+                    
+                    set_evict_stall = 1'b1;
+                end else begin
+                    // update the evict way
+                    lmem_wr_en_evict_way = 1'b1;
+                    lmem_wr_data_evict_way = evict_way_reg + 1;
+
+                    lmem_set_in = addr_br.set;
+                    lmem_way_in = evict_way_reg;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end
+                    lmem_wr_en_state = 1'b1;
+                end
+
+                // TODO: Add L1 inval
             end
             default : begin
                 mshr_op_code = `L2_MSHR_IDLE;
@@ -763,11 +865,11 @@ module l2_fsm(
         update_mshr_value_cpu_msg = cpu_msg;
         update_mshr_value_hprot = hprot;
         update_mshr_value_hsize = hsize;
-        update_mshr_value_tag = addr_br.tag;
-        update_mshr_value_way = way_hit;
-        update_mshr_value_way = line;
+        update_mshr_value_tag = tag;
+        update_mshr_value_way = way;
+        update_mshr_value_line = line;
         update_mshr_value_state = state;
-        update_mshr_value_word = l2_cpu_req.word;
+        update_mshr_value_word = word;
         update_mshr_value_amo = amo;
         // word_mask_reg stores the original requested value of word_mask,
         // as word_mask can be altered as responses are serviced.

@@ -8,11 +8,13 @@ module l2_bufs (
     // Command to read into bufs
     input logic rd_set_into_bufs,
     // Values from localmem
+    input l2_way_t lmem_rd_data_evict_way,
     input line_t lmem_rd_data_line[`L2_WAYS],
     input l2_tag_t lmem_rd_data_tag[`L2_WAYS],
     input hprot_t lmem_rd_data_hprot[`L2_WAYS],
     input state_t lmem_rd_data_state[`L2_WAYS][`WORDS_PER_LINE],
     // Bufs that are loaded for use in FSM
+    output l2_way_t evict_way_buf,
     output line_t lines_buf[`L2_WAYS],
     output l2_tag_t tags_buf[`L2_WAYS],
     output hprot_t hprots_buf[`L2_WAYS],
@@ -20,6 +22,13 @@ module l2_bufs (
     );
     // Read all data of a set from the registers populated
     // by localmem into bufs registers that is used in the FSM.
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            evict_way_buf <= 0;
+        end else if (rd_set_into_bufs) begin
+            evict_way_buf <= lmem_rd_data_evict_way;
+        end
+    end
     genvar i, j;
     generate
         for (i = 0; i < `L2_WAYS; i++) begin
