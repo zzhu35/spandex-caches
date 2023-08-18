@@ -21,6 +21,18 @@
 `define WB_BITS     2
 `define WB_BITS_P1  3
 
+// MSHR
+`define N_MSHR          `N_REQS
+`define MSHR_BITS       `REQS_BITS
+`define MSHR_BITS_P1    `REQS_BITS_P1
+
+//L2 REQ DEFINES
+`define L2_MSHR_LOOKUP      3'b000
+`define L2_MSHR_PEEK_REQ    3'b001
+`define L2_MSHR_PEEK_FLUSH  3'b010
+`define L2_MSHR_PEEK_FWD    3'b011
+`define L2_MSHR_IDLE        3'b100
+
 // Ongoing transaction buffers
 `define LLC_N_REQS          4 // affects LLC_REQS_BITS
 `define LLC_REQS_BITS       (ilog2(`LLC_N_REQS)) // depends on LLC_N_REQS

@@ -33,8 +33,6 @@ module l2_interfaces(
     input logic l2_rd_rsp_ready,
     input logic l2_inval_valid_int,
     input logic l2_inval_ready,
-    input logic l2_stats_valid_int,
-    input logic l2_stats_ready,
     input logic set_cpu_req_from_conflict,
     input logic set_cpu_req_conflict,
     input logic set_fwd_in_from_stalled,
@@ -88,11 +86,6 @@ module l2_interfaces(
     l2_fwd_in_t.out l2_fwd_in,
     l2_rsp_in_t.out l2_rsp_in,
     l2_inval_t.out l2_inval
-`ifdef STATS_ENABLE
-    , input logic l2_stats_o,
-    output logic l2_stats,
-    output logic l2_stats_ready_int, l2_stats_valid
-`endif
     );
 
     //L2 REQ IN
@@ -462,31 +455,6 @@ module l2_interfaces(
     end
 
     assign l2_bresp = (!l2_bresp_valid_tmp) ? l2_bresp_o : l2_bresp_tmp;
-
-    //L2 STATS
-`ifdef STATS_ENABLE
-    logic l2_stats_valid_tmp, l2_stats_tmp;
-
-    interface_controller l2_stats_intf(
-        .clk(clk),
-        .rst(rst),
-        .ready_in(l2_stats_ready),
-        .valid_in(l2_stats_valid_int),
-        .ready_out(l2_stats_ready_int),
-        .valid_out(l2_stats_valid),
-        .valid_tmp(l2_stats_valid_tmp)
-    );
-
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            l2_stats_tmp <= 0;
-        end else if (l2_stats_valid_int && l2_stats_ready_int && !l2_stats_ready) begin
-            l2_stats_tmp <= l2_stats_o;
-        end
-    end
-
-    assign l2_stats = (!l2_stats_valid_tmp) ? l2_stats_o : l2_stats_tmp;
-`endif
 
     //READ FROM INPUT
     //cpu req + conflict

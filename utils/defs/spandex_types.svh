@@ -53,7 +53,6 @@ typedef line_addr_t l2_inval_addr_t;
 typedef struct packed{
     cpu_msg_t           cpu_msg;
     l2_tag_t            tag;
-    l2_tag_t            tag_estall;
     l2_set_t            set;
     l2_way_t            way;
     hsize_t             hsize;
@@ -61,11 +60,11 @@ typedef struct packed{
     byte_offset_t       b_off;
     unstable_state_t    state;
     hprot_t             hprot;
-    invack_cnt_calc_t   invack_cnt;
     word_t              word;
     line_t              line;
     amo_t               amo;
     word_mask_t         word_mask;
-} reqs_buf_t;
+    word_mask_t         word_mask_reg;
+} mshr_buf_t;
 
 `endif // __SPANDEX_TYPES_SVH__
