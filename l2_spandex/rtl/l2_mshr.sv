@@ -32,6 +32,8 @@ module l2_mshr(
     // TODO: Add addr_br_reqs when adding fill_reqs_flush
     line_breakdown_l2_t.in line_br,
     // TODO: Removed set conflict, fwd_stall related signals
+    output logic set_set_conflict_mshr,
+    output logic clr_set_conflict_mshr,
     // Signals indicating whether there was a hit and the index for hit.
     output logic mshr_hit_next,
     output logic mshr_hit,
@@ -131,6 +133,8 @@ module l2_mshr(
         // TODO: removed set_conflict and fwd_stall signals
         mshr_i_next = 0;
         mshr_hit_next = 1'b0;
+        clr_set_conflict_mshr = 1'b0;
+        set_set_conflict_mshr = 1'b0;
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
@@ -145,12 +149,19 @@ module l2_mshr(
             end
             // Check if there is a conflicting entry to incoming request. If yes, stall.
             `L2_MSHR_PEEK_REQ : begin
+                clr_set_conflict_mshr = 1'b1;
+
                 for (int i = 0; i < `N_MSHR; i++) begin
-                    if (mshr[i].state == `INVALID) begin
+                    if (mshr[i].state == `SPX_I) begin
                         mshr_i_next = i;
                     end
 
-                    // TODO: Add set_set_conflict_reqs and clr_set_conflict_reqs
+                    // If the incoming request matches with an entry in the MSHR,
+                    // assert set_conflict (which is sampled in l2_core).
+                    if (mshr[i].set == addr_br.set && mshr[i].state != `SPX_I) begin
+                        set_set_conflict_mshr = 1'b1;
+                        clr_set_conflict_mshr = 1'b0;
+                    end
                 end
             end
             // TODO: Removed peek_flush to find next free entry

@@ -16,7 +16,11 @@ module l2_input_decoder (
     // To check if new request can be tracked
     input logic [`REQS_BITS_P1-1:0] mshr_cnt,
     // State registers from regs/others
-    input logic evict_stall, 
+    input logic evict_stall,
+    input logic set_conflict,
+    
+    // Assign cpu_req from conflict registers
+    output logic set_cpu_req_from_conflict, 
     // Accept the new input now
     output logic do_rsp_next,
     output logic do_fwd_next,
@@ -53,6 +57,8 @@ module l2_input_decoder (
         addr_br_next.line[`OFF_RANGE_HI : `OFF_RANGE_LO ] = 0;
         addr_br_next.word[`B_OFF_RANGE_HI : `B_OFF_RANGE_LO ] = 0;
 
+        set_cpu_req_from_conflict = 1'b0;
+
         if (decode_en) begin
             // TODO: Add fence and flush check here
             if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
@@ -64,12 +70,14 @@ module l2_input_decoder (
                 l2_fwd_in_ready_int = 1'b1;
             // TODO: Add ongoing_flush logic
             // TODO: cpu_req: add set_conflict, evict_stall, ongoing_atomic checks
-            end else if (l2_cpu_req_valid_int && mshr_cnt != 0 && !evict_stall) begin
+            end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall) begin
                 do_cpu_req_next = 1'b1;
-                // TODO: Check set_conflict here before setting l2_cpu_req_ready_int
-                l2_cpu_req_ready_int = 1'b1; 
+                if (!set_conflict) begin 
+                    l2_cpu_req_ready_int = 1'b1; 
+                end else begin 
+                    set_cpu_req_from_conflict = 1'b1; 
+                end
             end
-
             // Parse line addresses for rsp and fwd as line_br
             if (do_rsp_next) begin
                 line_br_next.tag = rsp_in_addr[`ADDR_BITS - `OFFSET_BITS - 1 : `L2_SET_BITS];

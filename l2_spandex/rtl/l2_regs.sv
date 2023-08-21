@@ -10,9 +10,15 @@ module l2_regs (
     input logic add_mshr_entry,
     input logic incr_mshr_cnt,
     input logic [`MSHR_BITS-1:0] mshr_i,
+    // Triggers to assign to registers
     input logic clr_evict_stall,
     input logic set_evict_stall,
+    input logic set_set_conflict,
+    input logic clr_set_conflict,
+
+    // Registers
     output logic evict_stall,
+    output logic set_conflict,
     output logic [`MSHR_BITS_P1-1:0] mshr_cnt
     );
 
@@ -34,6 +40,16 @@ module l2_regs (
             evict_stall <= 1'b0;
         end else if (set_evict_stall) begin
             evict_stall <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            set_conflict <= 1'b0;
+        end else if (clr_set_conflict) begin
+            set_conflict <= 1'b0;
+        end else if (set_set_conflict) begin
+            set_conflict <= 1'b1;
         end
     end
 

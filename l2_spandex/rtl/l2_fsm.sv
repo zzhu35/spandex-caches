@@ -22,6 +22,8 @@ module l2_fsm(
     input logic [`MSHR_BITS-1:0] mshr_i,
     input logic [`MSHR_BITS-1:0] mshr_i_next,
     input mshr_buf_t mshr[`N_MSHR],
+    input logic set_set_conflict_mshr,
+    input logic clr_set_conflict_mshr,
     // Outputs from looking up RAMs.
     input logic tag_hit,
     input logic tag_hit_next,
@@ -49,6 +51,7 @@ module l2_fsm(
     input hprot_t lmem_rd_data_hprot[`L2_NUM_PORTS],
     // State registers from regs/others
     input logic evict_stall, 
+    input logic set_conflict,
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -117,6 +120,9 @@ module l2_fsm(
     // Outputs to regs to register states
     output logic clr_evict_stall,
     output logic set_evict_stall,
+    output logic set_set_conflict_fsm,
+    output logic clr_set_conflict_fsm,
+    output logic set_cpu_req_conflict,
 
     output bresp_t l2_bresp_o,
 
@@ -150,7 +156,8 @@ module l2_fsm(
     localparam CPU_REQ_READ_REQ = 5'b10011;
     localparam CPU_REQ_WRITE_NOREQ = 5'b10100;
     localparam CPU_REQ_WRITE_REQ = 5'b10101;
-    localparam CPU_REQ_TAG_LOOKUP = 5'b10110;
+    localparam CPU_REQ_SET_CONFLICT = 5'b10110;
+    localparam CPU_REQ_TAG_LOOKUP = 5'b10111;
     localparam CPU_REQ_EMPTY_WAY = 5'b11010;
     localparam CPU_REQ_EVICT = 5'b11011;
 
@@ -324,7 +331,14 @@ module l2_fsm(
             // If none of the above, check tag RAMs to know if hit or not.
             CPU_REQ_REQS_LOOKUP : begin
                 // TODO: All code related to ongoing atomic and set conflict removed. Add later.
-                next_state = CPU_REQ_TAG_LOOKUP;
+                if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
+                    next_state = CPU_REQ_SET_CONFLICT;
+                end else begin
+                    next_state = CPU_REQ_TAG_LOOKUP;
+                end
+            end
+            CPU_REQ_SET_CONFLICT : begin
+                next_state = DECODE;
             end
             CPU_REQ_TAG_LOOKUP : begin
                 // TODO: All code related to atomic read/write removed. Add later. 
@@ -406,6 +420,9 @@ module l2_fsm(
 
         set_evict_stall = 1'b0;
         clr_evict_stall = 1'b0;
+        set_set_conflict_fsm = 1'b0;
+        clr_set_conflict_fsm = 1'b0;
+        set_cpu_req_conflict = 1'b0;
 
         add_mshr_entry = 1'b0;
         update_mshr_state = 1'b0;
@@ -617,6 +634,9 @@ module l2_fsm(
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = addr_br.set;
                 // TODO: Removed code related to BRESP being sent back for atomic write.
+            end
+            CPU_REQ_SET_CONFLICT : begin
+                set_cpu_req_conflict = 1'b1;
             end
             CPU_REQ_TAG_LOOKUP : begin
                 // TODO: Removed code related to setting ongoing_atomic if atomic read.

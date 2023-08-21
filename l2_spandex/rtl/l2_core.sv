@@ -79,7 +79,7 @@ module l2_core(
     logic set_ongoing_atomic, clr_ongoing_atomic, set_set_conflict, clr_set_conflict;
     logic incr_flush_way, incr_flush_set, clr_flush_set, clr_flush_way;
     logic do_flush_next, do_rsp_next, do_fwd_next, do_ongoing_flush_next, do_cpu_req_next;
-    logic set_set_conflict_fsm, set_set_conflict_reqs, clr_set_conflict_fsm, clr_set_conflict_reqs;
+    logic set_set_conflict_fsm, set_set_conflict_mshr, clr_set_conflict_fsm, clr_set_conflict_mshr;
     logic set_fwd_stall, clr_fwd_stall, set_fwd_stall_i, clr_reqs_cnt, incr_mshr_cnt, clr_fwd_stall_ended;
     logic clr_evict_stall, set_evict_stall, incr_evict_way_buf;
     logic clr_flush_stall_ended, set_flush_stall_ended, flush_stall_ended, is_flush_all;
@@ -137,10 +137,7 @@ module l2_core(
     assign fwd_stall = 1'b0;
     assign fwd_stall_ended = 1'b0;
     assign ongoing_flush = 1'b0;
-    assign set_conflict = 1'b0;
-    assign evict_stall = 1'b0;
     assign ongoing_atomic = 1'b0;
-    assign set_cpu_req_conflict = 1'b0;
     assign set_fwd_in_stalled = 1'b0;
     assign do_ongoing_flush = 1'b0;
     assign set_ongoing_flush = 1'b0;
@@ -155,18 +152,11 @@ module l2_core(
     assign clr_flush_way = 1'b0;
     assign do_flush_next = 1'b0;
     assign do_ongoing_flush_next = 1'b0;
-    assign set_set_conflict_fsm = 1'b0;
-    assign set_set_conflict_reqs = 1'b0;
-    assign clr_set_conflict_fsm = 1'b0;
-    assign clr_set_conflict_reqs = 1'b0;
     assign set_fwd_stall = 1'b0;
     assign clr_fwd_stall = 1'b0;
     assign set_fwd_stall_i = 1'b0;
     assign clr_reqs_cnt = 1'b0;
     assign clr_fwd_stall_ended = 1'b0;
-    assign clr_evict_stall = 1'b0;
-    assign set_evict_stall = 1'b0;
-    assign incr_evict_way_buf = 1'b0;
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
     assign flush_stall_ended = 1'b0;
@@ -175,8 +165,8 @@ module l2_core(
     assign set_ongoing_atomic_set_conflict_instr = 1'b0;
     assign clr_ongoing_atomic_set_conflict_instr = 1'b0;
 
-    assign set_set_conflict = set_set_conflict_fsm | set_set_conflict_reqs;
-    assign clr_set_conflict = clr_set_conflict_fsm | clr_set_conflict_reqs;
+    assign set_set_conflict = set_set_conflict_fsm | set_set_conflict_mshr;
+    assign clr_set_conflict = clr_set_conflict_fsm | clr_set_conflict_mshr;
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
     assign lmem_rd_en = 1'b1;
 
