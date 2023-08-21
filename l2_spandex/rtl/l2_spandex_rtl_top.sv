@@ -1,15 +1,8 @@
-// Copyright (c) 2011-2022 Columbia University, System Level Design Group
-// SPDC-License-Identifier: Apache-2.0
-
 `timescale 1ps / 1ps
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// l2_wrapper.sv
-// Author: Joseph Zuckerman
-// top level wrapper for l2 cache
-
-module l2_rtl_top(
+module l2_spandex_rtl_top(
     input logic clk,
     input logic rst,
     input logic l2_cpu_req_valid,
