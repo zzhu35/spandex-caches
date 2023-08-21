@@ -16,6 +16,10 @@
 `define MIX_MSG_TYPE_WIDTH (`COH_MSG_TYPE_WIDTH + `DMA_MSG_TYPE_WIDTH)
 `endif
 
+`ifdef STATS_ENABLE
+`undef STATS_ENABLE
+`endif
+
 // write buffer
 `define N_WB        4
 `define WB_BITS     2

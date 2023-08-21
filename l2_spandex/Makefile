@@ -10,7 +10,6 @@ FLAGS += -NOWarn SCK505
 FLAGS += -SCTOP sc_main
 FLAGS += -DCLOCK_PERIOD=12.5
 FLAGS += -DRTL_CACHE
-FLAGS += -DSTATS_ENABLE
 FLAGS += -TOP glbl
 FLAGS += -access +R
 FLAGS += -ncvlog_args,"-define XILINX_FPGA"

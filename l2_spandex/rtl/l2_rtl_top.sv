@@ -154,10 +154,8 @@ module l2_rtl_top(
     bresp_t l2_bresp;
     assign l2_bresp_data = l2_bresp;
 
-`ifdef STATS_ENABLE
-    logic l2_stats;
-    assign l2_stats_data = l2_stats;
-`endif
+    assign l2_stats_data = 1'b0;
+    assign l2_stats_valid = 1'b0;
 
     l2_core l2_u(.*);
 endmodule
