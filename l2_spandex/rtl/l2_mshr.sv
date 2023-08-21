@@ -34,6 +34,10 @@ module l2_mshr(
     // TODO: Removed set conflict, fwd_stall related signals
     output logic set_set_conflict_mshr,
     output logic clr_set_conflict_mshr,
+    output logic set_fwd_stall,
+    output logic clr_fwd_stall,
+    output logic set_fwd_stall_entry,
+    output logic [`MSHR_BITS-1:0] set_fwd_stall_entry_data,
     // Signals indicating whether there was a hit and the index for hit.
     output logic mshr_hit_next,
     output logic mshr_hit,
@@ -135,6 +139,8 @@ module l2_mshr(
         mshr_hit_next = 1'b0;
         clr_set_conflict_mshr = 1'b0;
         set_set_conflict_mshr = 1'b0;
+        set_fwd_stall_entry = 1'b0;
+        set_fwd_stall_entry_data = 'h0;
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
@@ -167,6 +173,26 @@ module l2_mshr(
             // TODO: Removed peek_flush to find next free entry
             // TODO: Removed peek_fwd for checking conflict and setting fwd_stall
             // Check if there is a conflicting entry to incoming forward. If yes, stall.
+            `L2_MSHR_PEEK_FWD : begin
+                clr_fwd_stall = 1'b1;
+
+                for (int i = 0; i < `N_MSHR; i++) begin
+                    if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
+                        mshr_hit_next = 1'b1;
+                        mshr_i_next = i;
+
+                        set_fwd_stall = 1'b1;
+                        clr_fwd_stall = 1'b0;
+                        
+                        // TODO: Minor: Removed ESP protocol check for INV state
+                        // It's possible that the fwd_stall does not need to be asserted
+                        // for certain mshr hit states.
+                    end
+                end
+
+                set_fwd_stall_entry = 1'b1;
+                set_fwd_stall_entry_data = mshr_i_next;
+            end
             default : begin
                 mshr_hit_next = 1'b0;
             end

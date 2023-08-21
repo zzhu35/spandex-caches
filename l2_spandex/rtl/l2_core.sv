@@ -73,7 +73,7 @@ module l2_core(
     logic incr_flush_way, incr_flush_set, clr_flush_set, clr_flush_way;
     logic do_flush_next, do_rsp_next, do_fwd_next, do_ongoing_flush_next, do_cpu_req_next;
     logic set_set_conflict_fsm, set_set_conflict_mshr, clr_set_conflict_fsm, clr_set_conflict_mshr;
-    logic set_fwd_stall, clr_fwd_stall, set_fwd_stall_i, clr_reqs_cnt, incr_mshr_cnt, clr_fwd_stall_ended;
+    logic set_fwd_stall, clr_fwd_stall, set_fwd_stall_entry, clr_reqs_cnt, incr_mshr_cnt, clr_fwd_stall_ended;
     logic clr_evict_stall, set_evict_stall, incr_evict_way_buf;
     logic clr_flush_stall_ended, set_flush_stall_ended, flush_stall_ended, is_flush_all;
     logic lookup_mode, tag_hit, empty_way_found, tag_hit_next, empty_way_found_next;
@@ -84,7 +84,7 @@ module l2_core(
     logic [2:0] mshr_op_code;
     logic [`L2_SET_BITS:0] flush_set;
     logic [`L2_WAY_BITS:0] flush_way;
-    logic [`REQS_BITS-1:0] mshr_i, fwd_stall_i_wr_data, fwd_stall_i, mshr_i_next, reqs_atomic_i;
+    logic [`REQS_BITS-1:0] mshr_i, set_fwd_stall_entry_data, fwd_stall_entry, mshr_i_next, reqs_atomic_i;
     logic [`REQS_BITS_P1-1:0] mshr_cnt;
     logic update_mshr_word_mask, update_mshr_word_mask_reg;
 

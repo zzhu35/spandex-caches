@@ -24,6 +24,8 @@ module l2_fsm(
     input mshr_buf_t mshr[`N_MSHR],
     input logic set_set_conflict_mshr,
     input logic clr_set_conflict_mshr,
+    input logic set_fwd_stall,
+    input logic clr_fwd_stall,
     // Outputs from looking up RAMs.
     input logic tag_hit,
     input logic tag_hit_next,
@@ -52,6 +54,7 @@ module l2_fsm(
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,
+    input logic fwd_stall,
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -133,35 +136,37 @@ module l2_fsm(
     l2_inval_t.out l2_inval_o
    );
 
-    localparam RESET = 5'b00000;
-    localparam DECODE = 5'b00001;
+    localparam RESET = 6'b000000;
+    localparam DECODE = 6'b000001;
 
-    localparam RSP_LOOKUP = 5'b00010;
-    localparam RSP_ODATA_HANDLER = 5'b00011;
-    localparam RSP_S_HANDLER = 5'b00100;
-    localparam RSP_WB_ACK_HANDLER = 5'b00101;
+    localparam RSP_LOOKUP = 6'b000010;
+    localparam RSP_ODATA_HANDLER = 6'b000011;
+    localparam RSP_S_HANDLER = 6'b000100;
+    localparam RSP_WB_ACK_HANDLER = 6'b000101;
 
-    localparam FWD_REQS_LOOKUP = 5'b01000;
-    localparam FWD_TAG_LOOKUP = 5'b01001;
-    localparam FWD_STALL = 5'b01010;
-    localparam FWD_HIT = 5'b01011;
-    localparam FWD_NO_HIT = 5'b01101;
+    localparam FWD_REQS_LOOKUP = 6'b001000;
+    localparam FWD_TAG_LOOKUP = 6'b001001;
+    localparam FWD_STALL = 6'b001010;
+    localparam FWD_MSHR_HIT = 6'b001011;
+    localparam FWD_NO_MSHR_HIT = 6'b001101;
+    localparam FWD_INV_HANDLER = 6'b001110;
+    localparam FWD_RVK_O_HANDLER = 6'b001111;
     // TODO: Removed FWD_HIT/NO_HIT_2 states
 
-    localparam ONGOING_FLUSH_LOOKUP = 5'b01111;
-    localparam ONGOING_FLUSH_PROCESS = 5'b10000;
+    localparam ONGOING_FLUSH_LOOKUP = 6'b100000;
+    localparam ONGOING_FLUSH_PROCESS = 6'b100001;
 
-    localparam CPU_REQ_REQS_LOOKUP = 5'b10001;
-    localparam CPU_REQ_READ_NO_REQ = 5'b10010;
-    localparam CPU_REQ_READ_REQ = 5'b10011;
-    localparam CPU_REQ_WRITE_NOREQ = 5'b10100;
-    localparam CPU_REQ_WRITE_REQ = 5'b10101;
-    localparam CPU_REQ_SET_CONFLICT = 5'b10110;
-    localparam CPU_REQ_TAG_LOOKUP = 5'b10111;
-    localparam CPU_REQ_EMPTY_WAY = 5'b11010;
-    localparam CPU_REQ_EVICT = 5'b11011;
+    localparam CPU_REQ_REQS_LOOKUP = 6'b100010;
+    localparam CPU_REQ_READ_NO_REQ = 6'b100011;
+    localparam CPU_REQ_READ_REQ = 6'b100100;
+    localparam CPU_REQ_WRITE_NOREQ = 6'b100101;
+    localparam CPU_REQ_WRITE_REQ = 6'b100110;
+    localparam CPU_REQ_SET_CONFLICT = 6'b100111;
+    localparam CPU_REQ_TAG_LOOKUP = 6'b101000;
+    localparam CPU_REQ_EMPTY_WAY = 6'b101001;
+    localparam CPU_REQ_EVICT = 6'b101010;
 
-    logic [4:0] state, next_state;
+    logic [5:0] state, next_state;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             state <= RESET;
@@ -290,30 +295,47 @@ module l2_fsm(
             // TODO: For Spandex, we may need to service forwards during fwd_stall
             // as well, so the FWD_STALL state should not just go back to DECODE.
             FWD_REQS_LOOKUP : begin
-                // TODO: Add check for FWD_STALL - (fwd_stall || set_fwd_stall) & !clr_fwd_stall
-                if (mshr_hit_next) begin
-                    next_state = FWD_HIT;
+                if ((fwd_stall || set_fwd_stall) & !clr_fwd_stall) begin
+                    next_state = FWD_STALL;
+                end else if (mshr_hit_next) begin
+                    next_state = FWD_MSHR_HIT;
                 end else begin
                     next_state = FWD_TAG_LOOKUP;
                 end
             end
-            FWD_TAG_LOOKUP : begin
-                next_state = FWD_NO_HIT;
-            end
             FWD_STALL : begin
                 next_state = DECODE;
             end
-            // TODO: Add a switch case here on reqs[reqs_i].state
-            // for all the forwards in our no fwd_stall handler.
-            // In FSM 2, we need to add the actual rsp_out updates.
-            // I think this FSM will proceed back to DECODE
-            // as soon as rsp_out_ready is high, for example.
             // TODO: Cleared both handler code till we figure out what we want to service.
-            FWD_HIT : begin
+            FWD_MSHR_HIT : begin
                 next_state = DECODE;
             end
-            FWD_NO_HIT : begin
+            FWD_TAG_LOOKUP : begin
+                next_state = FWD_NO_MSHR_HIT;
+            end
+            FWD_NO_MSHR_HIT : begin
+                if (tag_hit) begin
+                    case(l2_fwd_in.coh_msg)
+                        `FWD_INV : begin
+                            next_state = FWD_INV_HANDLER;
+                        end
+                        `FWD_RVK_O : begin
+                            next_state = FWD_RVK_O_HANDLER;
+                        end
+                        default : begin
+                            next_state = DECODE;
+                        end
+                    endcase
+                end
+            end
+            FWD_INV_HANDLER : begin
+                // TODO: When inval is implemented, wait inval_ready
                 next_state = DECODE;
+            end
+            FWD_RVK_O_HANDLER : begin
+                if (l2_rsp_out_ready_int) begin
+                    next_state = DECODE;
+                end
             end
             // Check if the flush_way (from l2_regs) has valid data,
             // and if it has data (instr don't need write-back). If yes,
@@ -629,6 +651,32 @@ module l2_fsm(
                 lookup_en = 1'b1;
                 lookup_mode = `L2_LOOKUP_FWD;
             end
+            FWD_INV_HANDLER : begin
+                // Invalidate state of words requested in forward
+                lmem_set_in = line_br.set;
+                lmem_way_in = way_hit;
+                for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                    // Only update the state for valid words in forward.
+                    if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] < `SPX_R) begin
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end else begin
+                        lmem_wr_data_state[i] = states_buf[way_hit][i];
+                    end
+                end
+                lmem_wr_en_state = 1'b1;
+
+                // send invalidate response back
+                send_rsp_out (
+                    /* coh_msg */ `RSP_INV_ACK,
+                    /* req_id */ 'h0,
+                    /* to_req */ 1'b0,
+                    /* line_addr */ l2_fwd_in.addr,
+                    /* line */ 'h0,
+                    /* word_mask */ l2_fwd_in.word_mask
+                );
+            end
+            FWD_RVK_O_HANDLER : begin
+            end
             CPU_REQ_REQS_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
@@ -666,7 +714,7 @@ module l2_fsm(
                     /* coh_msg */ `REQ_S,
                     /* hprot */ l2_cpu_req.hprot,
                     /* line_addr */ addr_br.line_addr,
-                    /* line */ 0,
+                    /* line */ 'h0,
                     /* word_mask */ `WORD_MASK_ALL
                 );
             end
@@ -829,6 +877,22 @@ module l2_fsm(
         l2_rd_rsp_o.line = line;
     endfunction
 
+    function void send_rsp_out;
+        input coh_msg_t coh_msg;
+        input cache_id_t req_id;
+        input logic to_req;
+        input line_addr_t line_addr;
+        input line_t line;
+        input word_mask_t word_mask;
+
+        l2_rsp_out_o.coh_msg = coh_msg;
+        l2_rsp_out_o.req_id = req_id;
+        l2_rsp_out_o.to_req = to_req;
+        l2_rsp_out_o.addr = line_addr;
+        l2_rsp_out_o.line = line;
+        l2_rsp_out_o.word_mask = word_mask;
+        l2_rsp_out_valid_int = 1'b1;
+    endfunction
 
     function void send_req_out;
         input coh_msg_t coh_msg;
@@ -865,6 +929,8 @@ module l2_fsm(
         for (int i = 0; i < `WORDS_PER_LINE; i++) begin
             if (word_mask[i]) begin
                 lmem_wr_data_state[i] = state;
+            end else begin
+                lmem_wr_data_state[i] = states_buf[way][i];
             end
         end
         lmem_wr_en_clear_mshr = 1'b1;

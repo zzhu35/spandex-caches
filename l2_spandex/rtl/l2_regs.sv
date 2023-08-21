@@ -15,10 +15,17 @@ module l2_regs (
     input logic set_evict_stall,
     input logic set_set_conflict,
     input logic clr_set_conflict,
-
+    input logic set_fwd_stall,
+    input logic clr_fwd_stall,
+    // Entry in MSHR that corresponds to fwd_stall
+    input logic set_fwd_stall_entry,
+    input logic [`MSHR_BITS-1:0] set_fwd_stall_entry_data,
     // Registers
     output logic evict_stall,
     output logic set_conflict,
+    output logic fwd_stall,
+    output logic fwd_stall_ended,
+    output logic [`MSHR_BITS-1:0] fwd_stall_entry,
     output logic [`MSHR_BITS_P1-1:0] mshr_cnt
     );
 
@@ -50,6 +57,24 @@ module l2_regs (
             set_conflict <= 1'b0;
         end else if (set_set_conflict) begin
             set_conflict <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            fwd_stall <= 1'b0;
+        end else if (clr_fwd_stall) begin
+            fwd_stall <= 1'b0;
+        end else if (set_fwd_stall) begin
+            fwd_stall <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            fwd_stall_entry <= 0;
+        end else if (set_fwd_stall_entry) begin
+            fwd_stall_entry <= set_fwd_stall_entry_data;
         end
     end
 

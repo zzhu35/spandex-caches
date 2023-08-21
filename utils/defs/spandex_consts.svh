@@ -125,7 +125,7 @@
 // forwards (L3 to L2/TU)
 `define FWD_REQ_S      0 // same as fwd_gets
 `define FWD_REQ_Odata  1 // same as fwd_getm
-`define FWD_INV_SPDX   2 // same as fwd_inv
+`define FWD_INV        2 // same as fwd_inv
 `define FWD_WB_ACK     3 // same as fwd_putack
 `define FWD_RVK_O      4 // same as getm_llc
 `define FWD_REQ_V      7 // non existent in ESP
@@ -135,7 +135,7 @@
 // response (L2/TU to L2/TU, L2/TU to L3, L3 to L2/TU)
 `define RSP_S               0
 `define RSP_Odata           1 // same as fwd_req_odata
-`define RSP_INV_ACK_SPDX    2 // same as fwd_inv_spdx
+`define RSP_INV_ACK         2 // same as fwd_inv_spdx
 `define RSP_NACK            3
 `define RSP_RVK_O           4 // same as fwd_rvk_o
 `define RSP_V               5
