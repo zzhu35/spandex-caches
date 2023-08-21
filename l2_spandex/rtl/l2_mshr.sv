@@ -141,6 +141,8 @@ module l2_mshr(
         set_set_conflict_mshr = 1'b0;
         set_fwd_stall_entry = 1'b0;
         set_fwd_stall_entry_data = 'h0;
+        set_fwd_stall = 1'b0;
+        clr_fwd_stall = 1'b0;
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
@@ -190,8 +192,10 @@ module l2_mshr(
                     end
                 end
 
-                set_fwd_stall_entry = 1'b1;
-                set_fwd_stall_entry_data = mshr_i_next;
+                if (set_fwd_stall) begin
+                    set_fwd_stall_entry = 1'b1;
+                    set_fwd_stall_entry_data = mshr_i_next;
+                end
             end
             default : begin
                 mshr_hit_next = 1'b0;

@@ -107,6 +107,18 @@ module l2_lookup (
                             way_hit_next = i;
                         end
                     end
+
+                    // Check how many words in the line are in owned or shared state
+                    if (tag_hit_next) begin
+                        for (int j = 0; j < `WORDS_PER_LINE; j++) begin
+                            if (states_buf[way_hit_next][j] == `SPX_R) begin
+                                word_mask_owned_next[j] = 1'b1;
+                                word_mask_shared_next[j] = 1'b1;
+                            end else if (states_buf[way_hit_next][j] == `SPX_S) begin
+                                word_mask_shared_next[j] = 1'b1;
+                            end
+                        end
+                    end
                 end
             endcase
         end

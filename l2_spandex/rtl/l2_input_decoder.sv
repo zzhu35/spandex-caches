@@ -18,9 +18,13 @@ module l2_input_decoder (
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,
+    input logic fwd_stall,
+    input logic fwd_stall_ended,
 
     // Assign cpu_req from conflict registers
     output logic set_cpu_req_from_conflict,
+    // Assign fwd_in from conflict registers
+    output logic set_fwd_in_from_stalled,
     // Accept the new input now
     output logic do_rsp_next,
     output logic do_fwd_next,
@@ -58,16 +62,20 @@ module l2_input_decoder (
         addr_br_next.word[`B_OFF_RANGE_HI : `B_OFF_RANGE_LO ] = 0;
 
         set_cpu_req_from_conflict = 1'b0;
+        set_fwd_in_from_stalled = 1'b0;
 
         if (decode_en) begin
             // TODO: Add fence and flush check here
             if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
                 do_rsp_next = 1'b1;
                 l2_rsp_in_ready_int = 1'b1;
-            end else if (l2_fwd_in_valid_int) begin
-                // TODO: Check fwd_stall here before setting l2_fwd_in_ready_int
+            end else if ((l2_fwd_in_valid_int && !fwd_stall) || fwd_stall_ended) begin
                 do_fwd_next = 1'b1;
-                l2_fwd_in_ready_int = 1'b1;
+                if (!fwd_stall) begin
+                    l2_fwd_in_ready_int = 1'b1;
+                end else begin
+                    set_fwd_in_from_stalled = 1'b1;
+                end
             // TODO: Add ongoing_flush logic
             // TODO: cpu_req: add set_conflict, evict_stall, ongoing_atomic checks
             end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall) begin

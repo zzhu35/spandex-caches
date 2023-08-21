@@ -127,16 +127,11 @@ module l2_core(
     word_mask_t update_mshr_value_word_mask;
     word_mask_t update_mshr_value_word_mask_reg;
 
-    assign fwd_stall = 1'b0;
-    assign fwd_stall_ended = 1'b0;
     assign ongoing_flush = 1'b0;
     assign ongoing_atomic = 1'b0;
-    assign set_fwd_in_stalled = 1'b0;
     assign do_ongoing_flush = 1'b0;
     assign set_ongoing_flush = 1'b0;
     assign clr_ongoing_flush = 1'b0;
-    assign set_cpu_req_from_conflict = 1'b0;
-    assign set_fwd_in_from_stalled = 1'b0;
     assign set_ongoing_atomic = 1'b0;
     assign clr_ongoing_atomic = 1'b0;
     assign incr_flush_way = 1'b0;
@@ -145,11 +140,6 @@ module l2_core(
     assign clr_flush_way = 1'b0;
     assign do_flush_next = 1'b0;
     assign do_ongoing_flush_next = 1'b0;
-    assign set_fwd_stall = 1'b0;
-    assign clr_fwd_stall = 1'b0;
-    assign set_fwd_stall_i = 1'b0;
-    assign clr_reqs_cnt = 1'b0;
-    assign clr_fwd_stall_ended = 1'b0;
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
     assign flush_stall_ended = 1'b0;

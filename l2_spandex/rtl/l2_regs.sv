@@ -17,6 +17,8 @@ module l2_regs (
     input logic clr_set_conflict,
     input logic set_fwd_stall,
     input logic clr_fwd_stall,
+    input logic clr_fwd_stall_ended,
+    input logic lmem_wr_en_clear_mshr,
     // Entry in MSHR that corresponds to fwd_stall
     input logic set_fwd_stall_entry,
     input logic [`MSHR_BITS-1:0] set_fwd_stall_entry_data,
@@ -75,6 +77,18 @@ module l2_regs (
             fwd_stall_entry <= 0;
         end else if (set_fwd_stall_entry) begin
             fwd_stall_entry <= set_fwd_stall_entry_data;
+        end
+    end
+
+    // fwd_stall is only if lifted when the original pending response
+    // received, whose MSHR entry cause the fwd to stall.
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            fwd_stall_ended <= 1'b0;
+        end else if (clr_fwd_stall_ended) begin
+            fwd_stall_ended <= 1'b0;
+        end else if (lmem_wr_en_clear_mshr && fwd_stall && (fwd_stall_entry == mshr_i)) begin
+            fwd_stall_ended <= 1'b1;
         end
     end
 

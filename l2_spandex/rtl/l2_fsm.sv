@@ -126,6 +126,8 @@ module l2_fsm(
     output logic set_set_conflict_fsm,
     output logic clr_set_conflict_fsm,
     output logic set_cpu_req_conflict,
+    output logic set_fwd_in_stalled,
+    output logic clr_fwd_stall_ended,
 
     output bresp_t l2_bresp_o,
 
@@ -295,6 +297,12 @@ module l2_fsm(
             // TODO: For Spandex, we may need to service forwards during fwd_stall
             // as well, so the FWD_STALL state should not just go back to DECODE.
             FWD_REQS_LOOKUP : begin
+                // FSM 2 will lookup MSHR to see if there's already a stall - if yes,
+                // go to FWD_STALL. Else, check if if the incoming entry is causing a
+                // stall. Else, lookup the RAMs to see if the forward is a hit.
+                // It is okay to check set_fwd_stall and clr_fwd_stall every time,
+                // because the l2_fwd_in will be registered till the fwd_stall ends,
+                // i.e., input_decoder will not accept a new forward till it ends. 
                 if ((fwd_stall || set_fwd_stall) & !clr_fwd_stall) begin
                     next_state = FWD_STALL;
                 end else if (mshr_hit_next) begin
@@ -306,9 +314,18 @@ module l2_fsm(
             FWD_STALL : begin
                 next_state = DECODE;
             end
-            // TODO: Cleared both handler code till we figure out what we want to service.
             FWD_MSHR_HIT : begin
-                next_state = DECODE;
+                case(l2_fwd_in.coh_msg)
+                    `FWD_INV : begin
+                        next_state = FWD_INV_HANDLER;
+                    end
+                    `FWD_RVK_O : begin
+                        next_state = FWD_RVK_O_HANDLER;
+                    end
+                    default : begin
+                        next_state = DECODE;
+                    end
+                endcase
             end
             FWD_TAG_LOOKUP : begin
                 next_state = FWD_NO_MSHR_HIT;
@@ -330,9 +347,12 @@ module l2_fsm(
             end
             FWD_INV_HANDLER : begin
                 // TODO: When inval is implemented, wait inval_ready
-                next_state = DECODE;
+                if (l2_rsp_out_ready_int) begin
+                    next_state = DECODE;
+                end
             end
             FWD_RVK_O_HANDLER : begin
+                // TODO: When inval is implemented, wait inval_ready
                 if (l2_rsp_out_ready_int) begin
                     next_state = DECODE;
                 end
@@ -445,6 +465,8 @@ module l2_fsm(
         set_set_conflict_fsm = 1'b0;
         clr_set_conflict_fsm = 1'b0;
         set_cpu_req_conflict = 1'b0;
+        set_fwd_in_stalled = 1'b0;
+        clr_fwd_stall_ended = 1'b0;
 
         add_mshr_entry = 1'b0;
         update_mshr_state = 1'b0;
@@ -600,15 +622,27 @@ module l2_fsm(
                     send_rd_rsp(/* line */ update_mshr_value_line);
 
                     // Update the RAMs and clear entry
-                    clear_mshr_entry (
-                        /* set */ line_br.set,
-                        /* way */ mshr[mshr_i].way,
-                        /* tag */ line_br.tag,
-                        /* line */ update_mshr_value_line,
-                        /* hprot */  mshr[mshr_i].hprot,
-                        /* state */ `SPX_S,
-                        /* word_mask_reg */ mshr[mshr_i].word_mask_reg
-                    );
+                    if (mshr[mshr_i].state == `SPX_IS) begin
+                        clear_mshr_entry (
+                            /* set */ line_br.set,
+                            /* way */ mshr[mshr_i].way,
+                            /* tag */ line_br.tag,
+                            /* line */ update_mshr_value_line,
+                            /* hprot */  mshr[mshr_i].hprot,
+                            /* state */ `SPX_S,
+                            /* word_mask_reg */ mshr[mshr_i].word_mask_reg
+                        );
+                    end else if (mshr[mshr_i].state == `SPX_II) begin
+                        clear_mshr_entry (
+                            /* set */ line_br.set,
+                            /* way */ mshr[mshr_i].way,
+                            /* tag */ line_br.tag,
+                            /* line */ update_mshr_value_line,
+                            /* hprot */  mshr[mshr_i].hprot,
+                            /* state */ `SPX_I,
+                            /* word_mask_reg */ mshr[mshr_i].word_mask_reg
+                        );
+                    end
 
                     // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
                     if (l2_rd_rsp_ready_int) begin
@@ -646,24 +680,39 @@ module l2_fsm(
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = line_br.set;
                 mshr_op_code = `L2_MSHR_PEEK_FWD;
+                clr_fwd_stall_ended = 1'b1;
             end
             FWD_TAG_LOOKUP : begin
                 lookup_en = 1'b1;
                 lookup_mode = `L2_LOOKUP_FWD;
             end
+            FWD_STALL : begin
+                // Assign the incoming fwd request to fwd_in_stalled
+                set_fwd_in_stalled = 1'b1;
+            end
             FWD_INV_HANDLER : begin
-                // Invalidate state of words requested in forward
-                lmem_set_in = line_br.set;
-                lmem_way_in = way_hit;
-                for (int i = 0; i < `WORDS_PER_LINE; i++) begin
-                    // Only update the state for valid words in forward.
-                    if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] < `SPX_R) begin
-                        lmem_wr_data_state[i] = `SPX_I;
-                    end else begin
-                        lmem_wr_data_state[i] = states_buf[way_hit][i];
+                if (fwd_stall) begin
+                    // update MSHR entry
+                    // The earlier ReqS is now invalid, and when the response
+                    // comes back, we should not allocate in SPX_S.
+                    if (mshr[mshr_i].state == `SPX_IS) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_II;
                     end
+                end else begin
+                    // Invalidate state of words requested in forward
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = way_hit;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        // Only update the state for valid words in forward.
+                        if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] < `SPX_R) begin
+                            lmem_wr_data_state[i] = `SPX_I;
+                        end else begin
+                            lmem_wr_data_state[i] = states_buf[way_hit][i];
+                        end
+                    end
+                    lmem_wr_en_state = 1'b1;
                 end
-                lmem_wr_en_state = 1'b1;
 
                 // send invalidate response back
                 send_rsp_out (
@@ -676,6 +725,30 @@ module l2_fsm(
                 );
             end
             FWD_RVK_O_HANDLER : begin
+                // Invalidate state of words requested in forward
+                lmem_set_in = line_br.set;
+                lmem_way_in = way_hit;
+                for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                    // Only update the state for valid words in forward.
+                    if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] == `SPX_R) begin
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end else begin
+                        lmem_wr_data_state[i] = states_buf[way_hit][i];
+                    end
+                end
+                lmem_wr_en_state = 1'b1;
+
+                // send invalidate response back
+                // TODO: Should we check the valid words in the line and forward word_mask
+                // to set the word_mask of the response?
+                send_rsp_out (
+                    /* coh_msg */ `RSP_RVK_O,
+                    /* req_id */ l2_fwd_in.req_id,
+                    /* to_req */ 1'b0,
+                    /* line_addr */ l2_fwd_in.addr,
+                    /* line */ lines_buf[way_hit],
+                    /* word_mask */ l2_fwd_in.word_mask
+                );
             end
             CPU_REQ_REQS_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
