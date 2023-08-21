@@ -81,7 +81,7 @@ endmodule
 //     output hprot_t hprots_buf[`L2_WAYS],
 //     output state_t states_buf[`L2_WAYS]
 //     );
-   
+
 //     always_ff @(posedge clk or negedge rst) begin
 //         if (!rst) begin
 //             evict_way_buf <= 0;
@@ -102,11 +102,11 @@ endmodule
 //             always_ff @(posedge clk or negedge rst) begin
 //                 if (!rst) begin
 //                     tags_buf[i] <= 0;
-//                 end else if (rd_mem_en) begin 
+//                 end else if (rd_mem_en) begin
 //                     tags_buf[i] <= rd_data_tag[i];
 //                 end
 //             end
-//             always_ff @(posedge clk or negedge rst) begin       
+//             always_ff @(posedge clk or negedge rst) begin
 //                 if (!rst) begin
 //                     hprots_buf[i] <= 0;
 //                 end else if (rd_mem_en) begin

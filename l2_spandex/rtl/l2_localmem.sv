@@ -1,6 +1,7 @@
 `timescale 1ps / 1ps
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
+
 module l2_localmem (
     input logic clk,
     input logic rst,
@@ -15,23 +16,23 @@ module l2_localmem (
     input line_t lmem_wr_data_line,
     input l2_tag_t lmem_wr_data_tag,
     input hprot_t lmem_wr_data_hprot,
-    input l2_way_t lmem_wr_data_evict_way, 
+    input l2_way_t lmem_wr_data_evict_way,
     input state_t lmem_wr_data_state[`WORDS_PER_LINE],
-  
+
     output line_t lmem_rd_data_line[`L2_NUM_PORTS],
     output l2_tag_t lmem_rd_data_tag[`L2_NUM_PORTS],
     output hprot_t lmem_rd_data_hprot[`L2_NUM_PORTS],
     output l2_way_t lmem_rd_data_evict_way,
     output state_t lmem_rd_data_state[`L2_NUM_PORTS][`WORDS_PER_LINE]
     );
-   
+
     //for following 2 use BRAM data width to aviod warnings, only copy relevant bits to output data
     logic [23:0] lmem_rd_data_tag_tmp[`L2_NUM_PORTS][`L2_TAG_BRAMS_PER_WAY];
     logic [3:0] lmem_rd_data_evict_way_tmp[`L2_EVICT_WAY_BRAMS];
     state_t lmem_rd_data_state_tmp[`L2_NUM_PORTS][`L2_STATE_BRAMS_PER_WAY][`WORDS_PER_LINE];
     line_t lmem_rd_data_line_tmp[`L2_NUM_PORTS][`L2_LINE_BRAMS_PER_WAY];
     hprot_t lmem_rd_data_hprot_tmp[`L2_NUM_PORTS][`L2_HPROT_BRAMS_PER_WAY];
-   
+
     //write enable decoder for ways
     logic lmem_wr_en_port[0:(`L2_NUM_PORTS-1)];
     always_comb begin
@@ -69,7 +70,7 @@ module l2_localmem (
                 end
             end
         end
-       
+
         if (`L2_STATE_BRAMS_PER_WAY == 1) begin
             always_comb begin
                 lmem_wr_en_state_bank[0] = lmem_wr_en_state  | lmem_wr_rst | lmem_wr_en_clear_mshr;
@@ -150,7 +151,7 @@ module l2_localmem (
                         .CE1(lmem_rd_en),
                         .WEM0(),
                         .WEM1());
-                   
+
                 end else begin
                     BRAM_16384x1 hprot_bram(
                         .CLK(clk),
@@ -324,7 +325,7 @@ module l2_localmem (
         end
     endgenerate
     generate
-       
+
         if (`L2_HPROT_BRAMS_PER_WAY == 1) begin
             always_comb begin
                 for (int i = 0; i < `L2_NUM_PORTS; i++) begin
@@ -343,7 +344,7 @@ module l2_localmem (
                 end
             end
         end
-              
+
         if (`L2_STATE_BRAMS_PER_WAY == 1) begin
             always_comb begin
                 for (int k = 0; k < `WORDS_PER_LINE; k++) begin
@@ -366,7 +367,7 @@ module l2_localmem (
                 end
             end
         end
-       
+
         if (`L2_TAG_BRAMS_PER_WAY == 1) begin
             always_comb begin
                 for (int i = 0; i < `L2_NUM_PORTS; i++) begin
@@ -385,7 +386,7 @@ module l2_localmem (
                 end
             end
         end
-       
+
         if (`L2_LINE_BRAMS_PER_WAY == 1) begin
             always_comb begin
                 for (int i = 0; i < `L2_NUM_PORTS; i++) begin
@@ -404,7 +405,7 @@ module l2_localmem (
                 end
             end
         end
-       
+
         if (`L2_EVICT_WAY_BRAMS == 1) begin
             always_comb begin
                 lmem_rd_data_evict_way = lmem_rd_data_evict_way_tmp[0];

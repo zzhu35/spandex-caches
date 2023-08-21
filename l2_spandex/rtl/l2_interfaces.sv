@@ -1,13 +1,7 @@
-// Copyright (c) 2011-2022 Columbia University, System Level Design Group
-// SPDC-License-Identifier: Apache-2.0
-
 `timescale 1ps / 1ps
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// l2_interfaces.sv
-// Author: Joseph Zuckerman
-// bypassable queue implementation for l2 channels
 module l2_interfaces(
     input logic clk,
     input logic rst,

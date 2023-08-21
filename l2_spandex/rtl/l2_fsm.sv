@@ -16,7 +16,7 @@ module l2_fsm(
     input logic l2_rsp_out_ready_int,
     input logic l2_inval_ready_int,
     input logic l2_bresp_ready_int,
-    // MSHR 
+    // MSHR
     input logic mshr_hit,
     input logic mshr_hit_next,
     input logic [`MSHR_BITS-1:0] mshr_i,
@@ -50,7 +50,7 @@ module l2_fsm(
     input state_t lmem_rd_data_state[`L2_NUM_PORTS][`WORDS_PER_LINE],
     input hprot_t lmem_rd_data_hprot[`L2_NUM_PORTS],
     // State registers from regs/others
-    input logic evict_stall, 
+    input logic evict_stall,
     input logic set_conflict,
 
     // Inputs from input_decoder -
@@ -108,7 +108,7 @@ module l2_fsm(
     output line_t lmem_wr_data_line,
     output hprot_t lmem_wr_data_hprot,
     output l2_tag_t lmem_wr_data_tag,
-    output l2_way_t lmem_wr_data_evict_way, 
+    output l2_way_t lmem_wr_data_evict_way,
     output l2_set_t lmem_set_in,
     output l2_way_t lmem_way_in,
     // outputs to write_word
@@ -150,7 +150,7 @@ module l2_fsm(
 
     localparam ONGOING_FLUSH_LOOKUP = 5'b01111;
     localparam ONGOING_FLUSH_PROCESS = 5'b10000;
-    
+
     localparam CPU_REQ_REQS_LOOKUP = 5'b10001;
     localparam CPU_REQ_READ_NO_REQ = 5'b10010;
     localparam CPU_REQ_READ_REQ = 5'b10011;
@@ -341,7 +341,7 @@ module l2_fsm(
                 next_state = DECODE;
             end
             CPU_REQ_TAG_LOOKUP : begin
-                // TODO: All code related to atomic read/write removed. Add later. 
+                // TODO: All code related to atomic read/write removed. Add later.
                 // TODO: Add eviction check for REQ_S where line is partially owned.
                 // If tag is hit, check:
                 // - if it is a non-FCS read (REQ_S) and all words in the line are at least shared.
@@ -349,7 +349,7 @@ module l2_fsm(
                 // TODO: currently, REQ_O requires all words to be owned, but that should not be
                 // necessary for word-granularity writes.
                 if (tag_hit_next) begin
-                    if (l2_cpu_req.cpu_msg == `READ) begin 
+                    if (l2_cpu_req.cpu_msg == `READ) begin
                         if (word_mask_shared_next == `WORD_MASK_ALL) begin
                             next_state = CPU_REQ_READ_NO_REQ;
                         end else begin
@@ -534,7 +534,7 @@ module l2_fsm(
                 update_mshr_value_word_mask = mshr[mshr_i].word_mask & ~l2_rsp_in.word_mask;
                 update_mshr_word_mask = 1'b1;
 
-                // If all words requested have been received, 
+                // If all words requested have been received,
                 // update the reqs entry state and increment the reqs_cnt
                 if (~update_mshr_value_word_mask) begin
                     // Write the original value to be written from the input request
@@ -547,7 +547,7 @@ module l2_fsm(
                         /* line_out */ update_mshr_value_line
                     );
                     update_mshr_line = 1'b1;
-                
+
                     // Update the RAMs and clear entry
                     clear_mshr_entry (
                         /* set */ line_br.set,
@@ -732,7 +732,7 @@ module l2_fsm(
                                 /* line */ lines_buf[empty_way],
                                 /* amo */ l2_cpu_req.amo,
                                 /* word_mask */ `WORD_MASK_ALL
-                            );                            
+                            );
                         end
 
                         send_req_out (
@@ -772,7 +772,7 @@ module l2_fsm(
             CPU_REQ_EVICT: begin
                 // Store the evict_way in a different register.
                 evict_way_reg = evict_way_buf;
-                
+
                 // Use word_mask_owned_evict from l2_lookup to know whether to evict or not.
                 if (word_mask_owned_evict) begin
                     // If owned, add MSHR entry and write-back the data if req_out is ready,
@@ -799,7 +799,7 @@ module l2_fsm(
                         /* line */ lines_buf[evict_way_reg],
                         /* word_mask */ word_mask_owned_evict
                     );
-                    
+
                     set_evict_stall = 1'b1;
                 end else begin
                     // update the evict way
@@ -902,7 +902,7 @@ module l2_fsm(
         input line_t line_i;
         input word_t word;
         input word_offset_t w_off;
-        input byte_offset_t b_off; 
+        input byte_offset_t b_off;
         input hsize_t hsize;
         output line_t line_out;
 
@@ -1076,7 +1076,7 @@ endmodule
 
 //     localparam ONGOING_FLUSH_LOOKUP = 5'b01111;
 //     localparam ONGOING_FLUSH_PROCESS = 5'b10000;
-    
+
 //     localparam CPU_REQ_REQS_LOOKUP = 5'b10001;
 //     localparam CPU_REQ_READ_NO_REQ = 5'b10010;
 //     localparam CPU_REQ_READ_REQ = 5'b10011;
@@ -1390,7 +1390,7 @@ endmodule
 //                 next_state = CPU_REQ_TAG_LOOKUP;
 //             end
 //             CPU_REQ_TAG_LOOKUP : begin
-//                 // TODO: All code related to atomic read/write removed. Add later. 
+//                 // TODO: All code related to atomic read/write removed. Add later.
 //                 // TODO: Add eviction check for REQ_S where line is partially owned.
 //                 // If tag is hit, check:
 //                 // - if it is a non-FCS read (REQ_S) and all words in the line are at least shared.
@@ -1398,7 +1398,7 @@ endmodule
 //                 // TODO: currently, REQ_O requires all words to be owned, but that should not be
 //                 // necessary for word-granularity writes.
 //                 if (tag_hit_next) begin
-//                     if (l2_cpu_req.cpu_msg == `READ) begin 
+//                     if (l2_cpu_req.cpu_msg == `READ) begin
 //                         if (word_mask_shared == `WORD_MASK_ALL) begin
 //                             next_state = CPU_REQ_READ_NO_REQ;
 //                         end else begin
@@ -1674,7 +1674,7 @@ endmodule
 //                 word_mask_wr_data_req = reqs[reqs_i].word_mask & ~l2_rsp_in.word_mask;
 //                 wr_req_word_mask = 1'b1;
 
-//                 // If all words requested have been received, 
+//                 // If all words requested have been received,
 //                 // update the reqs entry state and increment the reqs_cnt
 //                 if (~reqs[reqs_i].word_mask) begin
 //                     wr_req_state = 1'b1;
@@ -1699,7 +1699,7 @@ endmodule
 //                 word_mask_wr_data_req = reqs[reqs_i].word_mask | l2_rsp_in.word_mask;
 //                 wr_req_word_mask = 1'b1;
 
-//                 // If all words requested have been received, 
+//                 // If all words requested have been received,
 //                 // update the reqs entry state and increment the reqs_cnt
 //                 if (word_mask_wr_data_req == `WORD_MASK_ALL) begin
 //                     send_rd_rsp(l2_rsp_in.line);
@@ -2249,7 +2249,7 @@ endmodule
 // //                 lookup_en = 1'b1;
 // //                 lookup_mode = `L2_LOOKUP;
 // //             end
-            
+
 // //             CPU_REQ_READ_READ_ATOMIC_EM : begin
 // //                 if (l2_cpu_req.cpu_msg == `READ_ATOMIC) begin
 // //                     if (l2_rd_rsp_ready_int) begin

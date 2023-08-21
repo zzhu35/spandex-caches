@@ -1,13 +1,6 @@
-// Copyright (c) 2011-2022 Columbia University, System Level Design Group
-// SPDC-License-Identifier: Apache-2.0
-
 `timescale 1ps / 1ps
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
-
-// l2_core.sv
-// Author: Joseph Zuckerman
-// top level l2 cache module
 
 module l2_core(
     input logic clk,
