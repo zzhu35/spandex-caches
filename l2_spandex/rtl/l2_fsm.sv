@@ -507,6 +507,16 @@ module l2_fsm(
                     next_state = DECODE;
                 end
             end
+            CPU_REQ_READ_ATOMIC_NO_REQ : begin
+                if (l2_rd_rsp_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
+            CPU_REQ_READ_ATOMIC_REQ : begin
+                if (l2_req_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
             CPU_REQ_READ_NO_REQ : begin
                 if (l2_rd_rsp_ready_int) begin
                     next_state = DECODE;
@@ -514,6 +524,16 @@ module l2_fsm(
             end
             CPU_REQ_READ_REQ : begin
                 if (l2_req_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
+            CPU_REQ_WRITE_ATOMIC_NO_REQ : begin
+                if (l2_bresp_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
+            CPU_REQ_WRITE_ATOMIC_REQ : begin
+                if (l2_bresp_ready_int) begin
                     next_state = DECODE;
                 end
             end
@@ -671,32 +691,37 @@ module l2_fsm(
                 update_mshr_word_mask = 1'b1;
 
                 // If all words requested have been received,
-                // update the reqs entry state and increment the reqs_cnt
+                // update the reqs entry state and increment the reqs_cnt.
                 if (~update_mshr_value_word_mask) begin
-                    // Write the original value to be written from the input request
-                    if (mshr[mshr_i].state == `SPX_AMO) begin
+                    // In case of AMO and LR, we send a read response back.
+                    if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
                         send_rd_rsp(/* line */ update_mshr_value_line);
-
-                        write_word_amo_helper (
-                            /* line_in */ update_mshr_value_line,
-                            /* word */ mshr[mshr_i].word,
-                            /* w_off */ mshr[mshr_i].w_off,
-                            /* b_off */ mshr[mshr_i].b_off,
-                            /* hsize */ mshr[mshr_i].hsize,
-                            /* amo */ mshr[mshr_i].amo,
-                            /* line_out */ update_mshr_value_line
-                        );
                     end else begin
-                        write_word_helper (
-                            /* line_in */ update_mshr_value_line,
-                            /* word */ mshr[mshr_i].word,
-                            /* w_off */ mshr[mshr_i].w_off,
-                            /* b_off */ mshr[mshr_i].b_off,
-                            /* hsize */ mshr[mshr_i].hsize,
-                            /* line_out */ update_mshr_value_line
-                        );
+                        // Write the original value to be written from the input request.
+                        if (mshr[mshr_i].state == `SPX_AMO) begin
+                            send_rd_rsp(/* line */ update_mshr_value_line);
+
+                            write_word_amo_helper (
+                                /* line_in */ update_mshr_value_line,
+                                /* word */ mshr[mshr_i].word,
+                                /* w_off */ mshr[mshr_i].w_off,
+                                /* b_off */ mshr[mshr_i].b_off,
+                                /* hsize */ mshr[mshr_i].hsize,
+                                /* amo */ mshr[mshr_i].amo,
+                                /* line_out */ update_mshr_value_line
+                            );
+                        end else begin
+                            write_word_helper (
+                                /* line_in */ update_mshr_value_line,
+                                /* word */ mshr[mshr_i].word,
+                                /* w_off */ mshr[mshr_i].w_off,
+                                /* b_off */ mshr[mshr_i].b_off,
+                                /* hsize */ mshr[mshr_i].hsize,
+                                /* line_out */ update_mshr_value_line
+                            );
+                        end
+                        update_mshr_line = 1'b1;
                     end
-                    update_mshr_line = 1'b1;
 
                     // Update the RAMs and clear entry
                     clear_mshr_entry (
@@ -831,6 +856,7 @@ module l2_fsm(
                 );
             end
             FWD_RVK_O_HANDLER : begin
+                // TODO: Should we invalidate the line or downgrade to shared state?
                 // Invalidate state of words requested in forward
                 lmem_set_in = line_br.set;
                 lmem_way_in = way_hit;
@@ -871,10 +897,10 @@ module l2_fsm(
                 lookup_mode = `L2_LOOKUP;
             end
             CPU_REQ_AMO_NO_REQ : begin
-                send_rd_rsp(/* line */ lines_buf[way_hit]);
+                send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
 
                 write_word_amo_helper (
-                    /* line_in */ lines_buf[way_hit],
+                    /* line_in */ lines_buf[cpu_req_way],
                     /* word */ l2_cpu_req.word,
                     /* w_off */ addr_br.w_off,
                     /* b_off */ addr_br.b_off,
@@ -884,7 +910,7 @@ module l2_fsm(
                 );
 
                 lmem_set_in = addr_br.set;
-                lmem_way_in = way_hit;
+                lmem_way_in = cpu_req_way;
                 lmem_wr_en_line = 1'b1;
             end
             CPU_REQ_AMO_REQ : begin
@@ -915,8 +941,35 @@ module l2_fsm(
                     /* word_mask */ ~word_mask_owned_next
                 );
             end
+            CPU_REQ_READ_ATOMIC_NO_REQ : begin
+                send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
+            end
+            CPU_REQ_READ_ATOMIC_REQ : begin
+                if (l2_req_out_ready_int) begin
+                    fill_mshr_entry (
+                        /* cpu_msg */ l2_cpu_req.cpu_msg,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* tag */ addr_br.tag,
+                        /* way */ cpu_req_way,
+                        /* state */ `SPX_XR,
+                        /* word */ l2_cpu_req.word,
+                        /* line */ lines_buf[cpu_req_way],
+                        /* amo */ 'h0,
+                        /* word_mask */ ~word_mask_owned_next
+                    );
+                end
+
+                send_req_out (
+                    /* coh_msg */ `REQ_Odata,
+                    /* hprot */ l2_cpu_req.hprot,
+                    /* line_addr */ addr_br.line_addr,
+                    /* line */ 'h0,
+                    /* word_mask */ ~word_mask_owned_next
+                );
+            end            
             CPU_REQ_READ_NO_REQ : begin
-                send_rd_rsp(/* line */ lines_buf[way_hit]);
+                send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
             end
             CPU_REQ_READ_REQ : begin
                 if (l2_req_out_ready_int) begin
@@ -942,11 +995,29 @@ module l2_fsm(
                     /* word_mask */ ~word_mask_shared_next
                 );
             end
+            CPU_REQ_WRITE_ATOMIC_NO_REQ : begin
+                lmem_set_in = addr_br.set;
+                lmem_way_in = cpu_req_way;
+                write_word_helper (
+                    /* line_in */ lines_buf[cpu_req_way],
+                    /* word */ l2_cpu_req.word,
+                    /* w_off */ addr_br.w_off,
+                    /* b_off */ addr_br.b_off,
+                    /* hsize */ l2_cpu_req.hsize,
+                    /* line_out */ lmem_wr_data_line
+                );
+                lmem_wr_en_line = 1'b1;
+
+                send_bresp(/* bresp */ `BRESP_EXOKAY);
+            end
+            CPU_REQ_WRITE_ATOMIC_REQ : begin
+                send_bresp(/* bresp */ `BRESP_OKAY);
+            end
             CPU_REQ_WRITE_NO_REQ : begin
                 lmem_set_in = addr_br.set;
-                lmem_way_in = way_hit;
+                lmem_way_in = cpu_req_way;
                 write_word_helper (
-                    /* line_in */ lines_buf[way_hit],
+                    /* line_in */ lines_buf[cpu_req_way],
                     /* word */ l2_cpu_req.word,
                     /* w_off */ addr_br.w_off,
                     /* b_off */ addr_br.b_off,
@@ -1039,6 +1110,13 @@ module l2_fsm(
 
         l2_rd_rsp_valid_int = 1'b1;
         l2_rd_rsp_o.line = line;
+    endfunction
+
+    function void send_bresp;
+        input bresp_t bresp;
+
+        l2_bresp_valid_int = 1'b1;
+        l2_bresp_o = bresp;
     endfunction
 
     function void send_rsp_out;
