@@ -6,23 +6,24 @@
 /*
  * Cache data types
  */
-typedef logic[(`CPU_MSG_TYPE_WIDTH-1):0]	cpu_msg_t; // CPU bus requests
-typedef logic[(`COH_MSG_TYPE_WIDTH-1):0]	coh_msg_t; // Requests without DMA, Forwards, Responses
-typedef logic[(`MIX_MSG_TYPE_WIDTH-1):0]	mix_msg_t; // Requests if including DMA
-typedef logic[(`HSIZE_WIDTH-1):0]		hsize_t;
-typedef logic[(`HPROT_WIDTH-1):0]    	hprot_t;
-typedef logic[(`INVACK_CNT_WIDTH-1):0]	invack_cnt_t;
-typedef logic[(`INVACK_CNT_CALC_WIDTH-1):0]	invack_cnt_calc_t;
-typedef logic[(`ADDR_BITS-1):0]		addr_t;
-typedef logic[(`LINE_ADDR_BITS-1):0]		line_addr_t;
-typedef logic[(`L2_ADDR_BITS-1):0]           l2_addr_t;
-typedef logic[(`LLC_ADDR_BITS-1):0]          llc_addr_t;
-typedef logic[(`BITS_PER_WORD-1):0]		word_t;
-typedef logic[(`BITS_PER_LINE-1):0]	line_t;
-typedef logic[(`L2_TAG_BITS-1):0]		l2_tag_t;
-typedef logic[(`LLC_TAG_BITS-1):0]		llc_tag_t;
-typedef logic[(`L2_SET_BITS-1):0]		l2_set_t;
-typedef logic[(`LLC_SET_BITS-1):0]		llc_set_t;
+typedef logic[(`CPU_MSG_TYPE_WIDTH-1):0]	    cpu_msg_t; // CPU bus requests
+typedef logic[(`COH_MSG_TYPE_WIDTH-1):0]	    coh_msg_t; // Requests without DMA, Forwards, Responses
+typedef logic[(`MIX_MSG_TYPE_WIDTH-1):0]	    mix_msg_t; // Requests if including DMA
+typedef logic[(`HSIZE_WIDTH-1):0]		        hsize_t;
+typedef logic[(`HPROT_WIDTH-1):0]    	        hprot_t;
+typedef logic[(`INVACK_CNT_WIDTH-1):0]	        invack_cnt_t;
+typedef logic[(`INVACK_CNT_CALC_WIDTH-1):0]	    invack_cnt_calc_t;
+typedef logic[(`ADDR_BITS-1):0]		            addr_t;
+typedef logic[(`LINE_ADDR_BITS-1):0]		    line_addr_t;
+typedef logic[(`L2_ADDR_BITS-1):0]              l2_addr_t;
+typedef logic[(`LLC_ADDR_BITS-1):0]             llc_addr_t;
+typedef logic[(`BITS_PER_WORD-1):0]		        word_t;
+typedef logic signed[(`BITS_PER_WORD-1):0]		sword_t;
+typedef logic[(`BITS_PER_LINE-1):0]	            line_t;
+typedef logic[(`L2_TAG_BITS-1):0]		        l2_tag_t;
+typedef logic[(`LLC_TAG_BITS-1):0]		        llc_tag_t;
+typedef logic[(`L2_SET_BITS-1):0]		        l2_set_t;
+typedef logic[(`LLC_SET_BITS-1):0]		        llc_set_t;
 //@TODO
 //`if (L2_WAY_BITS == 1)
 //typedef logic[(2-1):0] l2_way_t;

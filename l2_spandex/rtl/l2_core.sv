@@ -105,6 +105,13 @@ module l2_core(
     word_t write_word_word_in;
     word_offset_t write_word_w_off_in;
 
+    byte_offset_t write_word_amo_b_off_in;
+    hsize_t write_word_amo_hsize_in;
+    line_t write_word_amo_line_in, write_word_amo_line_out;
+    word_t write_word_amo_word_in;
+    word_offset_t write_word_amo_w_off_in;
+    amo_t write_word_amo_amo_in;
+
     line_t lines_buf[`L2_WAYS];
     l2_tag_t tags_buf[`L2_WAYS];
     hprot_t hprots_buf[`L2_WAYS];
@@ -178,5 +185,6 @@ module l2_core(
     l2_regs regs_u (.*);
     l2_mshr mshr_u (.*);
     l2_write_word write_word_u(.*);
+    l2_write_word_amo write_word_amo_u(.*);
 
 endmodule
