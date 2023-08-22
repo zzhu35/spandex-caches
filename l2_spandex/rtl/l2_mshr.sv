@@ -7,6 +7,7 @@ module l2_mshr(
     input logic clk,
     input logic rst,
     input logic add_mshr_entry,
+    input mix_msg_t fwd_in_coh_msg,
     // Update parts of an MSHR entry.
     input logic update_mshr_state,
     input logic update_mshr_line,
@@ -46,6 +47,8 @@ module l2_mshr(
     // All MSHR entries
     output mshr_buf_t mshr[`N_MSHR]
     );
+
+    logic fwd_stall_override;
 
     // Generate logic for all MSHR entries
     genvar i;
@@ -143,6 +146,7 @@ module l2_mshr(
         set_fwd_stall_entry_data = 'h0;
         set_fwd_stall = 1'b0;
         clr_fwd_stall = 1'b0;
+        fwd_stall_override = 1'b0;
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
@@ -182,13 +186,20 @@ module l2_mshr(
                     if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
                         mshr_hit_next = 1'b1;
                         mshr_i_next = i;
-
-                        set_fwd_stall = 1'b1;
-                        clr_fwd_stall = 1'b0;
                         
-                        // TODO: Minor: Removed ESP protocol check for INV state
-                        // It's possible that the fwd_stall does not need to be asserted
-                        // for certain mshr hit states.
+                        // We do not always need to stall - in certain cases, we immediately de-assert fwd_stall
+                        case (fwd_in_coh_msg)
+                            `FWD_INV : begin
+                                if (mshr[i].state == `SPX_IS) begin
+                                    fwd_stall_override = 1'b1;
+                                end
+                            end
+                        endcase
+
+                        if (!fwd_stall_override) begin
+                            set_fwd_stall = 1'b1;
+                            clr_fwd_stall = 1'b0;
+                        end
                     end
                 end
 

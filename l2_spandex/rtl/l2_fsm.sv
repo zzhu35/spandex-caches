@@ -156,30 +156,29 @@ module l2_fsm(
     localparam RSP_WB_ACK_HANDLER = 6'b000101;
 
     localparam FWD_REQS_LOOKUP = 6'b001000;
-    localparam FWD_TAG_LOOKUP = 6'b001001;
-    localparam FWD_STALL = 6'b001010;
-    localparam FWD_MSHR_HIT = 6'b001011;
-    localparam FWD_NO_MSHR_HIT = 6'b001101;
-    localparam FWD_INV_HANDLER = 6'b001110;
-    localparam FWD_RVK_O_HANDLER = 6'b001111;
-    // TODO: Removed FWD_HIT/NO_HIT_2 states
+    localparam FWD_STALL = 6'b001001;
+    localparam FWD_MSHR_HIT = 6'b001010;
+    localparam FWD_TAG_LOOKUP = 6'b001011;
+    localparam FWD_LOOKUP_HIT = 6'b001100;
+    localparam FWD_INV_HANDLER = 6'b001101;
+    localparam FWD_RVK_O_HANDLER = 6'b001110;
 
     localparam ONGOING_FLUSH_LOOKUP = 6'b100000;
     localparam ONGOING_FLUSH_PROCESS = 6'b100001;
 
     localparam CPU_REQ_REQS_LOOKUP = 6'b100010;
-    localparam CPU_REQ_AMO_NO_REQ = 6'b100011;
-    localparam CPU_REQ_AMO_REQ = 6'b100100;
-    localparam CPU_REQ_READ_NO_REQ = 6'b100101;
-    localparam CPU_REQ_READ_REQ = 6'b100110;
-    localparam CPU_REQ_READ_ATOMIC_NO_REQ = 6'b100111;
-    localparam CPU_REQ_READ_ATOMIC_REQ = 6'b101000;
-    localparam CPU_REQ_WRITE_NO_REQ = 6'b101001;
-    localparam CPU_REQ_WRITE_REQ = 6'b101010;
-    localparam CPU_REQ_WRITE_ATOMIC_NO_REQ = 6'b101011;
-    localparam CPU_REQ_WRITE_ATOMIC_REQ = 6'b101100;
-    localparam CPU_REQ_SET_CONFLICT = 6'b101101;
-    localparam CPU_REQ_TAG_LOOKUP = 6'b101110;
+    localparam CPU_REQ_SET_CONFLICT = 6'b100011;
+    localparam CPU_REQ_TAG_LOOKUP = 6'b100100;
+    localparam CPU_REQ_AMO_NO_REQ = 6'b100101;
+    localparam CPU_REQ_AMO_REQ = 6'b100110;
+    localparam CPU_REQ_READ_NO_REQ = 6'b100111;
+    localparam CPU_REQ_READ_REQ = 6'b101000;
+    localparam CPU_REQ_READ_ATOMIC_NO_REQ = 6'b101001;
+    localparam CPU_REQ_READ_ATOMIC_REQ = 6'b101010;
+    localparam CPU_REQ_WRITE_NO_REQ = 6'b101011;
+    localparam CPU_REQ_WRITE_REQ = 6'b101100;
+    localparam CPU_REQ_WRITE_ATOMIC_NO_REQ = 6'b101101;
+    localparam CPU_REQ_WRITE_ATOMIC_REQ = 6'b101110;
     localparam CPU_REQ_EVICT = 6'b101111;
 
     logic [5:0] state, next_state;
@@ -358,22 +357,24 @@ module l2_fsm(
                 endcase
             end
             FWD_TAG_LOOKUP : begin
-                next_state = FWD_NO_MSHR_HIT;
-            end
-            FWD_NO_MSHR_HIT : begin
-                if (tag_hit) begin
-                    case(l2_fwd_in.coh_msg)
-                        `FWD_INV : begin
-                            next_state = FWD_INV_HANDLER;
-                        end
-                        `FWD_RVK_O : begin
-                            next_state = FWD_RVK_O_HANDLER;
-                        end
-                        default : begin
-                            next_state = DECODE;
-                        end
-                    endcase
+                if (tag_hit_next) begin
+                    next_state = FWD_LOOKUP_HIT;
+                end else begin
+                    next_state = DECODE;
                 end
+            end
+            FWD_LOOKUP_HIT : begin
+                case(l2_fwd_in.coh_msg)
+                    `FWD_INV : begin
+                        next_state = FWD_INV_HANDLER;
+                    end
+                    `FWD_RVK_O : begin
+                        next_state = FWD_RVK_O_HANDLER;
+                    end
+                    default : begin
+                        next_state = DECODE;
+                    end
+                endcase
             end
             FWD_INV_HANDLER : begin
                 // TODO: When inval is implemented, wait inval_ready
@@ -822,7 +823,7 @@ module l2_fsm(
                 set_fwd_in_stalled = 1'b1;
             end
             FWD_INV_HANDLER : begin
-                if (fwd_stall) begin
+                if (mshr_hit) begin
                     // update MSHR entry
                     // The earlier ReqS is now invalid, and when the response
                     // comes back, we should not allocate in SPX_S.
@@ -858,6 +859,9 @@ module l2_fsm(
             FWD_RVK_O_HANDLER : begin
                 // TODO: Should we invalidate the line or downgrade to shared state?
                 // Invalidate state of words requested in forward
+                // If a revoke arrived when there is SPX_XR in the MSHR, that means
+                // the revoke was sent after the directory acknowledged the ReqOdata. This can only
+                // happen if there is reordering in the NoC.
                 lmem_set_in = line_br.set;
                 lmem_way_in = way_hit;
                 for (int i = 0; i < `WORDS_PER_LINE; i++) begin
