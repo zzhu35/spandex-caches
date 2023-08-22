@@ -180,8 +180,7 @@ module l2_fsm(
     localparam CPU_REQ_WRITE_ATOMIC_REQ = 6'b101100;
     localparam CPU_REQ_SET_CONFLICT = 6'b101101;
     localparam CPU_REQ_TAG_LOOKUP = 6'b101110;
-    localparam CPU_REQ_EMPTY_WAY = 6'b101111;
-    localparam CPU_REQ_EVICT = 6'b110000;
+    localparam CPU_REQ_EVICT = 6'b101111;
 
     logic [5:0] state, next_state;
     always_ff @(posedge clk or negedge rst) begin
@@ -211,6 +210,10 @@ module l2_fsm(
 
     // Store the way to be evicted till evict_stall is removed.
     l2_way_t evict_way_reg;
+
+    // Wrapper variable to store the way for the ongoing cpu request.
+    l2_way_t cpu_req_way;
+    assign cpu_req_way = tag_hit ? way_hit : (empty_way_found ? empty_way : 'h0);
 
     // FSM 1
     // Decide which state to go to next;
@@ -417,6 +420,15 @@ module l2_fsm(
                 // - if it is a non-FCS write (REQ_O) and all words in the line are at least owned.
                 // TODO: currently, REQ_O requires all words to be owned, but that should not be
                 // necessary for word-granularity writes.
+                // --- copied from CPU_REQ_EMPTY_WAY
+                // TODO: READ_ATOMIC temporarily removed.
+                // TODO: Fix line so that when the response is received,
+                // the correct value that's currently in L2 memory and
+                // the response that is received, and the new value to be
+                // written (if applicable) are all considered.
+                // TODO: set word_mask as necessary. We might need to add more
+                // cases here and set word_mask and other signals (for req_out or reqs)
+                // accordingly.
                 if (tag_hit_next) begin
                     if (l2_cpu_req.amo) begin
                         if (word_mask_owned_next == `WORD_MASK_ALL) begin
@@ -460,7 +472,27 @@ module l2_fsm(
                         endcase
                     end
                 end else if (empty_way_found_next) begin
-                    next_state = CPU_REQ_EMPTY_WAY;
+                    if (l2_cpu_req.amo) begin
+                        next_state = CPU_REQ_AMO_REQ;
+                    end else begin
+                        case(l2_cpu_req.cpu_msg)
+                            `READ : begin
+                                next_state = CPU_REQ_READ_REQ;
+                            end
+                            `READ_ATOMIC : begin
+                                next_state = CPU_REQ_READ_ATOMIC_REQ;
+                            end
+                            `WRITE : begin
+                                next_state = CPU_REQ_WRITE_REQ;
+                            end
+                            `WRITE_ATOMIC : begin
+                                next_state = CPU_REQ_WRITE_ATOMIC_REQ;
+                            end                        
+                            default : begin
+                                next_state = DECODE;
+                            end
+                        endcase
+                    end
                 end else begin
                     next_state = CPU_REQ_EVICT;
                 end
@@ -489,11 +521,6 @@ module l2_fsm(
                 next_state = DECODE;
             end
             CPU_REQ_WRITE_REQ : begin
-                if (l2_req_out_ready_int) begin
-                    next_state = DECODE;
-                end
-            end
-            CPU_REQ_EMPTY_WAY : begin
                 if (l2_req_out_ready_int) begin
                     next_state = DECODE;
                 end
@@ -871,12 +898,12 @@ module l2_fsm(
                         /* hprot */ l2_cpu_req.hprot,
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
-                        /* way */ way_hit,
+                        /* way */ cpu_req_way,
                         /* state */ `SPX_AMO,
                         /* word */ l2_cpu_req.word,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ lines_buf[cpu_req_way],
                         /* amo */ l2_cpu_req.amo,
-                        /* word_mask */ word_mask_owned_next
+                        /* word_mask */ ~word_mask_owned_next
                     );
                 end
 
@@ -898,12 +925,12 @@ module l2_fsm(
                         /* hprot */ l2_cpu_req.hprot,
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
-                        /* way */ way_hit,
+                        /* way */ cpu_req_way,
                         /* state */ `SPX_IS,
                         /* word */ l2_cpu_req.word,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ lines_buf[cpu_req_way],
                         /* amo */ 'h0,
-                        /* word_mask */ 'h0
+                        /* word_mask */ ~word_mask_shared_next
                     );
                 end
 
@@ -912,7 +939,7 @@ module l2_fsm(
                     /* hprot */ l2_cpu_req.hprot,
                     /* line_addr */ addr_br.line_addr,
                     /* line */ 'h0,
-                    /* word_mask */ `WORD_MASK_ALL
+                    /* word_mask */ ~word_mask_shared_next
                 );
             end
             CPU_REQ_WRITE_NO_REQ : begin
@@ -935,10 +962,10 @@ module l2_fsm(
                         /* hprot */ l2_cpu_req.hprot,
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
-                        /* way */ way_hit,
+                        /* way */ cpu_req_way,
                         /* state */ `SPX_XR,
                         /* word */ l2_cpu_req.word,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ lines_buf[cpu_req_way],
                         /* amo */ 'h0,
                         /* word_mask */ ~word_mask_owned_next
                     );
@@ -950,94 +977,9 @@ module l2_fsm(
                     /* coh_msg */ `REQ_Odata,
                     /* hprot */ l2_cpu_req.hprot,
                     /* line_addr */ addr_br.line_addr,
-                    /* line */ lines_buf[way_hit],
+                    /* line */ 'h0,
                     /* word_mask */ ~word_mask_owned_next
                 );
-            end
-            CPU_REQ_EMPTY_WAY : begin
-                // TODO: READ_ATOMIC temporarily removed.
-                // TODO: Fix line so that when the response is received,
-                // the correct value that's currently in L2 memory and
-                // the response that is received, and the new value to be
-                // written (if applicable) are all considered.
-                // TODO: set word_mask as necessary. We might need to add more
-                // cases here and set word_mask and other signals (for req_out or reqs)
-                // accordingly.
-                if(l2_cpu_req.amo) begin
-                    if (l2_req_out_ready_int) begin
-                        fill_mshr_entry (
-                            /* cpu_msg */ l2_cpu_req.cpu_msg,
-                            /* hprot */ l2_cpu_req.hprot,
-                            /* hsize */ l2_cpu_req.hsize,
-                            /* tag */ addr_br.tag,
-                            /* way */ empty_way,
-                            /* state */ `SPX_AMO,
-                            /* word */ l2_cpu_req.word,
-                            /* line */ lines_buf[way_hit],
-                            /* amo */ l2_cpu_req.amo,
-                            /* word_mask */ `WORD_MASK_ALL
-                        );
-                    end
-
-                    send_req_out (
-                        /* coh_msg */ `REQ_Odata,
-                        /* hprot */ l2_cpu_req.hprot,
-                        /* line_addr */ addr_br.line_addr,
-                        /* line */ 'h0,
-                        /* word_mask */ `WORD_MASK_ALL
-                    );
-                end else begin
-                    case (l2_cpu_req.cpu_msg)
-                        `READ : begin
-                            if (l2_req_out_ready_int) begin
-                                fill_mshr_entry (
-                                    /* cpu_msg */ l2_cpu_req.cpu_msg,
-                                    /* hprot */ l2_cpu_req.hprot,
-                                    /* hsize */ l2_cpu_req.hsize,
-                                    /* tag */ addr_br.tag,
-                                    /* way */ empty_way,
-                                    /* state */ `SPX_IS,
-                                    /* word */ l2_cpu_req.word,
-                                    /* line */ lines_buf[empty_way],
-                                    /* amo */ l2_cpu_req.amo,
-                                    /* word_mask */ `WORD_MASK_ALL
-                                );
-                            end
-
-                            send_req_out (
-                                /* coh_msg */ `REQ_S,
-                                /* hprot */ l2_cpu_req.hprot,
-                                /* line_addr */ addr_br.line_addr,
-                                /* line */ 0,
-                                /* word_mask */ `WORD_MASK_ALL
-                            );
-                        end
-                        `WRITE : begin
-                            if (l2_req_out_ready_int) begin
-                                fill_mshr_entry (
-                                    /* cpu_msg */ l2_cpu_req.cpu_msg,
-                                    /* hprot */ l2_cpu_req.hprot,
-                                    /* hsize */ l2_cpu_req.hsize,
-                                    /* tag */ addr_br.tag,
-                                    /* way */ empty_way,
-                                    /* state */ `SPX_XR,
-                                    /* word */ l2_cpu_req.word,
-                                    /* line */ lines_buf[empty_way],
-                                    /* amo */ l2_cpu_req.amo,
-                                    /* word_mask */ `WORD_MASK_ALL
-                                );
-                            end
-
-                            send_req_out (
-                                /* coh_msg */ `REQ_Odata,
-                                /* hprot */ l2_cpu_req.hprot,
-                                /* line_addr */ addr_br.line_addr,
-                                /* line */ 'h0,
-                                /* word_mask */ `WORD_MASK_ALL
-                            );
-                        end
-                    endcase
-                end
             end
             CPU_REQ_EVICT: begin
                 // Store the evict_way in a different register.

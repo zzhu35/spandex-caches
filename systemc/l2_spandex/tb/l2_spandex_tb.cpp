@@ -202,7 +202,7 @@ void l2_spandex_tb::l2_test()
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
     get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
-        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
 
     wait();
 
@@ -259,7 +259,7 @@ void l2_spandex_tb::l2_test()
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
     get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
-        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
 
     wait();
 
