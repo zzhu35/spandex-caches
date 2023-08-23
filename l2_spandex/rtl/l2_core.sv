@@ -86,7 +86,7 @@ module l2_core(
     logic [`L2_WAY_BITS:0] flush_way;
     logic [`REQS_BITS-1:0] mshr_i, set_fwd_stall_entry_data, fwd_stall_entry, mshr_i_next, reqs_atomic_i;
     logic [`REQS_BITS_P1-1:0] mshr_cnt;
-    logic update_mshr_word_mask, update_mshr_word_mask_reg;
+    logic update_mshr_word_mask;
 
     addr_t cpu_req_addr;
     mix_msg_t fwd_in_coh_msg;

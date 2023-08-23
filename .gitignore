@@ -11,3 +11,4 @@ INCA_libs
 *.diag
 xcelium.d
 cache_cfg.hpp
+*.svcf

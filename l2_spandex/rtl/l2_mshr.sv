@@ -13,7 +13,6 @@ module l2_mshr(
     input logic update_mshr_line,
     input logic update_mshr_tag,
     input logic update_mshr_word_mask,
-    input logic update_mshr_word_mask_reg,
     // Function of the MSHR to perform
     input logic [2:0] mshr_op_code,
     // Values to update an MSHR entry.
@@ -66,7 +65,6 @@ module l2_mshr(
                     mshr[i].hprot <= 0;
                     mshr[i].word <= 0;
                     mshr[i].amo <= 0;
-                    mshr[i].word_mask <= 0;
                     mshr[i].word_mask_reg <= 0;
                 end else if (add_mshr_entry) begin
                     if (mshr_i == i) begin
@@ -79,7 +77,6 @@ module l2_mshr(
                         mshr[i].hprot <= update_mshr_value_hprot;
                         mshr[i].word <= update_mshr_value_word;
                         mshr[i].amo <= update_mshr_value_amo;
-                        mshr[i].word_mask <= update_mshr_value_word_mask;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end
                 end

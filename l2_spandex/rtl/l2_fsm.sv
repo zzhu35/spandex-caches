@@ -83,7 +83,6 @@ module l2_fsm(
     output logic update_mshr_line,
     output logic update_mshr_tag,
     output logic update_mshr_word_mask,
-    output logic update_mshr_word_mask_reg,
     output logic [2:0] mshr_op_code,
     output logic incr_mshr_cnt,
     output cpu_msg_t update_mshr_value_cpu_msg,
@@ -274,6 +273,8 @@ module l2_fsm(
                             next_state = DECODE;
                         end
                     endcase
+                end else begin
+                    next_state = DECODE;
                 end
             end
             RSP_ODATA_HANDLER : begin
@@ -357,13 +358,6 @@ module l2_fsm(
                 endcase
             end
             FWD_TAG_LOOKUP : begin
-                if (tag_hit_next) begin
-                    next_state = FWD_LOOKUP_HIT;
-                end else begin
-                    next_state = DECODE;
-                end
-            end
-            FWD_LOOKUP_HIT : begin
                 case(l2_fwd_in.coh_msg)
                     `FWD_INV : begin
                         next_state = FWD_INV_HANDLER;
@@ -586,7 +580,6 @@ module l2_fsm(
         update_mshr_line = 1'b0;
         update_mshr_tag = 1'b0;
         update_mshr_word_mask = 1'b0;
-        update_mshr_word_mask_reg = 1'b0;
         mshr_op_code = `L2_MSHR_IDLE;
         incr_mshr_cnt = 1'b0;
         update_mshr_value_cpu_msg = 'h0;
@@ -831,7 +824,7 @@ module l2_fsm(
                         update_mshr_state = 1'b1;
                         update_mshr_value_state = `SPX_II;
                     end
-                end else begin
+                end else if (tag_hit) begin
                     // Invalidate state of words requested in forward
                     lmem_set_in = line_br.set;
                     lmem_way_in = way_hit;
@@ -862,17 +855,19 @@ module l2_fsm(
                 // If a revoke arrived when there is SPX_XR in the MSHR, that means
                 // the revoke was sent after the directory acknowledged the ReqOdata. This can only
                 // happen if there is reordering in the NoC.
-                lmem_set_in = line_br.set;
-                lmem_way_in = way_hit;
-                for (int i = 0; i < `WORDS_PER_LINE; i++) begin
-                    // Only update the state for valid words in forward.
-                    if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] == `SPX_R) begin
-                        lmem_wr_data_state[i] = `SPX_I;
-                    end else begin
-                        lmem_wr_data_state[i] = states_buf[way_hit][i];
+                if (tag_hit) begin
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = way_hit;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        // Only update the state for valid words in forward.
+                        if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] == `SPX_R) begin
+                            lmem_wr_data_state[i] = `SPX_I;
+                        end else begin
+                            lmem_wr_data_state[i] = states_buf[way_hit][i];
+                        end
                     end
+                    lmem_wr_en_state = 1'b1;
                 end
-                lmem_wr_en_state = 1'b1;
 
                 // send invalidate response back
                 // TODO: Should we check the valid words in the line and forward word_mask
