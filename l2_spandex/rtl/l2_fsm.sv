@@ -149,12 +149,12 @@ module l2_fsm(
     localparam RESET = 6'b000000;
     localparam DECODE = 6'b000001;
 
-    localparam RSP_LOOKUP = 6'b000010;
+    localparam RSP_MSHR_LOOKUP = 6'b000010;
     localparam RSP_ODATA_HANDLER = 6'b000011;
     localparam RSP_S_HANDLER = 6'b000100;
     localparam RSP_WB_ACK_HANDLER = 6'b000101;
 
-    localparam FWD_REQS_LOOKUP = 6'b001000;
+    localparam FWD_MSHR_LOOKUP = 6'b001000;
     localparam FWD_STALL = 6'b001001;
     localparam FWD_MSHR_HIT = 6'b001010;
     localparam FWD_TAG_LOOKUP = 6'b001011;
@@ -165,7 +165,7 @@ module l2_fsm(
     localparam ONGOING_FLUSH_LOOKUP = 6'b100000;
     localparam ONGOING_FLUSH_PROCESS = 6'b100001;
 
-    localparam CPU_REQ_REQS_LOOKUP = 6'b100010;
+    localparam CPU_REQ_MSHR_LOOKUP = 6'b100010;
     localparam CPU_REQ_SET_CONFLICT = 6'b100011;
     localparam CPU_REQ_TAG_LOOKUP = 6'b100100;
     localparam CPU_REQ_AMO_NO_REQ = 6'b100101;
@@ -235,12 +235,12 @@ module l2_fsm(
             // TODO: Removed flush
             DECODE : begin
                 if (do_rsp_next) begin
-                    next_state = RSP_LOOKUP;
+                    next_state = RSP_MSHR_LOOKUP;
                 end else if (do_fwd_next) begin
-                    next_state = FWD_REQS_LOOKUP;
+                    next_state = FWD_MSHR_LOOKUP;
                     // TODO: Removed do_ongoing_flush_next temporarily
                 end else if (do_cpu_req_next) begin
-                    next_state = CPU_REQ_REQS_LOOKUP;
+                    next_state = CPU_REQ_MSHR_LOOKUP;
                 end
             end
             // -------------------
@@ -248,7 +248,7 @@ module l2_fsm(
             // -------------------
             // If new response received, lookup the coherence message
             // of the response.
-            RSP_LOOKUP : begin
+            RSP_MSHR_LOOKUP : begin
                 // TODO: Should we update the word_mask in reqs[reqs_i] here?
                 // Maybe, we should update word_mask here, and only transition to
                 // the handler that finally removes the MSHR entry and/or updates
@@ -326,7 +326,7 @@ module l2_fsm(
             // need to adapt as necessary to Spandex forward handler.
             // TODO: For Spandex, we may need to service forwards during fwd_stall
             // as well, so the FWD_STALL state should not just go back to DECODE.
-            FWD_REQS_LOOKUP : begin
+            FWD_MSHR_LOOKUP : begin
                 // FSM 2 will lookup MSHR to see if there's already a stall - if yes,
                 // go to FWD_STALL. Else, check if if the incoming entry is causing a
                 // stall. Else, lookup the RAMs to see if the forward is a hit.
@@ -392,11 +392,11 @@ module l2_fsm(
             // Flush handler
             // -------------------
             // If new input request is received, check if there is an ongoing atomic
-            // or set conflict. CPU_REQ_REQS_LOOKUP in FSM 2 will also check reqs to
+            // or set conflict. CPU_REQ_MSHR_LOOKUP in FSM 2 will also check reqs to
             // see if new set_conflict needs to be set.
             // If write atomic, this FSM will also wait for BRESP to be accepted.
             // If none of the above, check tag RAMs to know if hit or not.
-            CPU_REQ_REQS_LOOKUP : begin
+            CPU_REQ_MSHR_LOOKUP : begin
                 // TODO: All code related to ongoing atomic and set conflict removed. Add later.
                 if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
                     next_state = CPU_REQ_SET_CONFLICT;
@@ -544,10 +544,10 @@ module l2_fsm(
                 // TODO: Removed ready_bits check
                 if (word_mask_owned_evict) begin
                     if (l2_req_out_ready_int) begin
-                        next_state = CPU_REQ_REQS_LOOKUP;
+                        next_state = CPU_REQ_MSHR_LOOKUP;
                     end
                 end else begin
-                    next_state = CPU_REQ_REQS_LOOKUP;
+                    next_state = CPU_REQ_MSHR_LOOKUP;
                 end
             end
         endcase
@@ -669,7 +669,7 @@ module l2_fsm(
                     lmem_set_in = addr_br_next.set;
                 end
             end
-            RSP_LOOKUP : begin
+            RSP_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_LOOKUP;
             end
             // TODO: The current RSP_O implementation assumes word granularity REQ_O;
@@ -801,7 +801,7 @@ module l2_fsm(
                 update_mshr_value_state = `SPX_I;
                 incr_mshr_cnt = 1'b1;
             end
-            FWD_REQS_LOOKUP : begin
+            FWD_MSHR_LOOKUP : begin
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = line_br.set;
                 mshr_op_code = `L2_MSHR_PEEK_FWD;
@@ -881,7 +881,7 @@ module l2_fsm(
                     /* word_mask */ l2_fwd_in.word_mask
                 );
             end
-            CPU_REQ_REQS_LOOKUP : begin
+            CPU_REQ_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = addr_br.set;
@@ -1387,11 +1387,11 @@ endmodule
 //     localparam RESET = 5'b00000;
 //     localparam DECODE = 5'b00001;
 
-//     localparam RSP_LOOKUP = 5'b00010;
+//     localparam RSP_MSHR_LOOKUP = 5'b00010;
 //     localparam RSP_O_HANDLER = 5'b00011;
 //     localparam RSP_S_HANDLER = 5'b00100;
 
-//     localparam FWD_REQS_LOOKUP = 5'b01000;
+//     localparam FWD_MSHR_LOOKUP = 5'b01000;
 //     localparam FWD_TAG_LOOKUP = 5'b01001;
 //     localparam FWD_STALL = 5'b01010;
 //     localparam FWD_HIT = 5'b01011;
@@ -1402,7 +1402,7 @@ endmodule
 //     localparam ONGOING_FLUSH_LOOKUP = 5'b01111;
 //     localparam ONGOING_FLUSH_PROCESS = 5'b10000;
 
-//     localparam CPU_REQ_REQS_LOOKUP = 5'b10001;
+//     localparam CPU_REQ_MSHR_LOOKUP = 5'b10001;
 //     localparam CPU_REQ_READ_NO_REQ = 5'b10010;
 //     localparam CPU_REQ_READ_REQ = 5'b10011;
 //     localparam CPU_REQ_WRITE_NO_REQ = 5'b10100;
@@ -1489,18 +1489,18 @@ endmodule
 //                 if (do_flush_next) begin
 //                     next_state = DECODE;
 //                 end else if (do_rsp_next) begin
-//                     next_state = RSP_LOOKUP;
+//                     next_state = RSP_MSHR_LOOKUP;
 //                 end else if (do_fwd_next) begin
-//                     next_state = FWD_REQS_LOOKUP;
+//                     next_state = FWD_MSHR_LOOKUP;
 //                 end else if (do_ongoing_flush_next) begin
 //                     next_state = ONGOING_FLUSH_LOOKUP;
 //                 end else if (do_cpu_req_next) begin
-//                     next_state = CPU_REQ_REQS_LOOKUP;
+//                     next_state = CPU_REQ_MSHR_LOOKUP;
 //                 end
 //             end
 //             // If new response received, lookup the coherence message
 //             // of the response.
-//             RSP_LOOKUP : begin
+//             RSP_MSHR_LOOKUP : begin
 //                 // TODO: Should we update the word_mask in reqs[reqs_i] here?
 //                 // Maybe, we should update word_mask here, and only transition to
 //                 // the handler that finally removes the MSHR entry and/or updates
@@ -1546,7 +1546,7 @@ endmodule
 //                     next_state = DECODE;
 //                 end
 //             end
-//             // RSP_LOOKUP : begin
+//             // RSP_MSHR_LOOKUP : begin
 //             //     case(l2_rsp_in.coh_msg)
 //             //         `RSP_EDATA : begin
 //             //             next_state = RSP_E_DATA_ISD;
@@ -1614,7 +1614,7 @@ endmodule
 //             // need to adapt as necessary to Spandex forward handler.
 //             // TODO: For Spandex, we may need to service forwards during fwd_stall
 //             // as well, so the FWD_STALL state should not just go back to DECODE.
-//             FWD_REQS_LOOKUP : begin
+//             FWD_MSHR_LOOKUP : begin
 //                 if ((fwd_stall || set_fwd_stall) & !clr_fwd_stall) begin
 //                     next_state = FWD_STALL;
 //                 end else if (reqs_hit_next) begin
@@ -1706,11 +1706,11 @@ endmodule
 //                 end
 //             end
 //             // If new input request is received, check if there is an ongoing atomic
-//             // or set conflict. CPU_REQ_REQS_LOOKUP in FSM 2 will also check reqs to
+//             // or set conflict. CPU_REQ_MSHR_LOOKUP in FSM 2 will also check reqs to
 //             // see if new set_conflict needs to be set.
 //             // If write atomic, this FSM will also wait for BRESP to be accepted.
 //             // If none of the above, check tag RAMs to know if hit or not.
-//             CPU_REQ_REQS_LOOKUP : begin
+//             CPU_REQ_MSHR_LOOKUP : begin
 //                 // TODO: All code related to ongoing atomic and set conflict removed. Add later.
 //                 next_state = CPU_REQ_TAG_LOOKUP;
 //             end
@@ -1775,7 +1775,7 @@ endmodule
 //                 end
 //             end
 
-//             // CPU_REQ_REQS_LOOKUP : begin
+//             // CPU_REQ_MSHR_LOOKUP : begin
 //             //      if (ongoing_atomic) begin
 //             //         if (atomic_line_addr != addr_br.line_addr) begin
 //             //             next_state = CPU_REQ_ATOMIC_OVERRIDE;
@@ -1988,7 +1988,7 @@ endmodule
 //                     set_in = addr_br_next.set;
 //                 end
 //             end
-//             RSP_LOOKUP : begin
+//             RSP_MSHR_LOOKUP : begin
 //                 reqs_op_code = `L2_REQS_LOOKUP;
 //             end
 //             // TODO: The current RSP_O implementation assumes word granularity REQ_O;
@@ -2161,7 +2161,7 @@ endmodule
 //             //         incr_reqs_cnt = 1'b1;
 //             //     end
 //             // end
-//             FWD_REQS_LOOKUP : begin
+//             FWD_MSHR_LOOKUP : begin
 //                 rd_mem_en = 1'b1;
 //                 set_in = line_br.set;
 //                 reqs_op_code = `L2_REQS_PEEK_FWD;
@@ -2368,7 +2368,7 @@ endmodule
 //                     incr_flush_way = 1'b1;
 //                 end
 //             end
-//             CPU_REQ_REQS_LOOKUP : begin
+//             CPU_REQ_MSHR_LOOKUP : begin
 //                 reqs_op_code = `L2_REQS_PEEK_REQ;
 //                 rd_mem_en = 1'b1;
 //                 set_in = addr_br.set;
@@ -2482,7 +2482,7 @@ endmodule
 //                 // written (if applicable) are all considered.
 //                 line_wr_data_req = 0;
 //             end
-// //             CPU_REQ_REQS_LOOKUP : begin
+// //             CPU_REQ_MSHR_LOOKUP : begin
 // //                 reqs_op_code = `L2_REQS_PEEK_REQ;
 // //                 rd_mem_en = 1'b1;
 // //                 set_in = addr_br.set;
