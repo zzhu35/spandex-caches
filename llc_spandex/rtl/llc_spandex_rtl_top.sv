@@ -126,7 +126,7 @@ module llc_spandex_rtl_top (
       assign llc_rsp_out_data_req_id = llc_rsp_out.req_id;
       assign llc_rsp_out_data_dest_id = llc_rsp_out.dest_id;
       assign llc_rsp_out_data_word_offset = llc_rsp_out.word_offset;
-      assign llc_rsp_out_dataword_mask = llc_rsp_out.word_mask;
+      assign llc_rsp_out_data_word_mask = llc_rsp_out.word_mask;
         
       //llc dma rsp out
       llc_dma_rsp_out_t llc_dma_rsp_out();

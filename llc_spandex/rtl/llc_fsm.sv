@@ -6,8 +6,8 @@ module llc_fsm (
     input logic clk,
     input logic rst, 
     // From input decoder
-    input logic is_rsp_to_get,
-    input logic is_req_to_get, 
+    input logic do_get_rsp,
+    input logic do_get_req, 
     // From interfaces
     input logic llc_mem_req_ready_int,
     input logic llc_fwd_out_ready_int, 
@@ -191,9 +191,9 @@ module llc_fsm (
                 end
             end
             DECODE : begin
-                if (is_rsp_to_get) begin
+                if (do_get_rsp) begin
                     next_state = RSP_MSHR_LOOKUP;
-                end else if (is_req_to_get) begin
+                end else if (do_get_req) begin
                     next_state = REQ_MSHR_LOOKUP;
                 end
             end
@@ -396,6 +396,9 @@ module llc_fsm (
         lmem_wr_en_state = 1'b0;
         lmem_wr_en_line = 1'b0;
         lmem_wr_en_evict_way = 1'b0;
+        lmem_wr_en_sharers = 1'b0;
+        lmem_wr_en_owner = 1'b0;
+        lmem_wr_en_dirty_bit = 1'b0;
         lmem_wr_en_all_mem = 1'b0;
         lmem_wr_data_state = 'h0;
         lmem_wr_data_line = 'h0;

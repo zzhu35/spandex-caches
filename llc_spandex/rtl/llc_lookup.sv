@@ -51,7 +51,7 @@ module llc_lookup (
                             way_hit_next = i;
                         end
 
-                        if (states_buf[i] != `LLC_I) begin
+                        if (states_buf[i] == `LLC_I) begin
                             empty_way_found_next = 1'b1;
                             empty_way_next = i;
                         end
