@@ -1064,6 +1064,146 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    ////////////////////////////////////////////////////////////////
+    // TEST 1.5 - Write L2_WAYS+1 times + evict (write-back) + write
+    // at same time + Read back 1st
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.5!"); 
+    base_addr = 0x82508C80;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < L2_WAYS; i++) {
+        word = i+1;
+
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+        wait();
+
+        line = 0;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+        put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+        addr.tag_incr(1);
+    }
+
+    // Write to same set and cause an eviction.
+    word = L2_WAYS+1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+        
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x1;
+
+    // Evict first line
+    base_addr = 0x82508C80;
+    addr.breakdown(base_addr);
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    // Write to different line, not in the same set.
+    base_addr = 0x82508D80;
+    addr.breakdown(base_addr);
+
+    word = L2_WAYS+2;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    // Send response back for the eviction, after the two above writes.
+    base_addr = 0x82508C80;
+    addr.breakdown(base_addr);
+
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    // Accept the request for the overflow line (not the different set one).
+    base_addr = 0x82508C80;
+    addr.tag_incr(L2_WAYS);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+2;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    // Accept the request different set line.
+    base_addr = 0x82508D80;
+    addr.breakdown(base_addr);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+3;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    base_addr = 0x82508C80;
+    addr.breakdown(base_addr);
+
+    addr.tag_incr(1);
+
+    for (int i = 0; i < L2_WAYS; i++) {
+        put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        wait();
+
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+3;
+        line.range(BITS_PER_WORD - 1, 0) = i+2;
+
+        get_rd_rsp(line /* line */);
+
+        addr.tag_incr(1);
+    }
+
+    base_addr = 0x82508D80;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+    addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+3;
+    line.range(BITS_PER_WORD - 1, 0) = L2_WAYS+2;
+
+    get_rd_rsp(line /* line */);
+
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     wait();
