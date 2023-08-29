@@ -185,6 +185,62 @@ void llc_spandex_tb::llc_test()
 
     wait();
 
+    ////////////////////////////////////////////////////////////////
+    // TEST 0.4: ReqS + Evict + FWD_INV
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x82508550;
+    addr.breakdown(base_addr);
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+
+    for (int i = 0; i < LLC_WAYS; i++) {
+      word = i+0x1;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+
+      put_req_in(REQ_S /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+      DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+      get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+      wait();
+
+      put_mem_rsp(line /* line */);
+
+      get_rsp_out(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();
+
+      addr.tag_incr(1);
+    }
+
+    put_req_in(REQ_S /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    base_addr = 0x82508550;
+    addr.breakdown(base_addr);
+
+    get_fwd_out(FWD_INV_SPDX /* coh_msg */, addr.word /* addr */, 0 /* req_id */, 0 /* dest_id */, 0b11 /* word_mask*/);
+
+    wait();
+
+    put_rsp_in(RSP_INV_ACK_SPDX /* rsp_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */, 0b11 /* word_mask */);
+
+    addr.tag_incr(LLC_WAYS);
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+    wait();
+
+    word = LLC_WAYS+0x1;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
 	  CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     // End simulation

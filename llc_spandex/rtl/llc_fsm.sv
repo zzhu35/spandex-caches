@@ -142,7 +142,7 @@ module llc_fsm (
     localparam REQ_S_HANDLER_MISS = 6'b010111;
     localparam REQ_S_HANDLER_MISS_RSP = 6'b011000;
     localparam REQ_WB_HANDLER_HIT = 6'b011001;
-    localparam REQ_EVICT = 6'b011001;
+    localparam REQ_EVICT = 6'b011010;
 
     localparam SEND_FWD_WITH_OWNER_MASK = 6'b100000;
 
@@ -221,13 +221,13 @@ module llc_fsm (
                 if (mshr[mshr_i].state == `LLC_SWB) begin
                     if (~update_mshr_value_invack_cnt) begin
                         if (llc_mem_req_ready_int) begin
-                            next_state = DECODE;
+                            next_state = REQ_MSHR_LOOKUP;
                         end
                     end else begin
                         next_state = DECODE;
                     end
                 end else begin
-                    next_state = DECODE;
+                    next_state = REQ_MSHR_LOOKUP;
                 end
             end
             RSP_RVK_O_HANDLER : begin
@@ -311,12 +311,17 @@ module llc_fsm (
                     end                
                 end
             end                
+            REQ_WB_HANDLER_HIT : begin
+                if (llc_rsp_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
             REQ_EVICT : begin
                 case(states_buf[evict_way_buf])
                     `LLC_V : begin
                         if (!owners_buf[evict_way_buf]) begin
                             if (llc_mem_req_ready_int) begin 
-                                next_state = DECODE;
+                                next_state = REQ_MSHR_LOOKUP;
                             end                
                         end else begin
                             if (llc_fwd_out_ready_int) begin 
@@ -802,7 +807,7 @@ module llc_fsm (
                                     /* way */ evict_way_buf,
                                     /* state */ `LLC_OWB,
                                     /* hprot */ hprots_buf[evict_way_buf],
-                                    /* invack_cnt */ lines_buf[evict_way_buf],
+                                    /* invack_cnt */ 'h1,
                                     /* line */ lines_buf[evict_way_buf],
                                     /* word_mask */ owners_buf[evict_way_buf]
                                 );
@@ -822,17 +827,31 @@ module llc_fsm (
                                 /* line */ 'h0
                             );
 
-                            fill_mshr_entry (
-                                /* msg */ `FWD_INV,
-                                /* req_id */ llc_req_in.req_id,
-                                /* tag */ tags_buf[evict_way_buf],
-                                /* way */ evict_way_buf,
-                                /* state */ `LLC_SWB,
-                                /* hprot */ hprots_buf[evict_way_buf],
-                                /* invack_cnt */ 'h1,
-                                /* line */ 'h0,
-                                /* word_mask */ `WORD_MASK_ALL
-                            );
+                            if (dirty_bits_buf[evict_way_buf]) begin
+                                fill_mshr_entry (
+                                    /* msg */ `FWD_INV,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* tag */ tags_buf[evict_way_buf],
+                                    /* way */ evict_way_buf,
+                                    /* state */ `LLC_SWB,
+                                    /* hprot */ hprots_buf[evict_way_buf],
+                                    /* invack_cnt */ 'h1,
+                                    /* line */ 'h0,
+                                    /* word_mask */ `WORD_MASK_ALL
+                                );
+                            end else begin
+                                fill_mshr_entry (
+                                    /* msg */ `FWD_INV,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* tag */ tags_buf[evict_way_buf],
+                                    /* way */ evict_way_buf,
+                                    /* state */ `LLC_SI,
+                                    /* hprot */ hprots_buf[evict_way_buf],
+                                    /* invack_cnt */ 'h1,
+                                    /* line */ 'h0,
+                                    /* word_mask */ `WORD_MASK_ALL
+                                );
+                            end
                         end
                             
                         set_evict_stall = 1'b1;
