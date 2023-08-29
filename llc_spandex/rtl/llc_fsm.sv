@@ -218,28 +218,35 @@ module llc_fsm (
                 end            
             end
             RSP_INV_HANDLER : begin
-                if (mshr[mshr_i].state == `LLC_SWB) begin
-                    if (~update_mshr_value_invack_cnt) begin
+                case(mshr[mshr_i].state)
+                    `LLC_SWB : begin
+                        if (~update_mshr_value_invack_cnt) begin
+                            if (llc_mem_req_ready_int) begin
+                                next_state = REQ_MSHR_LOOKUP;
+                            end
+                        end else begin
+                            next_state = DECODE;
+                        end
+                    end
+                    `LLC_SI : begin
+                        next_state = REQ_MSHR_LOOKUP;
+                    end
+                    default : begin
+                        next_state = DECODE;
+                    end
+                endcase
+            end
+            RSP_RVK_O_HANDLER : begin
+                case(mshr[mshr_i].state)
+                    `LLC_OWB : begin
                         if (llc_mem_req_ready_int) begin
                             next_state = REQ_MSHR_LOOKUP;
                         end
-                    end else begin
+                    end
+                    default : begin
                         next_state = DECODE;
                     end
-                end else begin
-                    next_state = REQ_MSHR_LOOKUP;
-                end
-            end
-            RSP_RVK_O_HANDLER : begin
-                if (mshr[mshr_i].state == `LLC_OWB) begin
-                    if (llc_mem_req_ready_int) begin
-                        next_state = DECODE;
-                    end else begin
-                        next_state = DECODE;
-                    end
-                end else begin
-                    next_state = DECODE;
-                end
+                endcase
             end 
             REQ_MSHR_LOOKUP : begin
                 if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
@@ -502,9 +509,9 @@ module llc_fsm (
                 lmem_set_in = line_br.set;
                 lmem_way_in = mshr[mshr_i].way;
                 // Update the words in the response in the line, based on word_mask.
-                write_owner_helper (
+                write_line_helper (
                     /* line_orig */ lines_buf[mshr[mshr_i].way],
-                    /* req_id */ llc_rsp_in.line,
+                    /* line_in */ llc_rsp_in.line,
                     /* word_mask_i */ llc_rsp_in.word_mask,
                     /* line_out */ lmem_wr_data_line
                 );
@@ -523,7 +530,7 @@ module llc_fsm (
                             /* coh_msg */ `LLC_WRITE,
                             /* line_addr */ llc_rsp_in.addr,
                             /* hprot */ mshr[mshr_i].hprot,
-                            /* line */ mshr[mshr_i].line
+                            /* line */ lmem_wr_data_line
                         );
 
                         // Update the states RAM
