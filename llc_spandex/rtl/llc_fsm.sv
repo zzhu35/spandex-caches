@@ -430,6 +430,13 @@ module llc_fsm (
                 lmem_wr_data_state = 'h0;
                 lmem_set_in = rst_set;
             end
+            DECODE : begin
+                if (do_get_rsp_next) begin
+                    lmem_set_in = line_br_next.set;
+                end else if (do_get_req_next) begin
+                    lmem_set_in = line_br_next.set;
+                end
+            end            
             RSP_MSHR_LOOKUP : begin
                 mshr_op_code = `LLC_MSHR_LOOKUP;
             end

@@ -105,7 +105,7 @@ void llc_spandex_tb::llc_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 0.2: ReqS
+    // TEST 0.2: ReqS + ReqOdata
     ////////////////////////////////////////////////////////////////
     base_addr = 0x82508350;
     addr.breakdown(base_addr);
@@ -123,6 +123,14 @@ void llc_spandex_tb::llc_test()
     put_mem_rsp(line /* line */);
 
     get_rsp_out(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+		0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+		DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
 		0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
 
     wait();
