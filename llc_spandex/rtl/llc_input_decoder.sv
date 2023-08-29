@@ -25,11 +25,10 @@ module llc_input_decoder (
     output logic llc_rsp_in_ready_int,
     output logic llc_req_in_ready_int,
         
-    line_breakdown_llc_t.out line_br
+    line_breakdown_llc_t.out line_br,
+    line_breakdown_llc_t.out line_br_next
     );
    
-    line_breakdown_llc_t line_br_next(); 
-  
     always_comb begin  
         do_get_req_next = 1'b0;
         do_get_rsp_next = 1'b0;

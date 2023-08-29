@@ -4,11 +4,11 @@
 `define __CACHES_CFG_SVH__
 
 //set LITTLE_ENDIAN for Ariane, BIG_ENDIAN for Leon
-`define BIG_ENDIAN
+`define LITTLE_ENDIAN
 //3 for Ariane; 2 for Leon
-`define BYTE_BITS    2
+`define BYTE_BITS    3
 //1 for Ariane; 2 for Leon
-`define WORD_BITS    2
+`define WORD_BITS    1
 `define LLC_WAYS     16
 `define LLC_SETS     512
 

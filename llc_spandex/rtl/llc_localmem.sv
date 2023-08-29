@@ -35,7 +35,6 @@ module llc_localmem (
     output llc_way_t lmem_rd_data_evict_way
     );
 
-    owner_t lmem_rd_data_owner_tmp[`LLC_NUM_PORTS][`LLC_OWNER_BRAMS_PER_WAY];
     sharers_t lmem_rd_data_sharers_tmp[`LLC_NUM_PORTS][`LLC_SHARERS_BRAMS_PER_WAY]; 
     hprot_t lmem_rd_data_hprot_tmp[`LLC_NUM_PORTS][`LLC_HPROT_BRAMS_PER_WAY]; 
     logic lmem_rd_data_dirty_bit_tmp[`LLC_NUM_PORTS][`LLC_DIRTY_BIT_BRAMS_PER_WAY]; 
@@ -43,6 +42,7 @@ module llc_localmem (
     //for following 3 use BRAM data width to aviod warnings, only copy relevant bits to output data 
     logic [`LLC_STATE_BRAM_WIDTH-1:0] lmem_rd_data_state_tmp[`LLC_NUM_PORTS][`LLC_STATE_BRAMS_PER_WAY]; 
     logic [`LLC_TAG_BRAM_WIDTH-1:0] lmem_rd_data_tag_tmp[`LLC_NUM_PORTS][`LLC_TAG_BRAMS_PER_WAY]; 
+    logic [`LLC_OWNER_BRAM_WIDTH-1:0]  lmem_rd_data_owner_tmp[`LLC_NUM_PORTS][`LLC_OWNER_BRAMS_PER_WAY];
     logic [`LLC_EVICT_WAY_BRAM_WIDTH-1:0] lmem_rd_data_evict_way_tmp[`LLC_EVICT_WAY_BRAMS]; 
     line_t lmem_rd_data_line_tmp[`LLC_NUM_PORTS][`LLC_LINE_BRAMS_PER_WAY]; 
     
@@ -76,6 +76,8 @@ module llc_localmem (
     assign lmem_wr_data_state_extended = {{(4-`LLC_STATE_BITS){1'b0}}, lmem_wr_data_state};
     logic [23:0] lmem_wr_data_tag_extended;
     assign lmem_wr_data_tag_extended = {{(24-`LLC_TAG_BITS){1'b0}}, lmem_wr_data_tag};
+    logic [3:0] lmem_wr_data_owner_extended;
+    assign lmem_wr_data_owner_extended = {{(4-`LLC_OWNER_BITS){1'b0}}, lmem_wr_data_owner};
     logic [3:0] lmem_wr_data_evict_way_extended; 
 
     always_comb begin 
@@ -218,13 +220,13 @@ module llc_localmem (
                         .CLK(clk), 
                         .A0({{(`BRAM_4096_ADDR_WIDTH - (`LLC_SET_BITS - `LLC_OWNER_BRAM_INDEX_BITS) - 1){1'b0}}, 
                                 1'b0, lmem_set_in[(`LLC_SET_BITS - `LLC_OWNER_BRAM_INDEX_BITS - 1):0]}),
-                        .D0(lmem_wr_data_owner), 
+                        .D0(lmem_wr_data_owner_extended), 
                         .Q0(lmem_rd_data_owner_tmp[2*i][j]),
                         .WE0(wr_en_port[2*i] & wr_en_owner_bank[j]),
                         .CE0(lmem_rd_en),
                         .A1({{(`BRAM_4096_ADDR_WIDTH - (`LLC_SET_BITS - `LLC_OWNER_BRAM_INDEX_BITS) - 1){1'b0}}, 
                                 1'b1, lmem_set_in[(`LLC_SET_BITS - `LLC_OWNER_BRAM_INDEX_BITS - 1):0]}),
-                        .D1(lmem_wr_data_owner), 
+                        .D1(lmem_wr_data_owner_extended), 
                         .Q1(lmem_rd_data_owner_tmp[2*i+1][j]), 
                         .WE1(wr_en_port[2*i+1] & wr_en_owner_bank[j]), 
                         .CE1(lmem_rd_en),
@@ -234,12 +236,12 @@ module llc_localmem (
                     BRAM_4096x4 owner_bram(
                         .CLK(clk), 
                         .A0({1'b0, lmem_set_in[(`LLC_SET_BITS - `LLC_OWNER_BRAM_INDEX_BITS - 1):0]}),
-                        .D0(lmem_wr_data_owner), 
+                        .D0(lmem_wr_data_owner_extended), 
                         .Q0(lmem_rd_data_owner_tmp[2*i][j]),
                         .WE0(wr_en_port[2*i] & wr_en_owner_bank[j]),
                         .CE0(lmem_rd_en),
                         .A1({1'b1, lmem_set_in[(`LLC_SET_BITS - `LLC_OWNER_BRAM_INDEX_BITS - 1):0]}),
-                        .D1(lmem_wr_data_owner), 
+                        .D1(lmem_wr_data_owner_extended), 
                         .Q1(lmem_rd_data_owner_tmp[2*i+1][j]), 
                         .WE1(wr_en_port[2*i+1] & wr_en_owner_bank[j]), 
                         .CE1(lmem_rd_en),

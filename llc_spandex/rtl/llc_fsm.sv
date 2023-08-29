@@ -7,7 +7,9 @@ module llc_fsm (
     input logic rst, 
     // From input decoder
     input logic do_get_rsp,
+    input logic do_get_rsp_next,
     input logic do_get_req, 
+    input logic do_get_req_next, 
     // From interfaces
     input logic llc_mem_req_ready_int,
     input logic llc_fwd_out_ready_int, 
@@ -50,6 +52,7 @@ module llc_fsm (
     llc_dma_req_in_t.in llc_dma_req_in,
     llc_rsp_in_t.in llc_rsp_in,
     llc_mem_rsp_t.in llc_mem_rsp, 
+    llc_mem_rsp_t.in llc_mem_rsp_next,
     line_breakdown_llc_t.in line_br, 
  
     // To input_decoder - get new input
@@ -191,9 +194,9 @@ module llc_fsm (
                 end
             end
             DECODE : begin
-                if (do_get_rsp) begin
+                if (do_get_rsp_next) begin
                     next_state = RSP_MSHR_LOOKUP;
-                end else if (do_get_req) begin
+                end else if (do_get_req_next) begin
                     next_state = REQ_MSHR_LOOKUP;
                 end
             end
@@ -280,14 +283,16 @@ module llc_fsm (
                 end
             end
             REQ_ODATA_HANDLER_MISS : begin
-                if (llc_mem_rsp_valid_int) begin 
+                if (llc_mem_req_ready_int) begin 
                     next_state = REQ_ODATA_HANDLER_MISS_RSP;
                 end                
             end
             REQ_ODATA_HANDLER_MISS_RSP : begin
-                if (llc_rsp_out_ready_int) begin 
-                    next_state = DECODE;
-                end                
+                if (llc_mem_rsp_valid_int) begin
+                    if (llc_rsp_out_ready_int) begin 
+                        next_state = DECODE;
+                    end                
+                end
             end
             REQ_S_HANDLER_HIT : begin
                 if (llc_rsp_out_ready_int) begin
@@ -295,14 +300,16 @@ module llc_fsm (
                 end
             end
             REQ_S_HANDLER_MISS : begin
-                if (llc_mem_rsp_valid_int) begin 
+                if (llc_mem_req_ready_int) begin 
                     next_state = REQ_S_HANDLER_MISS_RSP;
                 end                
             end
             REQ_S_HANDLER_MISS_RSP : begin
-                if (llc_rsp_out_ready_int) begin 
-                    next_state = DECODE;
-                end                
+                if (llc_mem_rsp_valid_int) begin
+                    if (llc_rsp_out_ready_int) begin 
+                        next_state = DECODE;
+                    end                
+                end
             end                
             REQ_EVICT : begin
                 case(states_buf[evict_way_buf])
@@ -612,33 +619,35 @@ module llc_fsm (
                 mem_rsp_way_next = req_in_way;
             end
             REQ_ODATA_HANDLER_MISS_RSP : begin
-                // Once data is received from memory, send response to requestor.
-                send_rsp_out (
-                    /* coh_msg */ `RSP_Odata,
-                    /* line_addr */ llc_req_in.addr,
-                    /* line */ lines_buf[req_in_way],
-                    /* req_id */ llc_req_in.req_id,
-                    /* dest_id */ llc_req_in.req_id,
-                    /* invack_cnt */ 'h0,
-                    /* word_offset */ 'h0,
-                    /* word_mask */ llc_req_in.word_mask
-                );
+                if (llc_mem_rsp_valid_int) begin
+                    // Once data is received from memory, send response to requestor.
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_Odata,
+                        /* line_addr */ llc_req_in.addr,
+                        /* line */ llc_mem_rsp_next.line,
+                        /* req_id */ llc_req_in.req_id,
+                        /* dest_id */ llc_req_in.req_id,
+                        /* invack_cnt */ 'h0,
+                        /* word_offset */ 'h0,
+                        /* word_mask */ llc_req_in.word_mask
+                    );
 
-                // Update all RAMs - owners_buf and lines_buf with word owned and owner, respectively.
-                lmem_set_in = line_br.set;
-                lmem_way_in = req_in_way;
-                write_owner_helper (
-                    /* line_orig */ lines_buf[req_in_way],
-                    /* req_id */ llc_req_in.req_id,
-                    /* word_mask_i */ llc_req_in.word_mask,
-                    /* line_out */ lmem_wr_data_line
-                );
-                lmem_wr_data_owner = llc_req_in.word_mask;
-                lmem_wr_data_hprot = llc_req_in.hprot;
-                lmem_wr_data_tag = line_br.tag;
-                lmem_wr_data_state = `LLC_V;
-                lmem_wr_data_dirty_bit = 1'b0;
-                lmem_wr_en_all_mem = 1'b1;
+                    // Update all RAMs - owners_buf and lines_buf with word owned and owner, respectively.
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = req_in_way;
+                    write_owner_helper (
+                        /* line_orig */ llc_mem_rsp_next.line,
+                        /* req_id */ llc_req_in.req_id,
+                        /* word_mask_i */ llc_req_in.word_mask,
+                        /* line_out */ lmem_wr_data_line
+                    );
+                    lmem_wr_data_owner = llc_req_in.word_mask;
+                    lmem_wr_data_hprot = llc_req_in.hprot;
+                    lmem_wr_data_tag = line_br.tag;
+                    lmem_wr_data_state = `LLC_V;
+                    lmem_wr_data_dirty_bit = 1'b0;
+                    lmem_wr_en_all_mem = 1'b1;
+                end
             end
             REQ_S_HANDLER_HIT : begin
                 case (states_buf[req_in_way])
@@ -663,7 +672,6 @@ module llc_fsm (
                         lmem_wr_en_state = 1'b1;
                     end
                     `LLC_S : begin
-                        // First, we remove the requestor from the sharers list (if present)
                         // Update sharer RAM - add requestor
                         lmem_set_in = line_br.set;
                         lmem_way_in = req_in_way;
@@ -698,33 +706,30 @@ module llc_fsm (
                 mem_rsp_way_next = req_in_way;
             end
             REQ_S_HANDLER_MISS_RSP : begin
-                // Once data is received from memory, send response to requestor.
-                send_rsp_out (
-                    /* coh_msg */ `RSP_S,
-                    /* line_addr */ llc_req_in.addr,
-                    /* line */ lines_buf[req_in_way],
-                    /* req_id */ llc_req_in.req_id,
-                    /* dest_id */ llc_req_in.req_id,
-                    /* invack_cnt */ 'h0,
-                    /* word_offset */ 'h0,
-                    /* word_mask */ llc_req_in.word_mask
-                );
+                if (llc_mem_rsp_valid_int) begin
+                    // Once data is received from memory, send response to requestor.
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_S,
+                        /* line_addr */ llc_req_in.addr,
+                        /* line */ llc_mem_rsp_next.line,
+                        /* req_id */ llc_req_in.req_id,
+                        /* dest_id */ llc_req_in.req_id,
+                        /* invack_cnt */ 'h0,
+                        /* word_offset */ 'h0,
+                        /* word_mask */ llc_req_in.word_mask
+                    );
 
-                // Update all RAMs - owners_buf and lines_buf with word owned and owner, respectively.
-                lmem_set_in = line_br.set;
-                lmem_way_in = req_in_way;
-                write_owner_helper (
-                    /* line_orig */ lines_buf[req_in_way],
-                    /* req_id */ llc_req_in.req_id,
-                    /* word_mask_i */ llc_req_in.word_mask,
-                    /* line_out */ lmem_wr_data_line
-                );
-                lmem_wr_data_sharers = 1 << llc_req_in.req_id;
-                lmem_wr_data_hprot = llc_req_in.hprot;
-                lmem_wr_data_tag = line_br.tag;
-                lmem_wr_data_state = `LLC_S;
-                lmem_wr_data_dirty_bit = 1'b0;
-                lmem_wr_en_all_mem = 1'b1;
+                    // Update all RAMs.
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = req_in_way;
+                    lmem_wr_data_line = llc_mem_rsp_next.line;
+                    lmem_wr_data_sharers = 1 << llc_req_in.req_id;
+                    lmem_wr_data_hprot = llc_req_in.hprot;
+                    lmem_wr_data_tag = line_br.tag;
+                    lmem_wr_data_state = `LLC_S;
+                    lmem_wr_data_dirty_bit = 1'b0;
+                    lmem_wr_en_all_mem = 1'b1;
+                end
             end            
             REQ_WB_HANDLER_HIT : begin
                 // Send response for the write-back

@@ -54,6 +54,9 @@
 `define LLC_STABLE_STATE_BITS       2
 `define LLC_UNSTABLE_STATE_BITS     4 // depends on # of unstable states
 
+`define LLC_OWNER_BITS          `WORDS_PER_LINE
+`define LLC_OWNER_BRAM_WIDTH    4
+
 // DeNovo states
 `define SPX_R       (`SPX_NUM_STATE - 1)
 `define SPX_S       (`SPX_NUM_STATE - 2)

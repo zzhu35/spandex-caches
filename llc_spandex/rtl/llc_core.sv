@@ -146,9 +146,14 @@ module llc_core (
     assign lmem_rd_en = 1'b1;
     assign set_set_conflict = set_set_conflict_fsm | set_set_conflict_mshr;
     assign clr_set_conflict = clr_set_conflict_fsm | clr_set_conflict_mshr;
+    assign update_req_in_stalled = 1'b0;
+    assign update_req_in_from_stalled = 1'b0;
+    assign set_req_in_stalled = 1'b0;
+    assign llc_rst_tb_done = 1'b0;
 
     //interfaces
     line_breakdown_llc_t line_br();
+    line_breakdown_llc_t line_br_next();
     llc_dma_req_in_t llc_dma_req_in_next(); 
     llc_rsp_out_t llc_rsp_out_o();
     llc_dma_rsp_out_t llc_dma_rsp_out_o(); 

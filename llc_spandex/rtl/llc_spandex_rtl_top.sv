@@ -158,13 +158,13 @@ module llc_spandex_rtl_top (
       //llc rst tb done  
       logic llc_rst_tb_done;
       assign llc_rst_tb_done_data = llc_rst_tb_done; 
+      assign llc_rst_tb_ready = 1'b1;
+      assign llc_rst_tb_done_valid = 1'b0;
 
       //llc  stats
-`ifdef STATS_ENABLE
       logic llc_stats;
       assign llc_stats_data = 1'b0;
       assign llc_stats_valid = 1'b0;
-`endif
 
       llc_core llc_core_u(.*);
 
