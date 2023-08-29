@@ -1,6 +1,3 @@
-// Copyright(c) 2011-2022 Columbia University, System Level Design Group
-// SPDC-License-Identifier: Apache-2.0
-
 module pri_enc #(parameter WIDTH = 16, parameter LOG_WIDTH = 4) (
     input logic [WIDTH-1:0] in,
     output logic [LOG_WIDTH-1:0] out,

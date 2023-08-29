@@ -4,8 +4,8 @@
 #ifndef __SYSTEM_HPP__
 #define __SYSTEM_HPP__
 
-#include "llc_wrap.h"
-#include "llc_tb.hpp"
+#include "llc_spandex_wrap.h"
+#include "llc_spandex_tb.hpp"
 
 class system_t : public sc_module
 {
@@ -41,14 +41,14 @@ public:
     // LLC cache instance
     llc_wrapper_conv	*dut;
     // LLC testbench module
-    llc_tb      *tb;
+    llc_spandex_tb      *tb;
 
     // Constructor
     SC_CTOR(system_t)
     {
 	// Modules
 	dut = new llc_wrapper_conv("llc_wrapper_conv");
-	tb  = new llc_tb("llc_tb");
+	tb  = new llc_spandex_tb("llc_spandex_tb");
 
 	// Binding LLC cache
 	dut->clk(clk);

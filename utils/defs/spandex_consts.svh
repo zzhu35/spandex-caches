@@ -30,12 +30,17 @@
 `define MSHR_BITS       `REQS_BITS
 `define MSHR_BITS_P1    `REQS_BITS_P1
 
-//L2 REQ DEFINES
 `define L2_MSHR_LOOKUP      3'b000
 `define L2_MSHR_PEEK_REQ    3'b001
 `define L2_MSHR_PEEK_FLUSH  3'b010
 `define L2_MSHR_PEEK_FWD    3'b011
 `define L2_MSHR_IDLE        3'b100
+
+`define LLC_MSHR_LOOKUP      3'b000
+`define LLC_MSHR_PEEK_REQ    3'b001
+`define LLC_MSHR_IDLE        3'b100
+
+`define LLC_LOOKUP 1'b0
 
 // Ongoing transaction buffers
 `define LLC_N_REQS          4 // affects LLC_REQS_BITS

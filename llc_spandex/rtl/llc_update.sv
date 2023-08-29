@@ -2,8 +2,8 @@
 // SPDC-License-Identifier: Apache-2.0
 
 `timescale 1ps / 1ps
-`include "cache_consts.svh"
-`include "cache_types.svh"
+`include "spandex_consts.svh"
+`include "spandex_types.svh"
 
 // llc_update.sv
 // Author: Joseph Zuckerman
@@ -22,13 +22,13 @@ module llc_update(
     input logic is_dma_write_to_resume, 
     input logic is_req_to_resume,
     input logic update_evict_way, 
-    input var logic dirty_bits_buf[`LLC_WAYS],
-    input var llc_state_t states_buf[`LLC_WAYS],
-    input var hprot_t hprots_buf[`LLC_WAYS],
-    input var line_t lines_buf[`LLC_WAYS],
-    input var llc_tag_t tags_buf[`LLC_WAYS],
-    input var sharers_t sharers_buf[`LLC_WAYS],
-    input var owner_t owners_buf[`LLC_WAYS],
+    input logic dirty_bits_buf[`LLC_WAYS],
+    input llc_state_t states_buf[`LLC_WAYS],
+    input hprot_t hprots_buf[`LLC_WAYS],
+    input line_t lines_buf[`LLC_WAYS],
+    input llc_tag_t tags_buf[`LLC_WAYS],
+    input sharers_t sharers_buf[`LLC_WAYS],
+    input owner_t owners_buf[`LLC_WAYS],
     input llc_way_t evict_way_buf, 
     input llc_way_t way, 
     input logic llc_rst_tb_done_ready_int,

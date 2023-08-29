@@ -50,9 +50,6 @@ module l2_fsm(
     input line_t lines_buf[`L2_WAYS],
     input l2_tag_t tags_buf[`L2_WAYS],
     input l2_way_t evict_way_buf,
-    // Localmem outputs
-    input state_t lmem_rd_data_state[`L2_NUM_PORTS][`WORDS_PER_LINE],
-    input hprot_t lmem_rd_data_hprot[`L2_NUM_PORTS],
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,

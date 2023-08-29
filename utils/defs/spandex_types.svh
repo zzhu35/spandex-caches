@@ -37,9 +37,10 @@ typedef logic[(`BYTE_BITS-1):0]		byte_offset_t;
 typedef logic[(`STABLE_STATE_BITS-1):0]	state_t;
 typedef logic[(`LLC_STATE_BITS-1):0]	        llc_state_t;
 typedef logic[(`UNSTABLE_STATE_BITS-1):0]	unstable_state_t;
+typedef logic[(`LLC_UNSTABLE_STATE_BITS-1):0]	llc_unstable_state_t;
 typedef logic[(`CACHE_ID_WIDTH-1):0]         cache_id_t;
 typedef logic[(`LLC_COH_DEV_ID_WIDTH-1):0]   llc_coh_dev_id_t;
-typedef logic[(`MAX_N_L2_BITS-1):0]		owner_t;
+typedef logic[(`WORDS_PER_LINE-1):0]		owner_t;
 typedef logic[(`MAX_N_L2-1):0]		sharers_t;
 typedef logic[(`DMA_BURST_LENGTH_BITS-1):0]  dma_length_t;
 typedef logic[(`BRESP_WIDTH-1):0]   bresp_t;
@@ -67,5 +68,19 @@ typedef struct packed{
     word_mask_t         word_mask;
     word_mask_t         word_mask_reg;
 } mshr_buf_t;
+
+typedef struct packed{
+    mix_msg_t               msg;
+    cache_id_t              req_id;
+    llc_tag_t               tag;
+    llc_set_t               set;
+    llc_way_t               way;
+    llc_unstable_state_t    state;
+    hprot_t                 hprot;
+    invack_cnt_calc_t	    invack_cnt;
+    line_t                  line;
+    word_mask_t             word_mask;
+    word_mask_t             word_mask_reg;
+} mshr_llc_buf_t;
 
 `endif // __SPANDEX_TYPES_SVH__

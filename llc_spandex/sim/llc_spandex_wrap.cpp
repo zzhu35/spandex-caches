@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2022 Columbia University, System Level Design Group
 // SPDC-License-Identifier: Apache-2.0
 
-#include "llc_wrap.h"
+#include "llc_spandex_wrap.h"
 
 void llc_wrapper_conv::thread_llc_req_in_data_conv(){
     llc_req_in_t<CACHE_ID_WIDTH> tmp = llc_req_in.data.read();
@@ -12,6 +12,7 @@ void llc_wrapper_conv::thread_llc_req_in_data_conv(){
     llc_req_in_data_conv_req_id = tmp.req_id;
     llc_req_in_data_conv_word_offset = tmp.word_offset;
     llc_req_in_data_conv_valid_words = tmp.valid_words;
+    llc_req_in_data_conv_word_mask = tmp.word_mask;
 }
 
 void llc_wrapper_conv::thread_llc_dma_req_in_data_conv(){
@@ -31,6 +32,7 @@ void llc_wrapper_conv::thread_llc_rsp_in_data_conv(){
     llc_rsp_in_data_conv_addr = tmp.addr;
     llc_rsp_in_data_conv_line = tmp.line;
     llc_rsp_in_data_conv_req_id = tmp.req_id;
+    llc_rsp_in_data_conv_word_mask = tmp.word_mask;
 }
 
 void llc_wrapper_conv::thread_llc_mem_rsp_data_conv(){
@@ -51,6 +53,7 @@ void llc_wrapper_conv::thread_llc_rsp_out_data_conv(){
     tmp.req_id = llc_rsp_out_data_conv_req_id.read();
     tmp.dest_id = llc_rsp_out_data_conv_dest_id.read();
     tmp.word_offset = llc_rsp_out_data_conv_word_offset.read();
+    tmp.word_mask = llc_rsp_out_data_conv_word_mask.read();
     llc_rsp_out.data.write(tmp);
 }
 
@@ -72,6 +75,8 @@ void llc_wrapper_conv::thread_llc_fwd_out_data_conv(){
     tmp.addr = llc_fwd_out_data_conv_addr.read();
     tmp.req_id = llc_fwd_out_data_conv_req_id.read();
     tmp.dest_id = llc_fwd_out_data_conv_dest_id.read();
+    tmp.line = llc_fwd_out_data_conv_line.read();
+    tmp.word_mask = llc_fwd_out_data_conv_word_mask.read();
     llc_fwd_out.data.write(tmp);
 }
 

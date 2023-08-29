@@ -6,10 +6,10 @@
 
 #include "systemc.h"
 #include <cynw_flex_channels.h>
-#include "cache_types.hpp"
-#include "cache_consts.hpp"
+#include "spandex_types.hpp"
+#include "spandex_consts.hpp"
 
-class llc_rtl_top : public ncsc_foreign_module 
+class llc_spandex_rtl_top : public ncsc_foreign_module 
 {
 public:
     sc_in<bool> clk;
@@ -23,6 +23,7 @@ public:
     sc_in<cache_id_t> llc_req_in_data_req_id;
     sc_in<word_offset_t> llc_req_in_data_word_offset;
     sc_in<word_offset_t> llc_req_in_data_valid_words;
+    sc_in<word_mask_t> llc_req_in_data_word_mask;
     sc_in<bool> llc_req_in_valid;
     sc_out<bool> llc_req_in_ready;
 
@@ -42,6 +43,7 @@ public:
     sc_in<line_addr_t> llc_rsp_in_data_addr;
     sc_in<line_t> llc_rsp_in_data_line;
     sc_in<cache_id_t> llc_rsp_in_data_req_id;
+    sc_in<word_mask_t> llc_rsp_in_data_word_mask;
     sc_in<bool> llc_rsp_in_valid;
     sc_out<bool> llc_rsp_in_ready;
 
@@ -65,6 +67,7 @@ public:
     sc_out<cache_id_t> llc_rsp_out_data_req_id;
     sc_out<cache_id_t> llc_rsp_out_data_dest_id;
     sc_out<word_offset_t> llc_rsp_out_data_word_offset;
+    sc_out<word_mask_t> llc_rsp_out_data_word_mask;
 
     //llc dma rsp out
     sc_in<bool> llc_dma_rsp_out_ready;
@@ -84,6 +87,8 @@ public:
     sc_out<line_addr_t> llc_fwd_out_data_addr;
     sc_out<cache_id_t> llc_fwd_out_data_req_id;
     sc_out<cache_id_t> llc_fwd_out_data_dest_id;
+    sc_out<line_t> llc_fwd_out_data_line;
+    sc_out<word_mask_t> llc_fwd_out_data_word_mask;
 
     //llc mem req
     sc_in<bool> llc_mem_req_ready;
@@ -105,11 +110,10 @@ public:
     sc_out<bool> llc_stats_data;
 #endif
 
-    llc_rtl_top(sc_module_name name) 
+    llc_spandex_rtl_top(sc_module_name name) 
         : ncsc_foreign_module(name)
         , clk("clk")
         , rst("rst")
-        , llc_req_in_valid("llc_req_in_valid")
         , llc_req_in_data_coh_msg("llc_req_in_data_coh_msg")
         , llc_req_in_data_hprot("llc_req_in_data_hprot")
         , llc_req_in_data_addr("llc_req_in_data_addr")
@@ -117,8 +121,9 @@ public:
         , llc_req_in_data_req_id("llc_req_in_data_req_id")
         , llc_req_in_data_word_offset("llc_req_in_data_word_offset")
         , llc_req_in_data_valid_words("llc_req_in_data_valid_words")
+        , llc_req_in_data_word_mask("llc_req_in_data_word_mask")
+        , llc_req_in_valid("llc_req_in_valid")
         , llc_req_in_ready("llc_req_in_ready")
-        , llc_dma_req_in_valid("llc_dma_req_in_valid")
         , llc_dma_req_in_data_coh_msg("llc_dma_req_in_data_coh_msg")
         , llc_dma_req_in_data_hprot("llc_dma_req_in_data_hprot")
         , llc_dma_req_in_data_addr("llc_dma_req_in_data_addr")
@@ -126,19 +131,22 @@ public:
         , llc_dma_req_in_data_req_id("llc_dma_req_in_data_req_id")
         , llc_dma_req_in_data_word_offset("llc_dma_req_in_data_word_offset")
         , llc_dma_req_in_data_valid_words("llc_dma_req_in_data_valid_words")
+        , llc_dma_req_in_valid("llc_dma_req_in_valid")
         , llc_dma_req_in_ready("llc_dma_req_in_ready")
-        , llc_rsp_in_valid("llc_rsp_in_valid")
         , llc_rsp_in_data_coh_msg("llc_rsp_in_data_coh_msg")
         , llc_rsp_in_data_addr("llc_rsp_in_data_addr")
         , llc_rsp_in_data_line("llc_rsp_in_data_line")
         , llc_rsp_in_data_req_id("llc_rsp_in_data_req_id")
+        , llc_rsp_in_data_word_mask("llc_rsp_in_data_word_mask")
+        , llc_rsp_in_valid("llc_rsp_in_valid")
         , llc_rsp_in_ready("llc_rsp_in_ready")
-        , llc_mem_rsp_valid("llc_mem_rsp_valid")
         , llc_mem_rsp_data_line("llc_mem_rsp_data_line")
+        , llc_mem_rsp_valid("llc_mem_rsp_valid")
         , llc_mem_rsp_ready("llc_mem_rsp_ready")
         , llc_rst_tb_valid("llc_rst_tb_valid")
         , llc_rst_tb_data("llc_rst_tb_data")
         , llc_rst_tb_ready("llc_rst_tb_ready")
+        , llc_rsp_out_ready("llc_rsp_out_ready")
         , llc_rsp_out_valid("llc_rsp_out_valid")
         , llc_rsp_out_data_coh_msg("llc_rsp_out_data_coh_msg")
         , llc_rsp_out_data_addr("llc_rsp_out_data_addr")
@@ -147,7 +155,8 @@ public:
         , llc_rsp_out_data_req_id("llc_rsp_out_data_req_id")
         , llc_rsp_out_data_dest_id("llc_rsp_out_data_dest_id")
         , llc_rsp_out_data_word_offset("llc_rsp_out_data_word_offset")
-        , llc_rsp_out_ready("llc_rsp_out_ready")
+        , llc_rsp_out_data_word_mask("llc_rsp_out_data_word_mask")
+        , llc_dma_rsp_out_ready("llc_dma_rsp_out_ready")
         , llc_dma_rsp_out_valid("llc_dma_rsp_out_valid")
         , llc_dma_rsp_out_data_coh_msg("llc_dma_rsp_out_data_coh_msg")
         , llc_dma_rsp_out_data_addr("llc_dma_rsp_out_data_addr")
@@ -156,31 +165,32 @@ public:
         , llc_dma_rsp_out_data_req_id("llc_dma_rsp_out_data_req_id")
         , llc_dma_rsp_out_data_dest_id("llc_dma_rsp_out_data_dest_id")
         , llc_dma_rsp_out_data_word_offset("llc_dma_rsp_out_data_word_offset")
-        , llc_dma_rsp_out_ready("llc_dma_rsp_out_ready")
+        , llc_fwd_out_ready("llc_fwd_out_ready")
         , llc_fwd_out_valid("llc_fwd_out_valid")
         , llc_fwd_out_data_coh_msg("llc_fwd_out_data_coh_msg")
         , llc_fwd_out_data_addr("llc_fwd_out_data_addr")
         , llc_fwd_out_data_req_id("llc_fwd_out_data_req_id")
         , llc_fwd_out_data_dest_id("llc_fwd_out_data_dest_id")
-        , llc_fwd_out_ready("llc_fwd_out_ready")
+        , llc_fwd_out_data_line("llc_fwd_out_data_line")
+        , llc_fwd_out_data_word_mask("llc_fwd_out_data_word_mask")
+        , llc_mem_req_ready("llc_mem_req_ready")
         , llc_mem_req_valid("llc_mem_req_valid")
         , llc_mem_req_data_hwrite("llc_mem_req_data_hwrite")
         , llc_mem_req_data_hsize("llc_mem_req_data_hsize")
         , llc_mem_req_data_hprot("llc_mem_req_data_hprot")
         , llc_mem_req_data_addr("llc_mem_req_data_addr")
         , llc_mem_req_data_line("llc_mem_req_data_line")
-        , llc_mem_req_ready("llc_mem_req_ready")
+        , llc_rst_tb_done_ready("llc_rst_tb_done_ready")
         , llc_rst_tb_done_valid("llc_rst_tb_done_valid")
         , llc_rst_tb_done_data("llc_rst_tb_done_data")
-        , llc_rst_tb_done_ready("llc_rst_tb_done_ready")
 #ifdef STATS_ENABLE
+        , llc_stats_ready("llc_stats_ready")
         , llc_stats_valid ("llc_stats_valid")
         , llc_stats_data("llc_stats_data")
-        , llc_stats_ready("llc_stats_ready")
 #endif
 {}
 
-        const char* hdl_name() const { return "llc_rtl_top"; }
+        const char* hdl_name() const { return "llc_spandex_rtl_top"; }
 };
 
 class llc_wrapper_conv : public sc_module 
@@ -225,6 +235,7 @@ public:
         , llc_req_in_data_conv_req_id("llc_req_in_data_conv_req_id")
         , llc_req_in_data_conv_word_offset("llc_req_in_data_conv_word_offset")
         , llc_req_in_data_conv_valid_words("llc_req_in_data_conv_valid_words")
+        , llc_req_in_data_conv_word_mask("llc_req_in_data_conv_word_mask")
         , llc_dma_req_in_data_conv_coh_msg("llc_dma_req_in_data_conv_coh_msg")
         , llc_dma_req_in_data_conv_hprot("llc_dma_req_in_data_conv_hprot")
         , llc_dma_req_in_data_conv_addr("llc_dma_req_in_data_conv_addr")
@@ -236,6 +247,7 @@ public:
         , llc_rsp_in_data_conv_addr("llc_rsp_in_data_conv_addr")
         , llc_rsp_in_data_conv_line("llc_rsp_in_data_conv_line")
         , llc_rsp_in_data_conv_req_id("llc_rsp_in_data_conv_req_id")
+        , llc_rsp_in_data_conv_word_mask("llc_rsp_in_data_conv_word_mask")
         , llc_mem_rsp_data_conv_line("llc_mem_rsp_data_conv_line")
         , llc_rst_tb_data_conv("llc_rst_tb_data_conv")
         , llc_rsp_out_data_conv_coh_msg("llc_rsp_out_data_conv_coh_msg")
@@ -245,6 +257,7 @@ public:
         , llc_rsp_out_data_conv_req_id("llc_rsp_out_data_conv_req_id")
         , llc_rsp_out_data_conv_dest_id("llc_rsp_out_data_conv_dest_id")
         , llc_rsp_out_data_conv_word_offset("llc_rsp_out_data_conv_word_offset")
+        , llc_rsp_out_data_conv_word_mask("llc_rsp_out_data_conv_word_mask")
         , llc_dma_rsp_out_data_conv_coh_msg("llc_dma_rsp_out_data_conv_coh_msg")
         , llc_dma_rsp_out_data_conv_addr("llc_dma_rsp_out_data_conv_addr")
         , llc_dma_rsp_out_data_conv_line("llc_dma_rsp_out_data_conv_line")
@@ -256,6 +269,8 @@ public:
         , llc_fwd_out_data_conv_addr("llc_fwd_out_data_conv_addr")
         , llc_fwd_out_data_conv_req_id("llc_fwd_out_data_conv_req_id")
         , llc_fwd_out_data_conv_dest_id("llc_fwd_out_data_conv_dest_id")
+        , llc_fwd_out_data_conv_line("llc_fwd_out_data_conv_line")
+        , llc_fwd_out_data_conv_word_mask("llc_fwd_out_data_conv_word_mask")
         , llc_mem_req_data_conv_hwrite("llc_mem_req_data_conv_hwrite")
         , llc_mem_req_data_conv_hsize("llc_mem_req_data_conv_hsize")
         , llc_mem_req_data_conv_hprot("llc_mem_req_data_conv_hprot")
@@ -280,12 +295,12 @@ public:
 
         SC_METHOD(thread_llc_rsp_out_data_conv);
         sensitive << llc_rsp_out_data_conv_coh_msg << llc_rsp_out_data_conv_addr << llc_rsp_out_data_conv_line << llc_rsp_out_data_conv_invack_cnt 
-                  << llc_rsp_out_data_conv_req_id << llc_rsp_out_data_conv_dest_id << llc_rsp_out_data_conv_word_offset;
+                  << llc_rsp_out_data_conv_req_id << llc_rsp_out_data_conv_dest_id << llc_rsp_out_data_conv_word_offset << llc_rsp_out_data_conv_word_mask;
         SC_METHOD(thread_llc_dma_rsp_out_data_conv);
         sensitive << llc_dma_rsp_out_data_conv_coh_msg << llc_dma_rsp_out_data_conv_addr << llc_dma_rsp_out_data_conv_line << llc_dma_rsp_out_data_conv_invack_cnt 
                   << llc_dma_rsp_out_data_conv_req_id << llc_dma_rsp_out_data_conv_dest_id << llc_dma_rsp_out_data_conv_word_offset;
         SC_METHOD(thread_llc_fwd_out_data_conv);
-        sensitive << llc_fwd_out_data_conv_coh_msg << llc_fwd_out_data_conv_addr << llc_fwd_out_data_conv_req_id << llc_fwd_out_data_conv_dest_id; 
+        sensitive << llc_fwd_out_data_conv_coh_msg << llc_fwd_out_data_conv_addr << llc_fwd_out_data_conv_req_id << llc_fwd_out_data_conv_dest_id << llc_fwd_out_data_conv_line << llc_fwd_out_data_conv_word_mask; 
         SC_METHOD(thread_llc_mem_req_data_conv);
         sensitive << llc_mem_req_data_conv_hwrite << llc_mem_req_data_conv_hsize << llc_mem_req_data_conv_hprot << llc_mem_req_data_conv_addr << llc_mem_req_data_conv_line; 
         SC_METHOD(thread_llc_rst_tb_done_data_conv);
@@ -305,6 +320,7 @@ public:
         cosim.llc_req_in_data_req_id(llc_req_in_data_conv_req_id);
         cosim.llc_req_in_data_word_offset(llc_req_in_data_conv_word_offset);
         cosim.llc_req_in_data_valid_words(llc_req_in_data_conv_valid_words);
+        cosim.llc_req_in_data_word_mask(llc_req_in_data_conv_word_mask);
         cosim.llc_req_in_ready(llc_req_in.ready);
         cosim.llc_dma_req_in_valid(llc_dma_req_in.valid);
         cosim.llc_dma_req_in_data_coh_msg(llc_dma_req_in_data_conv_coh_msg);
@@ -320,6 +336,7 @@ public:
         cosim.llc_rsp_in_data_addr(llc_rsp_in_data_conv_addr);
         cosim.llc_rsp_in_data_line(llc_rsp_in_data_conv_line);
         cosim.llc_rsp_in_data_req_id(llc_rsp_in_data_conv_req_id);
+        cosim.llc_rsp_in_data_word_mask(llc_rsp_in_data_conv_word_mask);
         cosim.llc_rsp_in_ready(llc_rsp_in.ready);
         cosim.llc_mem_rsp_valid(llc_mem_rsp.valid);
         cosim.llc_mem_rsp_data_line(llc_mem_rsp_data_conv_line);
@@ -335,6 +352,7 @@ public:
         cosim.llc_rsp_out_data_req_id(llc_rsp_out_data_conv_req_id);
         cosim.llc_rsp_out_data_dest_id(llc_rsp_out_data_conv_dest_id);
         cosim.llc_rsp_out_data_word_offset(llc_rsp_out_data_conv_word_offset);
+        cosim.llc_rsp_out_data_word_mask(llc_rsp_out_data_conv_word_mask);
         cosim.llc_rsp_out_ready(llc_rsp_out.ready);
         cosim.llc_dma_rsp_out_valid(llc_dma_rsp_out.valid);
         cosim.llc_dma_rsp_out_data_coh_msg(llc_dma_rsp_out_data_conv_coh_msg);
@@ -350,6 +368,8 @@ public:
         cosim.llc_fwd_out_data_addr(llc_fwd_out_data_conv_addr);
         cosim.llc_fwd_out_data_req_id(llc_fwd_out_data_conv_req_id);
         cosim.llc_fwd_out_data_dest_id(llc_fwd_out_data_conv_dest_id);
+        cosim.llc_fwd_out_data_line(llc_fwd_out_data_conv_line);
+        cosim.llc_fwd_out_data_word_mask(llc_fwd_out_data_conv_word_mask);
         cosim.llc_fwd_out_ready(llc_fwd_out.ready);
         cosim.llc_mem_req_valid(llc_mem_req.valid);
         cosim.llc_mem_req_data_hwrite(llc_mem_req_data_conv_hwrite);
@@ -377,6 +397,7 @@ public:
     sc_signal<cache_id_t> llc_req_in_data_conv_req_id;
     sc_signal<word_offset_t> llc_req_in_data_conv_word_offset;
     sc_signal<word_offset_t> llc_req_in_data_conv_valid_words;
+    sc_signal<word_mask_t> llc_req_in_data_conv_word_mask;
 
     //llc dma req in 
     sc_signal<mix_msg_t> llc_dma_req_in_data_conv_coh_msg;
@@ -392,6 +413,7 @@ public:
     sc_signal<line_addr_t> llc_rsp_in_data_conv_addr;
     sc_signal<line_t> llc_rsp_in_data_conv_line;
     sc_signal<cache_id_t> llc_rsp_in_data_conv_req_id;
+    sc_signal<word_mask_t> llc_rsp_in_data_conv_word_mask;
 
     //llc mem rsp
     sc_signal<line_t> llc_mem_rsp_data_conv_line;
@@ -407,6 +429,7 @@ public:
     sc_signal<cache_id_t> llc_rsp_out_data_conv_req_id;
     sc_signal<cache_id_t> llc_rsp_out_data_conv_dest_id;
     sc_signal<word_offset_t> llc_rsp_out_data_conv_word_offset;
+    sc_signal<word_mask_t> llc_rsp_out_data_conv_word_mask;
 
     //llc dma rsp out
     sc_signal<coh_msg_t> llc_dma_rsp_out_data_conv_coh_msg;
@@ -422,6 +445,8 @@ public:
     sc_signal<line_addr_t> llc_fwd_out_data_conv_addr;
     sc_signal<cache_id_t> llc_fwd_out_data_conv_req_id;
     sc_signal<cache_id_t> llc_fwd_out_data_conv_dest_id;
+    sc_signal<line_t> llc_fwd_out_data_conv_line;
+    sc_signal<word_mask_t> llc_fwd_out_data_conv_word_mask;
 
     //llc mem req
     sc_signal<bool> llc_mem_req_data_conv_hwrite;
@@ -455,7 +480,7 @@ public:
 
 
 protected:
-    llc_rtl_top cosim;
+    llc_spandex_rtl_top cosim;
 
 };
 
