@@ -754,9 +754,9 @@ module llc_fsm (
                 // Update data in bufs, remove owner and mark line as dirty.
                 lmem_set_in = line_br.set;
                 lmem_way_in = req_in_way;
-                write_owner_helper (
+                write_line_helper (
                     /* line_orig */ lines_buf[req_in_way],
-                    /* req_id */ llc_req_in.req_id,
+                    /* line_in */ llc_req_in.line,
                     /* word_mask_i */ llc_req_in.word_mask,
                     /* line_out */ lmem_wr_data_line
                 );

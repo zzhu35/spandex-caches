@@ -416,6 +416,7 @@ public:
             case RSP_O : os << "RSP_O"; break;
             case RSP_WT : os << "RSP_WT"; break;
             case RSP_WTdata : os << "RSP_WTdata"; break;
+            case RSP_WB_ACK : os << "RSP_WB_ACK"; break;
             default: os << "UNKNOWN"; break;
         }
         os << ", addr: "       << x.addr

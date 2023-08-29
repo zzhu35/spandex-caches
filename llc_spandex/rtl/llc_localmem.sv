@@ -54,7 +54,7 @@ module llc_localmem (
             if (lmem_wr_rst_flush[i]) begin 
                 wr_en_port[i] = 1'b1;
             end else if (lmem_way_in == i) begin 
-                wr_en_port[i] = lmem_wr_en_all_mem; 
+                wr_en_port[i] = 1'b1; 
             end
         end
     end
