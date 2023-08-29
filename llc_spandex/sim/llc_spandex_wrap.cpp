@@ -24,6 +24,7 @@ void llc_wrapper_conv::thread_llc_dma_req_in_data_conv(){
     llc_dma_req_in_data_conv_req_id = tmp.req_id;
     llc_dma_req_in_data_conv_word_offset = tmp.word_offset;
     llc_dma_req_in_data_conv_valid_words = tmp.valid_words;
+    llc_dma_req_in_data_conv_word_mask = tmp.word_mask;
 }
 
 void llc_wrapper_conv::thread_llc_rsp_in_data_conv(){
@@ -66,6 +67,7 @@ void llc_wrapper_conv::thread_llc_dma_rsp_out_data_conv(){
     tmp.req_id = llc_dma_rsp_out_data_conv_req_id.read();
     tmp.dest_id = llc_dma_rsp_out_data_conv_dest_id.read();
     tmp.word_offset = llc_dma_rsp_out_data_conv_word_offset.read();
+    tmp.word_mask = llc_dma_rsp_out_data_conv_word_mask.read();
     llc_dma_rsp_out.data.write(tmp);
 }
 

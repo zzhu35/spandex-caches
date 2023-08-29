@@ -21,6 +21,7 @@ module llc_spandex_rtl_top (
       input llc_coh_dev_id_t llc_dma_req_in_data_req_id,
       input word_offset_t llc_dma_req_in_data_word_offset,
       input word_offset_t llc_dma_req_in_data_valid_words,
+      input word_mask_t llc_dma_req_in_data_word_mask,
       input logic llc_dma_req_in_valid,
       input coh_msg_t llc_rsp_in_data_coh_msg,
       input line_addr_t llc_rsp_in_data_addr,
@@ -60,6 +61,7 @@ module llc_spandex_rtl_top (
       output llc_coh_dev_id_t llc_dma_rsp_out_data_req_id,
       output cache_id_t llc_dma_rsp_out_data_dest_id,
       output word_offset_t llc_dma_rsp_out_data_word_offset,
+      output word_mask_t llc_dma_rsp_out_data_word_mask,
       output logic llc_fwd_out_valid,
       output mix_msg_t llc_fwd_out_data_coh_msg,
       output line_addr_t llc_fwd_out_data_addr,
@@ -165,6 +167,8 @@ module llc_spandex_rtl_top (
       logic llc_stats;
       assign llc_stats_data = 1'b0;
       assign llc_stats_valid = 1'b0;
+
+      assign llc_dma_rsp_out_data_word_mask = 'h0;
 
       llc_core llc_core_u(.*);
 

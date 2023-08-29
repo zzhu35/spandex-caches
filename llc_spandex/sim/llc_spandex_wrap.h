@@ -35,6 +35,7 @@ public:
     sc_in<llc_coh_dev_id_t> llc_dma_req_in_data_req_id;
     sc_in<word_offset_t> llc_dma_req_in_data_word_offset;
     sc_in<word_offset_t> llc_dma_req_in_data_valid_words;
+    sc_in<word_mask_t> llc_dma_req_in_data_word_mask;
     sc_in<bool> llc_dma_req_in_valid;
     sc_out<bool> llc_dma_req_in_ready;
     
@@ -79,6 +80,7 @@ public:
     sc_out<llc_coh_dev_id_t> llc_dma_rsp_out_data_req_id;
     sc_out<cache_id_t> llc_dma_rsp_out_data_dest_id;
     sc_out<word_offset_t> llc_dma_rsp_out_data_word_offset;
+    sc_out<word_mask_t> llc_dma_rsp_out_data_word_mask;
 
     //llc fwd out
     sc_in<bool> llc_fwd_out_ready;
@@ -131,6 +133,7 @@ public:
         , llc_dma_req_in_data_req_id("llc_dma_req_in_data_req_id")
         , llc_dma_req_in_data_word_offset("llc_dma_req_in_data_word_offset")
         , llc_dma_req_in_data_valid_words("llc_dma_req_in_data_valid_words")
+        , llc_dma_req_in_data_word_mask("llc_dma_req_in_data_word_mask")
         , llc_dma_req_in_valid("llc_dma_req_in_valid")
         , llc_dma_req_in_ready("llc_dma_req_in_ready")
         , llc_rsp_in_data_coh_msg("llc_rsp_in_data_coh_msg")
@@ -165,6 +168,7 @@ public:
         , llc_dma_rsp_out_data_req_id("llc_dma_rsp_out_data_req_id")
         , llc_dma_rsp_out_data_dest_id("llc_dma_rsp_out_data_dest_id")
         , llc_dma_rsp_out_data_word_offset("llc_dma_rsp_out_data_word_offset")
+        , llc_dma_rsp_out_data_word_mask("llc_dma_rsp_out_data_word_mask")
         , llc_fwd_out_ready("llc_fwd_out_ready")
         , llc_fwd_out_valid("llc_fwd_out_valid")
         , llc_fwd_out_data_coh_msg("llc_fwd_out_data_coh_msg")
@@ -243,6 +247,7 @@ public:
         , llc_dma_req_in_data_conv_req_id("llc_dma_req_in_data_conv_req_id")
         , llc_dma_req_in_data_conv_word_offset("llc_dma_req_in_data_conv_word_offset")
         , llc_dma_req_in_data_conv_valid_words("llc_dma_req_in_data_conv_valid_words")
+        , llc_dma_req_in_data_conv_word_mask("llc_dma_req_in_data_conv_word_mask")
         , llc_rsp_in_data_conv_coh_msg("llc_rsp_in_data_conv_coh_msg")
         , llc_rsp_in_data_conv_addr("llc_rsp_in_data_conv_addr")
         , llc_rsp_in_data_conv_line("llc_rsp_in_data_conv_line")
@@ -265,6 +270,7 @@ public:
         , llc_dma_rsp_out_data_conv_req_id("llc_dma_rsp_out_data_conv_req_id")
         , llc_dma_rsp_out_data_conv_dest_id("llc_dma_rsp_out_data_conv_dest_id")
         , llc_dma_rsp_out_data_conv_word_offset("llc_dma_rsp_out_data_conv_word_offset")
+        , llc_dma_rsp_out_data_conv_word_mask("llc_dma_rsp_out_data_conv_word_mask")
         , llc_fwd_out_data_conv_coh_msg("llc_fwd_out_data_conv_coh_msg")
         , llc_fwd_out_data_conv_addr("llc_fwd_out_data_conv_addr")
         , llc_fwd_out_data_conv_req_id("llc_fwd_out_data_conv_req_id")
@@ -298,7 +304,7 @@ public:
                   << llc_rsp_out_data_conv_req_id << llc_rsp_out_data_conv_dest_id << llc_rsp_out_data_conv_word_offset << llc_rsp_out_data_conv_word_mask;
         SC_METHOD(thread_llc_dma_rsp_out_data_conv);
         sensitive << llc_dma_rsp_out_data_conv_coh_msg << llc_dma_rsp_out_data_conv_addr << llc_dma_rsp_out_data_conv_line << llc_dma_rsp_out_data_conv_invack_cnt 
-                  << llc_dma_rsp_out_data_conv_req_id << llc_dma_rsp_out_data_conv_dest_id << llc_dma_rsp_out_data_conv_word_offset;
+                  << llc_dma_rsp_out_data_conv_req_id << llc_dma_rsp_out_data_conv_dest_id << llc_dma_rsp_out_data_conv_word_offset << llc_dma_rsp_out_data_conv_word_mask;
         SC_METHOD(thread_llc_fwd_out_data_conv);
         sensitive << llc_fwd_out_data_conv_coh_msg << llc_fwd_out_data_conv_addr << llc_fwd_out_data_conv_req_id << llc_fwd_out_data_conv_dest_id << llc_fwd_out_data_conv_line << llc_fwd_out_data_conv_word_mask; 
         SC_METHOD(thread_llc_mem_req_data_conv);
@@ -330,6 +336,7 @@ public:
         cosim.llc_dma_req_in_data_req_id(llc_dma_req_in_data_conv_req_id);
         cosim.llc_dma_req_in_data_word_offset(llc_dma_req_in_data_conv_word_offset);
         cosim.llc_dma_req_in_data_valid_words(llc_dma_req_in_data_conv_valid_words);
+        cosim.llc_dma_req_in_data_word_mask(llc_dma_req_in_data_conv_word_mask);
         cosim.llc_dma_req_in_ready(llc_dma_req_in.ready);
         cosim.llc_rsp_in_valid(llc_rsp_in.valid);
         cosim.llc_rsp_in_data_coh_msg(llc_rsp_in_data_conv_coh_msg);
@@ -362,6 +369,7 @@ public:
         cosim.llc_dma_rsp_out_data_req_id(llc_dma_rsp_out_data_conv_req_id);
         cosim.llc_dma_rsp_out_data_dest_id(llc_dma_rsp_out_data_conv_dest_id);
         cosim.llc_dma_rsp_out_data_word_offset(llc_dma_rsp_out_data_conv_word_offset);
+        cosim.llc_dma_rsp_out_data_word_mask(llc_dma_rsp_out_data_conv_word_mask);
         cosim.llc_dma_rsp_out_ready(llc_dma_rsp_out.ready);
         cosim.llc_fwd_out_valid(llc_fwd_out.valid);
         cosim.llc_fwd_out_data_coh_msg(llc_fwd_out_data_conv_coh_msg);
@@ -407,6 +415,7 @@ public:
     sc_signal<llc_coh_dev_id_t> llc_dma_req_in_data_conv_req_id;
     sc_signal<word_offset_t> llc_dma_req_in_data_conv_word_offset;
     sc_signal<word_offset_t> llc_dma_req_in_data_conv_valid_words;
+    sc_signal<word_mask_t> llc_dma_req_in_data_conv_word_mask;
     
     //llc rsp
     sc_signal<coh_msg_t> llc_rsp_in_data_conv_coh_msg;
@@ -439,6 +448,7 @@ public:
     sc_signal<llc_coh_dev_id_t> llc_dma_rsp_out_data_conv_req_id;
     sc_signal<cache_id_t> llc_dma_rsp_out_data_conv_dest_id;
     sc_signal<word_offset_t> llc_dma_rsp_out_data_conv_word_offset;
+    sc_signal<word_mask_t> llc_dma_rsp_out_data_conv_word_mask;
 
     //llc fwd out
     sc_signal<mix_msg_t> llc_fwd_out_data_conv_coh_msg;
