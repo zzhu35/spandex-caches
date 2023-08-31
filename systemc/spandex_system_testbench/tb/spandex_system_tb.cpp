@@ -345,7 +345,7 @@ void spandex_system_tb::system_test()
     // TEST 0.1 - Write a large array, read back and overwrite.
     ////////////////////////////////////////////////////////////////
     const unsigned test_0_1_length = 32 * 1024;
-    CACHE_REPORT_INFO("[SPANDEX TB] Test 0!"); 
+    CACHE_REPORT_INFO("[SPANDEX TB] Test 0.1!"); 
     CACHE_REPORT_INFO("[SPANDEX TB] Writing all elements!"); 
 
     for (unsigned i = 0; i < test_0_1_length; i++) {
@@ -406,7 +406,225 @@ void spandex_system_tb::system_test()
 
         multi_wait(10);
     }
-    
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 0.2 - Emulate an FFT and read back
+    ////////////////////////////////////////////////////////////////
+    const unsigned test_0_2_length = 16 * 1024;
+    CACHE_REPORT_INFO("[SPANDEX TB] Test 0.2!"); 
+    CACHE_REPORT_INFO("[SPANDEX TB] Performing a 16*1024 FFT!");
+    unsigned logn = 14;
+	unsigned transform_length = 1;
+	addr_t data_addr;
+
+    base_addr = 0x1000;
+
+	for (unsigned bit = 0; bit < logn; bit++) {
+		for (unsigned a = 0; a < transform_length; a++) {
+			for (unsigned b = 0; b < test_0_2_length; b += 2 * transform_length) {
+				unsigned i = b + a;
+				unsigned j = b + a + transform_length;
+
+                hsize_t hsize = WORD;
+                unsigned bit_offset;
+                unsigned bytes_offset;
+
+                /////////////////////////////////////////
+                // z_real = data[2 * j];
+                /////////////////////////////////////////
+                data_addr = base_addr + ((2 * j) * 0x8);
+                addr.breakdown(data_addr);
+
+                put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, 0 /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                wait();
+
+                get_rd_rsp(mem_gold[addr.line_addr]);
+
+                /////////////////////////////////////////
+                // z_imag = data[2 * j + 1];
+                /////////////////////////////////////////
+                data_addr = base_addr + ((2 * j + 1) * 0x8);
+                addr.breakdown(data_addr);
+
+                put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, 0 /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                wait();
+
+                get_rd_rsp(mem_gold[addr.line_addr]);
+
+                multi_wait(10);
+
+                /////////////////////////////////////////
+                // data[2*j] = data[2*i] - t_real;
+                /////////////////////////////////////////
+                data_addr = base_addr + ((2*i) * 0x8);
+                addr.breakdown(data_addr);
+
+                put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, 0 /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                wait();
+
+                get_rd_rsp(mem_gold[addr.line_addr]);
+
+                wait();
+
+                data_addr = base_addr + ((2*j) * 0x8);
+                addr.breakdown(data_addr);
+
+                word = bit + a + b + 0x1;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, word /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+
+                bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+                bytes_offset = addr.b_off * 8;
+                mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+
+                multi_wait(10);
+
+                /////////////////////////////////////////
+                // data[2*j + 1] = data[2*i + 1] - t_imag;
+                /////////////////////////////////////////
+                data_addr = base_addr + ((2*i + 1) * 0x8);
+                addr.breakdown(data_addr);
+
+                put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, 0 /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                wait();
+
+                get_rd_rsp(mem_gold[addr.line_addr]);
+
+                wait();
+
+                data_addr = base_addr + ((2*j + 1) * 0x8);
+                addr.breakdown(data_addr);
+
+                word = bit + a + b + 0x2;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, word /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+                bytes_offset = addr.b_off * 8;
+                mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+
+                multi_wait(10);
+
+                /////////////////////////////////////////
+                // data[2*i] += t_real;
+                /////////////////////////////////////////
+                data_addr = base_addr + ((2*i) * 0x8);
+                addr.breakdown(data_addr);
+
+                put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, 0 /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                wait();
+
+                get_rd_rsp(mem_gold[addr.line_addr]);
+
+                wait();
+
+                data_addr = base_addr + ((2*i) * 0x8);
+                addr.breakdown(data_addr);
+
+                word = bit + a + b + 0x3;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, word /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+                bytes_offset = addr.b_off * 8;
+                mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+
+                multi_wait(10);
+
+                /////////////////////////////////////////
+                // data[2*i + 1] += t_imag;
+                /////////////////////////////////////////
+                data_addr = base_addr + ((2*i + 1) * 0x8);
+                addr.breakdown(data_addr);
+
+                put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, 0 /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                wait();
+
+                get_rd_rsp(mem_gold[addr.line_addr]);
+
+                wait();
+
+                data_addr = base_addr + ((2*i + 1) * 0x8);
+                addr.breakdown(data_addr);
+
+                word = bit + a + b + 0x4;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, hsize /* hsize */,
+                    data_addr /* addr */, word /* word */, DATA /* hprot */,
+                    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+                bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+                bytes_offset = addr.b_off * 8;
+                mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+
+                multi_wait(10);
+			}
+		}
+		transform_length *= 2;
+	}         
+
+    base_addr = 0x1000;
+
+    for (unsigned i = 0; i < test_0_2_length; i++) {
+        addr.breakdown(base_addr);
+
+        hsize_t hsize = WORD;
+
+        put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+            base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        wait();
+
+        get_rd_rsp(mem_gold[addr.line_addr]);
+
+        multi_wait(10);
+    }
+
     // static l2_cpu_req_t cpu_req[40]; // Some buffer space
     // int req_i = 0;
     // #define REQ_I (req_i++ % (sizeof(cpu_req) / sizeof(cpu_req[0])))
@@ -1143,7 +1361,7 @@ void spandex_system_tb::put_mem_rsp(line_t line)
 
     llc_mem_rsp_tb.put(mem_rsp);
 
-    if (RPT_TB)
+    if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "MEM_RSP", mem_rsp);
 }
 
@@ -1170,7 +1388,7 @@ void spandex_system_tb::put_req_in(mix_msg_t coh_msg, line_addr_t addr, line_t l
 
     llc_req_in_tb.put(req_in);
 
-    if (RPT_TB)
+    if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "REQ_IN", req_in);
 }
 
@@ -1190,7 +1408,7 @@ void spandex_system_tb::put_dma_req_in(mix_msg_t coh_msg, addr_t addr, line_t li
 
     llc_dma_req_in_tb.put(req_in);
 
-    if (RPT_TB)
+    if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "REQ_IN", req_in);
 }
 
@@ -1207,7 +1425,7 @@ void spandex_system_tb::put_llc_rsp_in_(coh_msg_t rsp_msg, addr_t addr, line_t l
 
     llc_rsp_in_tb.put(rsp_in);
 
-    if (RPT_TB)
+    if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RSP_IN", rsp_in);
 }
 
@@ -1224,6 +1442,6 @@ void spandex_system_tb::put_llc_rsp_in(coh_msg_t rsp_msg, line_addr_t addr, line
 
     llc_rsp_in_tb.put(rsp_in);
 
-    if (RPT_TB)
+    if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RSP_IN", rsp_in);
 }
