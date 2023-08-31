@@ -77,8 +77,6 @@ void spandex_system_tb::l2_req_out_if()
                        0, // woff
                        0, // wvalid
                        l2_req.word_mask);
-            CACHE_REPORT_VAR(TIME, "L2_Req", l2_req);
-            
         }
     }
 }
@@ -137,8 +135,6 @@ void spandex_system_tb::l2_rsp_out_if()
                            l2_rsp.line,
                            l2_rsp.req_id,
                            l2_rsp.word_mask);
-            CACHE_REPORT_VAR(TIME, "L2_Rsp", l2_rsp);
-
         }
     }
 }
@@ -170,7 +166,6 @@ void spandex_system_tb::llc_rsp_out_if()
                               llc_rsp.line,
                               llc_rsp.word_mask,
                               llc_rsp.invack_cnt);
-                CACHE_REPORT_VAR(TIME, "LLC_Rsp", llc_rsp);
             } else {
                 CACHE_REPORT_VAR(TIME, "LLC_Rsp, but to a different target", llc_rsp);
             }
@@ -206,7 +201,6 @@ void spandex_system_tb::llc_fwd_out_if()
                            llc_fwd.req_id,
                            llc_fwd.line,
                            llc_fwd.word_mask);
-                CACHE_REPORT_VAR(TIME, "LLC_Fwd", llc_fwd);
             } else {
                 CACHE_REPORT_VAR(TIME, "LLC_Fwd, but to a different target", llc_fwd);
             }
@@ -291,12 +285,8 @@ void spandex_system_tb::mem_if()
 
         if(llc_req.hwrite == HWRITE_READ) {
             put_mem_rsp(main_mem[llc_req.addr]);
-
-            CACHE_REPORT_VAR(TIME, "Mem_READ @ " << llc_req.addr, main_mem[llc_req.addr]);
         } else {
             main_mem[llc_req.addr] = llc_req.line;
-
-            CACHE_REPORT_VAR(TIME, "Mem_WRITE @" << llc_req.addr, llc_req.line);
         }
     }
 }
@@ -336,457 +326,513 @@ void spandex_system_tb::spandex_system_test()
                                 : ((sz) == HALFWORD) ? ((addr) - ((addr) % 2)) \
                                 : ((unsigned long long) addr))
 
+void multi_wait(unsigned n) {
+    for (unsigned cycle = 0; cycle < n; cycle++)
+        wait();
+}                                
+
 void spandex_system_tb::system_test()
 {
-    
-    static l2_cpu_req_t cpu_req[40]; // Some buffer space
-    int req_i = 0;
-    #define REQ_I (req_i++ % (sizeof(cpu_req) / sizeof(cpu_req[0])))
+    addr_t base_addr = 0x1000;
+    addr_breakdown_t addr;
+    l2_cpu_req_t cpu_req;
+    word_t word;
+    line_t line;
 
-    addr_t base_addr = 0x00001010, base_addr2;
-    addr_breakdown_t addr, addr2;
-    addr_t addr_amo[10];
-    int amo_i = 0;
-    bool atomicity = false; // If this is false, then we won't even try to
-                            // perform the atomic operation, since I assume
-                            // the CPU would take care of dis-allowing this.
-    bool aq = (rand() % 100 == 0); // Rare aq
-    bool rl = (rand() % 100 == 0); // Rare rl
-
-    // A basic test to verify that the system is functioning properly
-    if(0) {
-        addr.breakdown(base_addr);
-        put_cpu_req(cpu_req[REQ_I], WRITE, WORD, addr.word, 0x01, DATA, 0, aq, rl, false, false, 0, 0);
-
-        wait();
-
-        put_cpu_req(cpu_req[REQ_I], READ, WORD, addr.word, 0x01, DATA, 0, aq, rl, false, false, 0, 0);
-
-        wait();
-
-        get_rd_rsp(0x01);
-
-        wait();
-
-        return;
-    }
-
-    // A targeted test which attempts to exploit a particular behavior
-    // The thought here is that it might be possible to exploit a behavior
-    // where the LLC issues a line invalidation to the L2 while that line
-    // still has some data to write to that line in the write buffer.
-    if(0) {
-
-        // Create the address
-        addr.breakdown(base_addr);
-
-        // Issue a read request from the CPU to get the line into the shared state
-        put_cpu_req(cpu_req[REQ_I], READ, WORD, addr.word, 0x00, DATA, 0, aq, rl, false, false, 0, 0);
-
-        wait();
-
-        get_rd_rsp(0x00);
-
-        // Issue a write request from the CPU to the L2 on that line that we accessed.
-        put_cpu_req(cpu_req[REQ_I], WRITE, WORD, addr.word, 0x01, DATA, 0, aq, rl, false, false, 0, 0);
-
-        for(int i = 0; i < 50; i++)
-            wait();
-
-        // Now issue a line invalidation request "from" the LLC to the L2. Note that this means that
-        // we are deliberately putting the two caches in inconsistent states, so we can no longer rely on
-        // proper behavior here.
-        put_fwd_in(FWD_INV_SPDX, addr.line_addr, 0, 0, -1);
-
-        for(int i = 0; i < 50; i++)
-            wait();
-
-        // Now that the line is invalidated, we are going to write to another line that shares a set with the
-        // original in an attempt to overwrite the data there.
-        base_addr2 = 0x01001010;
-        addr2.breakdown(base_addr2);
-        put_cpu_req(cpu_req[REQ_I], WRITE, WORD, addr2.word, 0x07, DATA, 0, aq, rl, false, false, 0, 0);
-
-        for(int i = 0; i < 50; i++)
-            wait();
-
-        // Now, we will attempt to read from the L2 again. Depending on how much we've screwed things up by
-        // faking a message from the LLC, this may or may not succeed, even if the L2 is behaving properly.
-        // Instead of looking at that, look at the order to messages: does the L2 ever write any data back
-        // to the LLC?
-        put_cpu_req(cpu_req[REQ_I], READ, WORD, addr.word, 0x00, DATA, 0, aq, rl, false, false, 0, 0);
-
-        wait();
-
-        get_rd_rsp(0x01);
-
-        return;
-    }
-
-    #define LARGE_RANDOM ((unsigned long long)((rand() << 12) + rand()))
-    #define EXTRA_LARGE_RANDOM ((LARGE_RANDOM << 24) + LARGE_RANDOM)
-
-    line_t line = rand(), line2 = rand();
     static line_t mem_gold[MAIN_MEMORY_SPACE] = {};
 
-    // A more complex test that attempts to make random access patterns and verify that
-    // the memory remains consistent regardless.
-    long long i = 0;
-    int outstanding_writes = 0;
-    while(i < 10000000) {
-        // We have several types of accesses, but for now we're just going to
-        // stick with reading/writing basic lines.
+    ////////////////////////////////////////////////////////////////
+    // TEST 0.1 - Write a large array, read back and overwrite.
+    ////////////////////////////////////////////////////////////////
+    const unsigned test_0_1_length = 32 * 1024;
+    CACHE_REPORT_INFO("[SPANDEX TB] Test 0!"); 
+    CACHE_REPORT_INFO("[SPANDEX TB] Writing all elements!"); 
 
-        // Generate a random read/write operation, and random data to use
-        int operation = rand() % 4;
-        line += EXTRA_LARGE_RANDOM;
-        base_addr = LARGE_RANDOM % (MAIN_MEMORY_SPACE << LINE_RANGE_LO);
-        int hsize = rand() % 4;
-        base_addr = ALIGN_ADDRESS(base_addr, hsize);
-        
-        // For writes: randomly choose to either write-through forward the
-        //             write or do a regular store
-        bool wt_fwd_en = rand() % 2;
-        int wt_hsize = wt_fwd_en ? 3 : hsize;
-
-        // Uncomment to only target a single set of the caches
-        // base_addr = base_addr & ~0x1FF0; // L2 set attacking
-        // base_addr = base_addr & ~0x3FF0; // LLC set attacking
-
-        if(operation == WRITE) {
-            base_addr = ALIGN_ADDRESS(base_addr, wt_hsize);
-            hsize = wt_hsize;
-        }
-
+    for (unsigned i = 0; i < test_0_1_length; i++) {
         addr.breakdown(base_addr);
-        int read_hprot = rand() % 2;
+        word = i;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+        line.range(BITS_PER_WORD - 1, 0) = word;
 
-        aq = (rand() % 100 == 0); // Rare aq
-        rl = (rand() % 100 == 0); // Rare rl
+        hsize_t hsize = WORD;
 
-        switch(operation) {
-            case READ: {
-                PDBG("About to READ...");
-                put_cpu_req(cpu_req[REQ_I], READ, hsize, base_addr, line, read_hprot, 0, aq, rl, false, false, 0, 0);
-                
-                wait();
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, hsize /* hsize */,
+            base_addr /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
-                // Randomly decide to throw a write request in here
-                if(rand() % 2) {
+        unsigned bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+        unsigned bytes_offset = addr.b_off * 8;
+        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
 
-                    line2 += EXTRA_LARGE_RANDOM;
-                    base_addr2 = LARGE_RANDOM % (MAIN_MEMORY_SPACE << LINE_RANGE_LO);
-                    int hsize2 = rand() % 4;
-                    hsize2 = wt_fwd_en ? 3 : hsize2;
-                    base_addr2 = ALIGN_ADDRESS(base_addr2, hsize2);
-                    addr2.breakdown(base_addr2);
+        base_addr += 0x8;
 
-                    PDBG("About to WRITE (2)");
-                    put_cpu_req(cpu_req[REQ_I], WRITE, hsize2, base_addr2, line2, DATA, 0, aq, rl, wt_fwd_en, false, wt_fwd_en, 0);
-
-                    wait();
-
-                    // We'll accept either the original line or the one that we just wrote as an answer if the addresses happen
-                    // to coincide.
-                    PDBG("About to get response");
-                    if(addr.line_addr == addr2.line_addr) {
-                        get_rd_rsp_or(mem_gold[addr.line_addr], line2);
-                    } else {
-                        get_rd_rsp(mem_gold[addr.line_addr]);
-                    }
-
-                    // Update the golden value
-                    // TODO: we probably need to get a better system for indexing into our golden memory.
-                    int bit_offset = addr2.w_off * BITS_PER_WORD + addr2.b_off * 8;
-                    int bytes_offset = addr2.b_off * 8;
-                    mem_gold[addr2.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize2) - 1, bit_offset) = line2.range(bytes_offset + BITS_FOR_SIZE(hsize2) - 1, bytes_offset);
-
-                    // outstanding_writes++;
-
-                } else {
-                    PDBG("About to get response");
-                    // TODO: we probably need to get a better system for indexing into our golden memory.
-                    get_rd_rsp(mem_gold[addr.line_addr]);
-                }
-
-                if(read_hprot == DATA)
-                    atomicity = false;
-
-                break;
-            }
-            
-            case READ_ATOMIC: {
-
-                hsize = rand() % 2 + 2; // 32 bit or 64 bit only
-                base_addr = ALIGN_ADDRESS(base_addr, hsize);
-                addr.breakdown(base_addr);
-
-                // Read from the memory location
-                put_cpu_req(cpu_req[REQ_I], READ_ATOMIC, hsize, base_addr, line, DATA, 0, aq, rl, false, false, 0, 0);
-
-                wait();
-
-                get_rd_rsp(mem_gold[addr.line_addr]);
-
-                amo_i = (amo_i + 1) % (sizeof(addr_amo) / sizeof(addr_amo[0]));
-                addr_amo[amo_i] = base_addr;
-                atomicity = true;
-
-                break;
-            }
-
-            case WRITE: {
-                PDBG("About to WRITE")
-                put_cpu_req(cpu_req[REQ_I], WRITE, hsize, base_addr, line, DATA, 0, aq, rl, wt_fwd_en, false, wt_fwd_en, 0);
-
-                // TODO: we probably need to get a better system for indexing into our golden memory.
-                int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
-                int bytes_offset = addr.b_off * 8;
-                mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
-
-                atomicity = false;
-
-                // outstanding_writes++;
-
-                break;
-            }
-
-            case WRITE_ATOMIC: {
-
-                sc_uint<2> bresp;
-
-                // Make sure all of the outstanding writes are serviced first
-                while(outstanding_writes != 0) {
-                    while(!l2_bresp_tb.nb_can_get()) wait();
-                    l2_bresp_tb.nb_get(bresp);
-                    outstanding_writes--;
-                    wait();
-                }
-
-                if(atomicity) {
-                    
-                    // If we have an outstanding request, then we will either try to access that location or a bogus one
-                    switch(rand() % 2) {
-                    case 0: {
-                        hsize = rand() % 2 + 2; // 32 bit or 64 bit only
-                        base_addr = ALIGN_ADDRESS(addr_amo[amo_i], hsize);
-                        addr.breakdown(base_addr);
-
-                        // Write to the reserved location
-                        put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, hsize, base_addr, line, DATA, 0, aq, rl, false, false, 0, 0);
-
-                        // Get the result of the operation
-                        while(!l2_bresp_tb.nb_can_get()) wait();
-                        l2_bresp_tb.nb_get(bresp);
-
-                        if(bresp == BRESP_EXOKAY) {
-                            int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
-                            int bytes_offset = addr.b_off * 8;
-                            PDBG("About to update golden memory. bit_offset = " << bit_offset << ".");
-                            mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
-                        }
-
-                        break;
-                    }
-                    
-                    case 1: {
-
-                        hsize = rand() % 2 + 2; // 32 bit or 64 bit only
-                        base_addr = ALIGN_ADDRESS(base_addr, hsize);
-                        addr.breakdown(base_addr);
-                        addr_breakdown_t addr_amo_breakdown;
-                        addr_amo_breakdown.breakdown(addr_amo[amo_i]);
-                        
-                        // Try writing to a different location
-                        put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, hsize, base_addr, line, DATA, 0, aq, rl, false, false, 0, 0);
-
-                        // Get the result of the operation
-                        while(!l2_bresp_tb.nb_can_get()) wait();
-                        l2_bresp_tb.nb_get(bresp);
-
-                        if(bresp == BRESP_EXOKAY) {
-                            // We happened to randomly choose an address that would work, so let's update the state.
-                            int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
-                            int bytes_offset = addr.b_off * 8;
-                            PDBG("About to update golden memory. bit_offset = " << bit_offset << ".");
-                            mem_gold[addr_amo_breakdown.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
-                        }
-
-                        break;
-                    }
-
-                    default:
-                        break;
-                    }
-
-                } else {
-                    // If we don't have an outstanding reservation set, then we'll just try
-                    // to access a random memory location and expect it to fail
-                    put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, WORD, addr.word, line, DATA, 0, aq, rl, false, false, 0, 0);
-
-                    // Get the result of the operation
-                    while(!l2_bresp_tb.nb_can_get()) wait();
-                    l2_bresp_tb.nb_get(bresp);
-
-                    if(bresp == BRESP_EXOKAY) {
-                        error_count++;
-                    }
-
-                    // Note that we are NOT updating the golden memory here.
-                }
-
-                atomicity = false;
-
-                break;
-            }
-
-            case 4: {
-
-                // Flush, but only rarely
-                if(rand() % 4048 == 0) {
-                    // issue flush
-                    l2_flush_tb.put(1);
-
-                    wait();
-
-                    atomicity = false;
-                }
-
-                // Fence, with some random aq/rl thing
-                if(rand() % 4048 == 0) {
-                    l2_fence_tb.put(rand() % 3 + 1);
-
-                    wait();
-
-                    atomicity = false;
-                }
-
-                break;
-            }
-
-            default: {
-                // Do an AMO operation
-
-                // Select a random amo operation
-                const int amo_ops[] = {AMO_SWAP, AMO_ADD, AMO_AND, AMO_OR, AMO_XOR, AMO_MAX, AMO_MAXU, AMO_MIN, AMO_MINU};
-                int amo_op = amo_ops[rand() % (sizeof(amo_ops) / sizeof(amo_ops[0]))];
-
-                // Select a random size (only 32-bit and 64-bit supported)
-                hsize = (rand() % 2) + 2;
-
-                base_addr = ALIGN_ADDRESS(base_addr, hsize);
-                addr.breakdown(base_addr);
-
-                // Send the request
-                // TODO: I assume that a WRITE_ATOMIC would be an acceptable message to send, but I don't know what we actually
-                //       send in these cases. Might be interesting to also try with a WRITE in case it makes a difference.
-                // put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize, 
-                //              addr_t addr, word_t word, hprot_t hprot, amo_t amo, bool aq, bool rl, bool dcs_en, 
-                //              bool use_owner_pred, dcs_t dcs, cache_id_t pred_cid)
-                put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, hsize, base_addr, line, DATA, amo_op, aq, rl, false, false, 0, 0);
-
-                wait();
-
-                int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
-                int bytes_offset = addr.b_off * 8;
-
-                word_mask_t mask = 1 << addr.w_off;
-
-                // Read the result back: this should always be the old value of that memory location
-                get_rd_rsp(mem_gold[addr.line_addr], mask);
-                // get_rd_rsp(mem_gold[addr.line_addr]);
-                
-                long long orig, line_val;
-                
-                if(hsize == WORD_64) {
-                    orig = mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset).to_int64();
-                    line_val = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset).to_int64();
-                } else {
-                    orig = mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset).to_int();
-                    line_val = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset).to_int();
-                }
-
-                // Update the golden memory
-                PDBG("About to update golden memory. bit_offset = " << bit_offset << ".");
-                switch(amo_op) {
-                
-                    case AMO_SWAP:
-                        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
-                        break;
-                    
-                    case AMO_ADD:
-                        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val + orig;
-                        break;
-                    
-                    case AMO_AND:
-                        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = ~line_val & orig;
-                        break;
-                    
-                    case AMO_OR:
-                        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val | orig;
-                        break;
-                    
-                    case AMO_XOR:
-                        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val ^ orig;
-                        break;
-                    
-                    case AMO_MAX:
-                        if(orig < line_val)
-                            mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
-                        break;
-                    
-                    case AMO_MAXU:
-                        if(((unsigned long long) orig) < ((unsigned long long) line_val))
-                            mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
-                        break;
-
-                    case AMO_MIN:
-                        if(orig > line_val)
-                            mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
-                        break;
-                    
-                    case AMO_MINU:
-                        if(((unsigned long long) orig) > ((unsigned long long) line_val))
-                            mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                // TODO: are we able to also send a read in here while waiting for the result of this operation to resolve? I'm not
-                //       sure how this would be transmitted over the AXI interface, but I'm guessing the answer is no. Might be worth
-                //       looking into though.
-
-                atomicity = false;
-
-                break;
-            }
-        }
-        
-        if(error_count > 0) {
-            CACHE_REPORT_ERROR("Error encountered at most recent operation!", i);
-
-            sc_assert(false);
-        }
-
-        i++;
-
-        #ifdef EN_COVERAGE
-        if(i % 10000 == 0) {
-            CACHE_REPORT_INFO("Completed iteration " << i << ".");
-            CACHE_REPORT_INFO("Coverages so far:");
-            for(int i = 0; i < num_coverages; i++) {
-                if(coverages[i].name != NULL)
-                    CACHE_REPORT_INFO(coverages[i].name << " (line " << i << ") : " << coverages[i].count);
-            }
-        }
-        #endif
-
-        wait();
+        multi_wait(10);
     }
 
-    CACHE_REPORT_INFO("Finished system test with 0x" << error_count << " errors after 0x" << i << " iterations.");
+    base_addr = 0x1000;
+    CACHE_REPORT_INFO("[SPANDEX TB] Read-modify-writing all elements!"); 
+
+    for (unsigned i = 0; i < test_0_1_length; i++) {
+        addr.breakdown(base_addr);
+
+        hsize_t hsize = WORD;
+
+        put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, hsize /* hsize */,
+            base_addr /* addr */, 0 /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        wait();
+
+        get_rd_rsp(mem_gold[addr.line_addr]);
+
+        multi_wait(10);
+
+        word = i+1;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+        line.range(BITS_PER_WORD - 1, 0) = word;
+
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, hsize /* hsize */,
+            base_addr /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        unsigned bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+        unsigned bytes_offset = addr.b_off * 8;
+        mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+
+        base_addr += 0x8;
+
+        multi_wait(10);
+    }
+    
+    // static l2_cpu_req_t cpu_req[40]; // Some buffer space
+    // int req_i = 0;
+    // #define REQ_I (req_i++ % (sizeof(cpu_req) / sizeof(cpu_req[0])))
+
+    // addr_t base_addr = 0x00001010, base_addr2;
+    // addr_breakdown_t addr, addr2;
+    // addr_t addr_amo[10];
+    // int amo_i = 0;
+    // bool atomicity = false; // If this is false, then we won't even try to
+    //                         // perform the atomic operation, since I assume
+    //                         // the CPU would take care of dis-allowing this.
+    // bool aq = (rand() % 100 == 0); // Rare aq
+    // bool rl = (rand() % 100 == 0); // Rare rl
+
+    // // A basic test to verify that the system is functioning properly
+    // if(0) {
+    //     addr.breakdown(base_addr);
+    //     put_cpu_req(cpu_req[REQ_I], WRITE, WORD, addr.word, 0x01, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //     wait();
+
+    //     put_cpu_req(cpu_req[REQ_I], READ, WORD, addr.word, 0x01, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //     wait();
+
+    //     get_rd_rsp(0x01);
+
+    //     wait();
+
+    //     return;
+    // }
+
+    // // A targeted test which attempts to exploit a particular behavior
+    // // The thought here is that it might be possible to exploit a behavior
+    // // where the LLC issues a line invalidation to the L2 while that line
+    // // still has some data to write to that line in the write buffer.
+    // if(0) {
+
+    //     // Create the address
+    //     addr.breakdown(base_addr);
+
+    //     // Issue a read request from the CPU to get the line into the shared state
+    //     put_cpu_req(cpu_req[REQ_I], READ, WORD, addr.word, 0x00, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //     wait();
+
+    //     get_rd_rsp(0x00);
+
+    //     // Issue a write request from the CPU to the L2 on that line that we accessed.
+    //     put_cpu_req(cpu_req[REQ_I], WRITE, WORD, addr.word, 0x01, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //     for(int i = 0; i < 50; i++)
+    //         wait();
+
+    //     // Now issue a line invalidation request "from" the LLC to the L2. Note that this means that
+    //     // we are deliberately putting the two caches in inconsistent states, so we can no longer rely on
+    //     // proper behavior here.
+    //     put_fwd_in(FWD_INV_SPDX, addr.line_addr, 0, 0, -1);
+
+    //     for(int i = 0; i < 50; i++)
+    //         wait();
+
+    //     // Now that the line is invalidated, we are going to write to another line that shares a set with the
+    //     // original in an attempt to overwrite the data there.
+    //     base_addr2 = 0x01001010;
+    //     addr2.breakdown(base_addr2);
+    //     put_cpu_req(cpu_req[REQ_I], WRITE, WORD, addr2.word, 0x07, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //     for(int i = 0; i < 50; i++)
+    //         wait();
+
+    //     // Now, we will attempt to read from the L2 again. Depending on how much we've screwed things up by
+    //     // faking a message from the LLC, this may or may not succeed, even if the L2 is behaving properly.
+    //     // Instead of looking at that, look at the order to messages: does the L2 ever write any data back
+    //     // to the LLC?
+    //     put_cpu_req(cpu_req[REQ_I], READ, WORD, addr.word, 0x00, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //     wait();
+
+    //     get_rd_rsp(0x01);
+
+    //     return;
+    // }
+
+    // if (0) {
+    //     #define LARGE_RANDOM ((unsigned long long)((rand() << 12) + rand()))
+    //     #define EXTRA_LARGE_RANDOM ((LARGE_RANDOM << 24) + LARGE_RANDOM)
+
+    //     line_t line = rand(), line2 = rand();
+    //     static line_t mem_gold[MAIN_MEMORY_SPACE] = {};
+
+    //     // A more complex test that attempts to make random access patterns and verify that
+    //     // the memory remains consistent regardless.
+    //     long long i = 0;
+    //     int outstanding_writes = 0;
+    //     while(i < 10000000) {
+    //         // We have several types of accesses, but for now we're just going to
+    //         // stick with reading/writing basic lines.
+
+    //         // Generate a random read/write operation, and random data to use
+    //         int operation = rand() % 6;
+    //         line += EXTRA_LARGE_RANDOM;
+    //         base_addr = LARGE_RANDOM % (MAIN_MEMORY_SPACE << LINE_RANGE_LO);
+    //         int hsize = rand() % 4;
+    //         base_addr = ALIGN_ADDRESS(base_addr, hsize);
+
+    //         // For writes: randomly choose to either write-through forward the
+    //         //             write or do a regular store
+    //         bool wt_fwd_en = rand() % 2;
+    //         int wt_hsize = wt_fwd_en ? 3 : hsize;
+
+    //         // Uncomment to only target a single set of the caches
+    //         // base_addr = base_addr & ~0x1FF0; // L2 set attacking
+    //         // base_addr = base_addr & ~0x3FF0; // LLC set attacking
+
+    //         if(operation == WRITE) {
+    //             base_addr = ALIGN_ADDRESS(base_addr, wt_hsize);
+    //             hsize = wt_hsize;
+    //         }
+
+    //         addr.breakdown(base_addr);
+    //         int read_hprot = rand() % 2;
+
+    //         aq = (rand() % 100 == 0); // Rare aq
+    //         rl = (rand() % 100 == 0); // Rare rl
+
+    //         switch(operation) {
+    //             case READ: {
+    //                 PDBG("About to READ...");
+    //                 put_cpu_req(cpu_req[REQ_I], READ, hsize, base_addr, line, read_hprot, 0, aq, rl, false, false, 0, 0);
+
+    //                 wait();
+
+    //                 // Randomly decide to throw a write request in here
+    //                 if(rand() % 2) {
+
+    //                     line2 += EXTRA_LARGE_RANDOM;
+    //                     base_addr2 = LARGE_RANDOM % (MAIN_MEMORY_SPACE << LINE_RANGE_LO);
+    //                     int hsize2 = rand() % 4;
+    //                     hsize2 = wt_fwd_en ? 3 : hsize2;
+    //                     base_addr2 = ALIGN_ADDRESS(base_addr2, hsize2);
+    //                     addr2.breakdown(base_addr2);
+
+    //                     PDBG("About to WRITE (2)");
+    //                     put_cpu_req(cpu_req[REQ_I], WRITE, hsize2, base_addr2, line2, DATA, 0, aq, rl, wt_fwd_en, false, wt_fwd_en, 0);
+
+    //                     wait();
+
+    //                     // We'll accept either the original line or the one that we just wrote as an answer if the addresses happen
+    //                     // to coincide.
+    //                     PDBG("About to get response");
+    //                     if(addr.line_addr == addr2.line_addr) {
+    //                         get_rd_rsp_or(mem_gold[addr.line_addr], line2);
+    //                     } else {
+    //                         get_rd_rsp(mem_gold[addr.line_addr]);
+    //                     }
+
+    //                     // Update the golden value
+    //                     // TODO: we probably need to get a better system for indexing into our golden memory.
+    //                     int bit_offset = addr2.w_off * BITS_PER_WORD + addr2.b_off * 8;
+    //                     int bytes_offset = addr2.b_off * 8;
+    //                     mem_gold[addr2.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize2) - 1, bit_offset) = line2.range(bytes_offset + BITS_FOR_SIZE(hsize2) - 1, bytes_offset);
+
+    //                     // outstanding_writes++;
+
+    //                 } else {
+    //                     PDBG("About to get response");
+    //                     // TODO: we probably need to get a better system for indexing into our golden memory.
+    //                     get_rd_rsp(mem_gold[addr.line_addr]);
+    //                 }
+
+    //                 if(read_hprot == DATA)
+    //                     atomicity = false;
+
+    //                 break;
+    //             }
+
+    //             case READ_ATOMIC: {
+
+    //                 hsize = rand() % 2 + 2; // 32 bit or 64 bit only
+    //                 base_addr = ALIGN_ADDRESS(base_addr, hsize);
+    //                 addr.breakdown(base_addr);
+
+    //                 // Read from the memory location
+    //                 put_cpu_req(cpu_req[REQ_I], READ_ATOMIC, hsize, base_addr, line, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //                 wait();
+
+    //                 get_rd_rsp(mem_gold[addr.line_addr]);
+
+    //                 amo_i = (amo_i + 1) % (sizeof(addr_amo) / sizeof(addr_amo[0]));
+    //                 addr_amo[amo_i] = base_addr;
+    //                 atomicity = true;
+
+    //                 break;
+    //             }
+
+    //             case WRITE: {
+    //                 PDBG("About to WRITE")
+    //                 put_cpu_req(cpu_req[REQ_I], WRITE, hsize, base_addr, line, DATA, 0, aq, rl, wt_fwd_en, false, wt_fwd_en, 0);
+
+    //                 // TODO: we probably need to get a better system for indexing into our golden memory.
+    //                 int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+    //                 int bytes_offset = addr.b_off * 8;
+    //                 mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+
+    //                 atomicity = false;
+
+    //                 // outstanding_writes++;
+
+    //                 break;
+    //             }
+
+    //             case WRITE_ATOMIC: {
+
+    //                 sc_uint<2> bresp;
+
+    //                 // Make sure all of the outstanding writes are serviced first
+    //                 while(outstanding_writes != 0) {
+    //                     while(!l2_bresp_tb.nb_can_get()) wait();
+    //                     l2_bresp_tb.nb_get(bresp);
+    //                     outstanding_writes--;
+    //                     wait();
+    //                 }
+
+    //                 if(atomicity) {
+
+    //                     // If we have an outstanding request, then we will either try to access that location or a bogus one
+    //                     switch(rand() % 2) {
+    //                     case 0: {
+    //                         hsize = rand() % 2 + 2; // 32 bit or 64 bit only
+    //                         base_addr = ALIGN_ADDRESS(addr_amo[amo_i], hsize);
+    //                         addr.breakdown(base_addr);
+
+    //                         // Write to the reserved location
+    //                         put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, hsize, base_addr, line, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //                         // Get the result of the operation
+    //                         while(!l2_bresp_tb.nb_can_get()) wait();
+    //                         l2_bresp_tb.nb_get(bresp);
+
+    //                         if(bresp == BRESP_EXOKAY) {
+    //                             int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+    //                             int bytes_offset = addr.b_off * 8;
+    //                             PDBG("About to update golden memory. bit_offset = " << bit_offset << ".");
+    //                             mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+    //                         }
+
+    //                         break;
+    //                     }
+
+    //                     case 1: {
+
+    //                         hsize = rand() % 2 + 2; // 32 bit or 64 bit only
+    //                         base_addr = ALIGN_ADDRESS(base_addr, hsize);
+    //                         addr.breakdown(base_addr);
+    //                         addr_breakdown_t addr_amo_breakdown;
+    //                         addr_amo_breakdown.breakdown(addr_amo[amo_i]);
+
+    //                         // Try writing to a different location
+    //                         put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, hsize, base_addr, line, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //                         // Get the result of the operation
+    //                         while(!l2_bresp_tb.nb_can_get()) wait();
+    //                         l2_bresp_tb.nb_get(bresp);
+
+    //                         if(bresp == BRESP_EXOKAY) {
+    //                             // We happened to randomly choose an address that would work, so let's update the state.
+    //                             int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+    //                             int bytes_offset = addr.b_off * 8;
+    //                             PDBG("About to update golden memory. bit_offset = " << bit_offset << ".");
+    //                             mem_gold[addr_amo_breakdown.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset);
+    //                         }
+
+    //                         break;
+    //                     }
+
+    //                     default:
+    //                         break;
+    //                     }
+
+    //                 } else {
+    //                     // If we don't have an outstanding reservation set, then we'll just try
+    //                     // to access a random memory location and expect it to fail
+    //                     put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, WORD, addr.word, line, DATA, 0, aq, rl, false, false, 0, 0);
+
+    //                     // Get the result of the operation
+    //                     while(!l2_bresp_tb.nb_can_get()) wait();
+    //                     l2_bresp_tb.nb_get(bresp);
+
+    //                     if(bresp == BRESP_EXOKAY) {
+    //                         error_count++;
+    //                     }
+
+    //                     // Note that we are NOT updating the golden memory here.
+    //                 }
+
+    //                 atomicity = false;
+
+    //                 break;
+    //             }
+
+    //             default: {
+    //                 // Do an AMO operation
+
+    //                 // Select a random amo operation
+    //                 const int amo_ops[] = {AMO_SWAP, AMO_ADD, AMO_AND, AMO_OR, AMO_XOR, AMO_MAX, AMO_MAXU, AMO_MIN, AMO_MINU};
+    //                 int amo_op = amo_ops[rand() % (sizeof(amo_ops) / sizeof(amo_ops[0]))];
+
+    //                 // Select a random size (only 32-bit and 64-bit supported)
+    //                 hsize = (rand() % 2) + 2;
+
+    //                 base_addr = ALIGN_ADDRESS(base_addr, hsize);
+    //                 addr.breakdown(base_addr);
+
+    //                 // Send the request
+    //                 // TODO: I assume that a WRITE_ATOMIC would be an acceptable message to send, but I don't know what we actually
+    //                 //       send in these cases. Might be interesting to also try with a WRITE in case it makes a difference.
+    //                 // put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize, 
+    //                 //              addr_t addr, word_t word, hprot_t hprot, amo_t amo, bool aq, bool rl, bool dcs_en, 
+    //                 //              bool use_owner_pred, dcs_t dcs, cache_id_t pred_cid)
+    //                 put_cpu_req(cpu_req[REQ_I], WRITE_ATOMIC, hsize, base_addr, line, DATA, amo_op, aq, rl, false, false, 0, 0);
+
+    //                 wait();
+
+    //                 int bit_offset = addr.w_off * BITS_PER_WORD + addr.b_off * 8;
+    //                 int bytes_offset = addr.b_off * 8;
+
+    //                 word_mask_t mask = 1 << addr.w_off;
+
+    //                 // Read the result back: this should always be the old value of that memory location
+    //                 get_rd_rsp(mem_gold[addr.line_addr], mask);
+    //                 // get_rd_rsp(mem_gold[addr.line_addr]);
+
+    //                 long long orig, line_val;
+
+    //                 if(hsize == WORD_64) {
+    //                     orig = mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset).to_int64();
+    //                     line_val = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset).to_int64();
+    //                 } else {
+    //                     orig = mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset).to_int();
+    //                     line_val = line.range(bytes_offset + BITS_FOR_SIZE(hsize) - 1, bytes_offset).to_int();
+    //                 }
+
+    //                 // Update the golden memory
+    //                 PDBG("About to update golden memory. bit_offset = " << bit_offset << ".");
+    //                 switch(amo_op) {
+                    
+    //                     case AMO_SWAP:
+    //                         mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
+    //                         break;
+
+    //                     case AMO_ADD:
+    //                         mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val + orig;
+    //                         break;
+
+    //                     case AMO_AND:
+    //                         mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = ~line_val & orig;
+    //                         break;
+
+    //                     case AMO_OR:
+    //                         mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val | orig;
+    //                         break;
+
+    //                     case AMO_XOR:
+    //                         mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val ^ orig;
+    //                         break;
+
+    //                     case AMO_MAX:
+    //                         if(orig < line_val)
+    //                             mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
+    //                         break;
+
+    //                     case AMO_MAXU:
+    //                         if(((unsigned long long) orig) < ((unsigned long long) line_val))
+    //                             mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
+    //                         break;
+
+    //                     case AMO_MIN:
+    //                         if(orig > line_val)
+    //                             mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
+    //                         break;
+
+    //                     case AMO_MINU:
+    //                         if(((unsigned long long) orig) > ((unsigned long long) line_val))
+    //                             mem_gold[addr.line_addr].range(bit_offset + BITS_FOR_SIZE(hsize) - 1, bit_offset) = line_val;
+    //                         break;
+
+    //                     default:
+    //                         break;
+    //                 }
+
+    //                 // TODO: are we able to also send a read in here while waiting for the result of this operation to resolve? I'm not
+    //                 //       sure how this would be transmitted over the AXI interface, but I'm guessing the answer is no. Might be worth
+    //                 //       looking into though.
+
+    //                 atomicity = false;
+
+    //                 break;
+    //             }
+    //         }
+
+    //         if(error_count > 0) {
+    //             CACHE_REPORT_ERROR("Error encountered at most recent operation!", i);
+
+    //             sc_assert(false);
+    //         }
+
+    //         i++;
+
+    //         #ifdef EN_COVERAGE
+    //         if(i % 10000 == 0) {
+    //             CACHE_REPORT_INFO("Completed iteration " << i << ".");
+    //             CACHE_REPORT_INFO("Coverages so far:");
+    //             for(int i = 0; i < num_coverages; i++) {
+    //                 if(coverages[i].name != NULL)
+    //                     CACHE_REPORT_INFO(coverages[i].name << " (line " << i << ") : " << coverages[i].count);
+    //             }
+    //         }
+    //         #endif
+
+    //         wait();
+    //     }
+
+    //     CACHE_REPORT_INFO("Finished system test with 0x" << error_count << " errors after 0x" << i << " iterations.");
+    // }
 }
 
 /*
