@@ -117,6 +117,8 @@ module llc_fsm (
     output logic set_evict_stall,
     output logic set_set_conflict_fsm,
     output logic clr_set_conflict_fsm,
+    output logic set_req_in_stalled,
+    output logic set_req_in_stalled_valid, 
 
     llc_mem_req_t.out llc_mem_req_o, 
     llc_fwd_out_t.out llc_fwd_out_o, 
@@ -222,14 +224,14 @@ module llc_fsm (
                     `LLC_SWB : begin
                         if (~update_mshr_value_invack_cnt) begin
                             if (llc_mem_req_ready_int) begin
-                                next_state = REQ_MSHR_LOOKUP;
+                                next_state = DECODE;
                             end
                         end else begin
                             next_state = DECODE;
                         end
                     end
                     `LLC_SI : begin
-                        next_state = REQ_MSHR_LOOKUP;
+                        next_state = DECODE;
                     end
                     default : begin
                         next_state = DECODE;
@@ -240,7 +242,7 @@ module llc_fsm (
                 case(mshr[mshr_i].state)
                     `LLC_OWB : begin
                         if (llc_mem_req_ready_int) begin
-                            next_state = REQ_MSHR_LOOKUP;
+                            next_state = DECODE;
                         end
                     end
                     default : begin
@@ -327,9 +329,13 @@ module llc_fsm (
                 case(states_buf[evict_way_buf])
                     `LLC_V : begin
                         if (!owners_buf[evict_way_buf]) begin
-                            if (llc_mem_req_ready_int) begin 
+                            if (dirty_bits_buf[evict_way_buf]) begin
+                                if (llc_mem_req_ready_int) begin 
+                                    next_state = REQ_MSHR_LOOKUP;
+                                end
+                            end else begin
                                 next_state = REQ_MSHR_LOOKUP;
-                            end                
+                            end               
                         end else begin
                             if (llc_fwd_out_ready_int) begin 
                                 next_state = DECODE;
@@ -435,6 +441,8 @@ module llc_fsm (
         clr_set_conflict_fsm = 1'b0;
         set_update_evict_way = 1'b0;  
         mem_rsp_way_next = 'h0;
+        set_req_in_stalled = 1'b0;
+        set_req_in_stalled_valid = 1'b0;
         
         case (state)
             RESET : begin
@@ -483,6 +491,14 @@ module llc_fsm (
                             update_mshr_state = 1'b1;
                             update_mshr_value_state = `LLC_I;
                             incr_mshr_cnt = 1'b1;
+
+                            // LLC_SI is triggered on eviction
+                            // therefore, we update eviction registers
+                            // and update the stalled request.
+                            incr_evict_way_buf = 1'b1;
+                            set_update_evict_way = 1'b1;  
+                            clr_evict_stall = 1'b1;
+                            set_req_in_stalled_valid = 1'b1;
                         end
                         `LLC_SI : begin
                             // Update the states RAM
@@ -495,12 +511,16 @@ module llc_fsm (
                             update_mshr_state = 1'b1;
                             update_mshr_value_state = `LLC_I;
                             incr_mshr_cnt = 1'b1;
+
+                            // LLC_SI is triggered on eviction
+                            // therefore, we update eviction registers
+                            // and update the stalled request.
+                            incr_evict_way_buf = 1'b1;
+                            set_update_evict_way = 1'b1;  
+                            clr_evict_stall = 1'b1;
+                            set_req_in_stalled_valid = 1'b1;
                         end
                     endcase
-
-                    incr_evict_way_buf = 1'b1;
-                    set_update_evict_way = 1'b0;  
-                    clr_evict_stall = 1'b1;
                 end
             end        
             RSP_RVK_O_HANDLER : begin
@@ -543,12 +563,16 @@ module llc_fsm (
                         update_mshr_state = 1'b1;
                         update_mshr_value_state = `LLC_I;
                         incr_mshr_cnt = 1'b1;
+
+                        // LLC_OWB is triggered on eviction
+                        // therefore, we update eviction registers
+                        // and update the stalled request.
+                        incr_evict_way_buf = 1'b1;
+                        set_update_evict_way = 1'b1;  
+                        clr_evict_stall = 1'b1;
+                        set_req_in_stalled_valid = 1'b1;
                     end
                 endcase
-
-                incr_evict_way_buf = 1'b1;
-                set_update_evict_way = 1'b0;  
-                clr_evict_stall = 1'b1;
             end
             REQ_MSHR_LOOKUP : begin
                 mshr_op_code = `LLC_MSHR_PEEK_REQ;
@@ -789,13 +813,13 @@ module llc_fsm (
                                     /* hprot */ hprots_buf[evict_way_buf],
                                     /* line */ lines_buf[evict_way_buf]
                                 );
-
-                                // Update the states RAM
-                                lmem_set_in = line_br.set;
-                                lmem_way_in = req_in_way;
-                                lmem_wr_data_state = `LLC_I;
-                                lmem_wr_en_state = 1'b1;
                             end
+
+                            // Update the states RAM
+                            lmem_set_in = line_br.set;
+                            lmem_way_in = req_in_way;
+                            lmem_wr_data_state = `LLC_I;
+                            lmem_wr_en_state = 1'b1;
                         end else begin
                             // TODO: Assuming only single owner for the line!
                             if (llc_fwd_out_ready_int) begin
@@ -821,6 +845,7 @@ module llc_fsm (
                             end
                             
                             set_evict_stall = 1'b1;
+                            set_req_in_stalled = 1'b1;
                         end
                     end
                     `LLC_S : begin
@@ -862,6 +887,7 @@ module llc_fsm (
                         end
                             
                         set_evict_stall = 1'b1;
+                        set_req_in_stalled = 1'b1;
                     end
                 endcase
             end

@@ -15,6 +15,7 @@ module llc_input_decoder (
     input logic [`REQS_BITS_P1-1:0] mshr_cnt,
     // State registers from regs/others
     input logic evict_stall,
+    input logic req_in_stalled_valid,
 
     // Accept the new input now
     output logic do_get_req, 
@@ -24,6 +25,8 @@ module llc_input_decoder (
     // Ready signals sent to interfaces
     output logic llc_rsp_in_ready_int,
     output logic llc_req_in_ready_int,
+    output logic clr_req_in_stalled_valid,  
+    output logic update_req_in_from_stalled,  
         
     line_breakdown_llc_t.out line_br,
     line_breakdown_llc_t.out line_br_next
@@ -34,6 +37,8 @@ module llc_input_decoder (
         do_get_rsp_next = 1'b0;
         llc_rsp_in_ready_int = 1'b0;
         llc_req_in_ready_int = 1'b0;
+        clr_req_in_stalled_valid = 1'b0;
+        update_req_in_from_stalled = 1'b0;
 
         line_br_next.tag = 0;
         line_br_next.set = 0;
@@ -42,9 +47,14 @@ module llc_input_decoder (
             if (llc_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin 
                 do_get_rsp_next =  1'b1;
                 llc_rsp_in_ready_int = 1'b1;
-            end else if (llc_req_in_valid_int && mshr_cnt != 0 && !evict_stall) begin 
+            end else if ((llc_req_in_valid_int || req_in_stalled_valid) && mshr_cnt != 0 && !evict_stall) begin 
+                if (req_in_stalled_valid) begin
+                    clr_req_in_stalled_valid = 1'b1;
+                    update_req_in_from_stalled = 1'b1;
+                end else if (llc_req_in_valid_int) begin
+                    llc_req_in_ready_int = 1'b1;
+                end
                 do_get_req_next = 1'b1;
-                llc_req_in_ready_int = 1'b1;
             end
 
             // Parse line addresses for rsp and req as line_br

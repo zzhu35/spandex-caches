@@ -52,9 +52,6 @@ module llc_interfaces (
     output logic llc_mem_req_ready_int,
     output line_addr_t req_in_addr, 
     output line_addr_t rsp_in_addr, 
-    output line_addr_t dma_req_in_addr, 
-    output line_addr_t req_in_stalled_addr, 
-    output line_addr_t req_in_recall_addr, 
     
     llc_req_in_t.out llc_req_in,
     llc_rsp_out_t.out llc_rsp_out, 
@@ -480,10 +477,7 @@ module llc_interfaces (
         end
     end
     
-    assign req_in_addr = llc_req_in_i.addr;
-    assign rsp_in_addr = llc_rsp_in_i.addr;
-    assign dma_req_in_addr = llc_dma_req_in.addr; 
-    assign req_in_stalled_addr = req_in_stalled.addr;
-    assign req_in_recall_addr = llc_req_in.addr; 
+    assign req_in_addr = update_req_in_from_stalled ? req_in_stalled.addr : (llc_req_in_valid_tmp ? llc_req_in_tmp.addr : llc_req_in_i.addr);
+    assign rsp_in_addr = (llc_rsp_in_valid_tmp) ? llc_rsp_in_tmp.addr : llc_rsp_in_i.addr;
 
 endmodule
