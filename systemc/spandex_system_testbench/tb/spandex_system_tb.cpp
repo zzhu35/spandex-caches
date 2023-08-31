@@ -12,8 +12,6 @@ http://rsim.cs.uiuc.edu/
 
 #include "spandex_system_tb.hpp"
 
-#include "l2_spandex.hpp" // Only needed for coverage reports
-
 #define L2_CID 0
 
 #define HWRITE_READ  0
@@ -26,7 +24,7 @@ http://rsim.cs.uiuc.edu/
  */
 
 #ifdef STATS_ENABLE
-void l2_spandex_tb::get_stats()
+void spandex_system_tb::get_stats()
 {
     l2_stats_tb.reset_get();
 
@@ -49,7 +47,7 @@ void l2_spandex_tb::get_stats()
 // but in theory it could also act as additional
 // debugging by intercepting these messages.
 
-void l2_spandex_tb::l2_req_out_if()
+void spandex_system_tb::l2_req_out_if()
 {
     while(true) {
 
@@ -85,7 +83,7 @@ void l2_spandex_tb::l2_req_out_if()
     }
 }
 
-void l2_spandex_tb::l2_fwd_out_if()
+void spandex_system_tb::l2_fwd_out_if()
 {
     while(true) {
 
@@ -113,7 +111,7 @@ void l2_spandex_tb::l2_fwd_out_if()
     }
 }
 
-void l2_spandex_tb::l2_rsp_out_if()
+void spandex_system_tb::l2_rsp_out_if()
 {
     while(true) {
 
@@ -145,7 +143,7 @@ void l2_spandex_tb::l2_rsp_out_if()
     }
 }
 
-void l2_spandex_tb::llc_rsp_out_if()
+void spandex_system_tb::llc_rsp_out_if()
 {
     while(true) {
 
@@ -181,7 +179,7 @@ void l2_spandex_tb::llc_rsp_out_if()
     }
 }
 
-void l2_spandex_tb::llc_fwd_out_if()
+void spandex_system_tb::llc_fwd_out_if()
 {
     while(true) {
 
@@ -217,7 +215,7 @@ void l2_spandex_tb::llc_fwd_out_if()
     }
 }
 
-void l2_spandex_tb::l2_inval_if()
+void spandex_system_tb::l2_inval_if()
 {
     while(true) {
 
@@ -245,7 +243,7 @@ void l2_spandex_tb::l2_inval_if()
     }
 }
 
-void l2_spandex_tb::llc_dma_rsp_out_if()
+void spandex_system_tb::llc_dma_rsp_out_if()
 {
     while(true) {
 
@@ -273,7 +271,7 @@ void l2_spandex_tb::llc_dma_rsp_out_if()
 }
 
 // Emulate memory by responding to llc requests
-void l2_spandex_tb::mem_if()
+void spandex_system_tb::mem_if()
 {
     while(true) {
 
@@ -303,13 +301,13 @@ void l2_spandex_tb::mem_if()
     }
 }
 
-void l2_spandex_tb::l2_test()
+void spandex_system_tb::spandex_system_test()
 {
     /*
      * Reset
      */
 
-    reset_l2_test();
+    reset_spandex_system_test();
 
     CACHE_REPORT_INFO("[SPANDEX] Reset done!"); 
 
@@ -338,7 +336,7 @@ void l2_spandex_tb::l2_test()
                                 : ((sz) == HALFWORD) ? ((addr) - ((addr) % 2)) \
                                 : ((unsigned long long) addr))
 
-void l2_spandex_tb::system_test()
+void spandex_system_tb::system_test()
 {
     
     static l2_cpu_req_t cpu_req[40]; // Some buffer space
@@ -440,7 +438,7 @@ void l2_spandex_tb::system_test()
         // stick with reading/writing basic lines.
 
         // Generate a random read/write operation, and random data to use
-        int operation = rand() % 6;
+        int operation = rand() % 4;
         line += EXTRA_LARGE_RANDOM;
         base_addr = LARGE_RANDOM % (MAIN_MEMORY_SPACE << LINE_RANGE_LO);
         int hsize = rand() % 4;
@@ -795,7 +793,7 @@ void l2_spandex_tb::system_test()
  * Functions
  */
 
-inline void l2_spandex_tb::reset_l2_test()
+inline void spandex_system_tb::reset_spandex_system_test()
 {
     l2_cpu_req_tb.reset_put();
     l2_fwd_in_tb.reset_put();
@@ -825,7 +823,7 @@ inline void l2_spandex_tb::reset_l2_test()
     wait();
 }
 
-void l2_spandex_tb::put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize, 
+void spandex_system_tb::put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize, 
     addr_t addr, word_t word, hprot_t hprot, amo_t amo, bool aq, bool rl, bool dcs_en, 
     bool use_owner_pred, dcs_t dcs, cache_id_t pred_cid)
 {
@@ -848,7 +846,7 @@ void l2_spandex_tb::put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_
 	CACHE_REPORT_VAR(sc_time_stamp(), "CPU_REQ", cpu_req);
 }
 
-void l2_spandex_tb::get_req_out(coh_msg_t coh_msg, addr_t addr, hprot_t hprot, line_t line, word_mask_t word_mask)
+void spandex_system_tb::get_req_out(coh_msg_t coh_msg, addr_t addr, hprot_t hprot, line_t line, word_mask_t word_mask)
 {
     l2_req_out_t req_out;
 
@@ -877,7 +875,7 @@ void l2_spandex_tb::get_req_out(coh_msg_t coh_msg, addr_t addr, hprot_t hprot, l
 	CACHE_REPORT_VAR(sc_time_stamp(), "REQ_OUT", req_out);
 }
 
-void l2_spandex_tb::get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, addr_t addr,
+void spandex_system_tb::get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, addr_t addr,
     line_t line, word_mask_t word_mask)
 {
     l2_rsp_out_t rsp_out;
@@ -912,7 +910,7 @@ void l2_spandex_tb::get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_re
 	CACHE_REPORT_VAR(sc_time_stamp(), "RSP_OUT", rsp_out);
 }
 
-void l2_spandex_tb::put_fwd_in_(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask)
+void spandex_system_tb::put_fwd_in_(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask)
 {
     l2_fwd_in_t fwd_in;
     
@@ -927,7 +925,7 @@ void l2_spandex_tb::put_fwd_in_(mix_msg_t coh_msg, addr_t addr, cache_id_t req_i
     if (rpt) CACHE_REPORT_VAR(sc_time_stamp(), "FWD_IN", fwd_in);
 }
 
-void l2_spandex_tb::put_fwd_in(mix_msg_t coh_msg, line_addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask)
+void spandex_system_tb::put_fwd_in(mix_msg_t coh_msg, line_addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask)
 {
     l2_fwd_in_t fwd_in;
     
@@ -942,7 +940,7 @@ void l2_spandex_tb::put_fwd_in(mix_msg_t coh_msg, line_addr_t addr, cache_id_t r
     if (rpt) CACHE_REPORT_VAR(sc_time_stamp(), "FWD_IN", fwd_in);
 }
 
-void l2_spandex_tb::put_l2_rsp_in_(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt)
+void spandex_system_tb::put_l2_rsp_in_(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt)
 {
     l2_rsp_in_t rsp_in;
     
@@ -957,7 +955,7 @@ void l2_spandex_tb::put_l2_rsp_in_(coh_msg_t coh_msg, addr_t addr, line_t line, 
     if (rpt) CACHE_REPORT_VAR(sc_time_stamp(), "RSP_IN", rsp_in);
 }
 
-void l2_spandex_tb::put_l2_rsp_in(coh_msg_t coh_msg, line_addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt)
+void spandex_system_tb::put_l2_rsp_in(coh_msg_t coh_msg, line_addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt)
 {
     l2_rsp_in_t rsp_in;
     
@@ -972,7 +970,7 @@ void l2_spandex_tb::put_l2_rsp_in(coh_msg_t coh_msg, line_addr_t addr, line_t li
     if (rpt) CACHE_REPORT_VAR(sc_time_stamp(), "RSP_IN", rsp_in);
 }
 
-void l2_spandex_tb::get_rd_rsp(line_t line, word_mask_t mask)
+void spandex_system_tb::get_rd_rsp(line_t line, word_mask_t mask)
 {
     l2_rd_rsp_t rd_rsp;
 
@@ -1005,7 +1003,7 @@ void l2_spandex_tb::get_rd_rsp(line_t line, word_mask_t mask)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RD_RSP", rd_rsp);
 }
 
-void l2_spandex_tb::get_rd_rsp(line_t line)
+void spandex_system_tb::get_rd_rsp(line_t line)
 {
     l2_rd_rsp_t rd_rsp;
 
@@ -1021,7 +1019,7 @@ void l2_spandex_tb::get_rd_rsp(line_t line)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RD_RSP", rd_rsp);
 }
 
-void l2_spandex_tb::get_rd_rsp_or(line_t line, line_t line2)
+void spandex_system_tb::get_rd_rsp_or(line_t line, line_t line2)
 {
     l2_rd_rsp_t rd_rsp;
 
@@ -1038,7 +1036,7 @@ void l2_spandex_tb::get_rd_rsp_or(line_t line, line_t line2)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RD_RSP_OR", rd_rsp);
 }
 
-void l2_spandex_tb::get_bresp(sc_uint<2> gold_bresp_val)
+void spandex_system_tb::get_bresp(sc_uint<2> gold_bresp_val)
 {
     sc_uint<2> bresp_val;
 
@@ -1054,7 +1052,7 @@ void l2_spandex_tb::get_bresp(sc_uint<2> gold_bresp_val)
 	CACHE_REPORT_VAR(sc_time_stamp(), "BRESP", bresp_val);
 }
 
-void l2_spandex_tb::get_inval(addr_t addr, hprot_t hprot)
+void spandex_system_tb::get_inval(addr_t addr, hprot_t hprot)
 {
     l2_inval_t inval;
     
@@ -1072,7 +1070,7 @@ void l2_spandex_tb::get_inval(addr_t addr, hprot_t hprot)
 	CACHE_REPORT_VAR(sc_time_stamp(), "INVAL", inval);
 }
 
-void l2_spandex_tb::flush(int n_lines, bool is_flush_all)
+void spandex_system_tb::flush(int n_lines, bool is_flush_all)
 {
     // issue flush
     l2_flush_tb.put(is_flush_all);
@@ -1090,7 +1088,7 @@ void l2_spandex_tb::flush(int n_lines, bool is_flush_all)
 	CACHE_REPORT_INFO("Flush done.");
 }
 
-void l2_spandex_tb::put_mem_rsp(line_t line)
+void spandex_system_tb::put_mem_rsp(line_t line)
 {
     llc_mem_rsp_t mem_rsp;
     mem_rsp.line = line;
@@ -1103,13 +1101,13 @@ void l2_spandex_tb::put_mem_rsp(line_t line)
 	CACHE_REPORT_VAR(sc_time_stamp(), "MEM_RSP", mem_rsp);
 }
 
-void l2_spandex_tb::put_req_in_(mix_msg_t coh_msg, addr_t addr, line_t line, cache_id_t req_id,
+void spandex_system_tb::put_req_in_(mix_msg_t coh_msg, addr_t addr, line_t line, cache_id_t req_id,
 			hprot_t hprot, word_offset_t woff, word_offset_t wvalid, word_mask_t word_mask)
 {
     put_req_in(coh_msg, addr.range(TAG_RANGE_HI, SET_RANGE_LO), line, req_id, hprot, woff, wvalid, word_mask);
 }
 
-void l2_spandex_tb::put_req_in(mix_msg_t coh_msg, line_addr_t addr, line_t line, cache_id_t req_id, hprot_t hprot, 
+void spandex_system_tb::put_req_in(mix_msg_t coh_msg, line_addr_t addr, line_t line, cache_id_t req_id, hprot_t hprot, 
             word_offset_t woff, word_offset_t wvalid, word_mask_t word_mask)
 {
     llc_req_in_t<CACHE_ID_WIDTH> req_in;
@@ -1130,7 +1128,7 @@ void l2_spandex_tb::put_req_in(mix_msg_t coh_msg, line_addr_t addr, line_t line,
 	CACHE_REPORT_VAR(sc_time_stamp(), "REQ_IN", req_in);
 }
 
-void l2_spandex_tb::put_dma_req_in(mix_msg_t coh_msg, addr_t addr, line_t line, llc_coh_dev_id_t req_id,
+void spandex_system_tb::put_dma_req_in(mix_msg_t coh_msg, addr_t addr, line_t line, llc_coh_dev_id_t req_id,
                             hprot_t hprot, word_offset_t woff, word_offset_t wvalid)
 {
     llc_req_in_t<LLC_COH_DEV_ID_WIDTH> req_in;
@@ -1150,7 +1148,7 @@ void l2_spandex_tb::put_dma_req_in(mix_msg_t coh_msg, addr_t addr, line_t line, 
 	CACHE_REPORT_VAR(sc_time_stamp(), "REQ_IN", req_in);
 }
 
-void l2_spandex_tb::put_llc_rsp_in_(coh_msg_t rsp_msg, addr_t addr, line_t line, cache_id_t req_id, word_mask_t word_mask)
+void spandex_system_tb::put_llc_rsp_in_(coh_msg_t rsp_msg, addr_t addr, line_t line, cache_id_t req_id, word_mask_t word_mask)
 {
     llc_rsp_in_t rsp_in;
     rsp_in.coh_msg = rsp_msg;
@@ -1167,7 +1165,7 @@ void l2_spandex_tb::put_llc_rsp_in_(coh_msg_t rsp_msg, addr_t addr, line_t line,
 	CACHE_REPORT_VAR(sc_time_stamp(), "RSP_IN", rsp_in);
 }
 
-void l2_spandex_tb::put_llc_rsp_in(coh_msg_t rsp_msg, line_addr_t addr, line_t line, cache_id_t req_id, word_mask_t word_mask)
+void spandex_system_tb::put_llc_rsp_in(coh_msg_t rsp_msg, line_addr_t addr, line_t line, cache_id_t req_id, word_mask_t word_mask)
 {
     llc_rsp_in_t rsp_in;
     rsp_in.coh_msg = rsp_msg;

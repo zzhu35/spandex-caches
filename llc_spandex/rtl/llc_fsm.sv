@@ -54,6 +54,7 @@ module llc_fsm (
     llc_mem_rsp_t.in llc_mem_rsp, 
     llc_mem_rsp_t.in llc_mem_rsp_next,
     line_breakdown_llc_t.in line_br, 
+    line_breakdown_llc_t.in line_br_next,
  
     // To input_decoder - get new input
     output logic decode_en,
@@ -272,6 +273,9 @@ module llc_fsm (
                         `REQ_WB : begin
                             next_state = REQ_WB_HANDLER_HIT;
                         end
+                        default : begin
+                            next_state = DECODE;
+                        end                        
                     endcase
                 end else if (empty_way_found_next) begin
                     case(llc_req_in.coh_msg)
@@ -281,6 +285,9 @@ module llc_fsm (
                         `REQ_S : begin
                             next_state = REQ_S_HANDLER_MISS;
                         end
+                        default : begin
+                            next_state = DECODE;
+                        end                                 
                     endcase
                 end else begin
                     next_state = REQ_EVICT;
@@ -341,14 +348,20 @@ module llc_fsm (
                                 next_state = DECODE;
                             end                
                         end
-                    end
+                    end                    
                     `LLC_S : begin
                         if (llc_fwd_out_ready_int) begin 
                             next_state = DECODE;
                         end
                     end
+                    default : begin
+                        next_state = DECODE;
+                    end                             
                 endcase
             end
+            default : begin
+                next_state = DECODE;
+            end                     
         endcase
     end
 
@@ -891,6 +904,9 @@ module llc_fsm (
                     end
                 endcase
             end
+            default : begin
+                mshr_op_code = `LLC_MSHR_IDLE;
+            end                  
         endcase
     end
     

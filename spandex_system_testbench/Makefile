@@ -17,22 +17,25 @@ FLAGS += -ncvlog_args,"-define XILINX_FPGA"
 INCDIR ?=
 INCDIR += -I$(ACCEL)
 INCDIR += -I../systemc/common/caches
-INCDIR += -I../systemc/llc_spandex/tb
+INCDIR += -I../systemc/spandex_system_testbench/tb
 INCDIR += -I../systemc/utils
 INCDIR += -I$(STRATUS_PATH)/share/stratus/include
 INCDIR += +incdir+../common/defs
 INCDIR += +incdir+../utils/defs
 INCDIR += +incdir+.
 
-LLC_TB ?=
-LLC_TB += ../systemc/llc_spandex/tb/llc_spandex_tb.cpp
-LLC_TB += sim/sc_main.cpp
+SYSTEM_TB ?=
+SYSTEM_TB += ../systemc/spandex_system_testbench/tb/spandex_system_tb.cpp
+SYSTEM_TB += sim/sc_main.cpp
 
-LLC_COSIM_SRC ?=
-LLC_COSIM_SRC += sim/llc_spandex_wrap.cpp
+SYSTEM_COSIM_SRC ?=
+SYSTEM_COSIM_SRC += sim/spandex_system_wrap.cpp
+
+L2_SRC ?=
+L2_SRC += ../l2_spandex/rtl/*.sv
 
 LLC_SRC ?=
-LLC_SRC += ./rtl/*.sv
+LLC_SRC += ../llc_spandex/rtl/*.sv
 
 RTL_SRC ?=
 RTL_SRC += $(ESP_ROOT)/rtl/techmap/virtex7/mem/*.v
@@ -41,12 +44,12 @@ RTL_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
 RTL_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
 RTL_SRC += ../utils/rtl/*.sv
 
-llc-sim: $(LLC_TB) $(LLC_COSIM_SRC) $(RTL_SRC) $(LLC_SRC)
+system-sim: $(SYSTEM_TB) $(SYSTEM_COSIM_SRC) $(RTL_SRC) $(L2_SRC) $(LLC_SRC)
 	cp cache_cfg.svh ../systemc/utils/cache_cfg.hpp
 	sed -i 's/`/#/g' ../systemc/utils/cache_cfg.hpp
 	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) $^
 
-llc-sim-gui: $(LLC_TB) $(LLC_COSIM_SRC) $(RTL_SRC) $(LLC_SRC)
+system-sim-gui: $(SYSTEM_TB) $(SYSTEM_COSIM_SRC) $(RTL_SRC) $(L2_SRC) $(LLC_SRC)
 	cp cache_cfg.svh ../systemc/utils/cache_cfg.hpp
 	sed -i 's/`/#/g' ../systemc/utils/cache_cfg.hpp
 	ncsc_run -DRTL_SIM $(INCDIR) $(FLAGS) -GUI $^

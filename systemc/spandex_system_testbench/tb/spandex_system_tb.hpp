@@ -10,8 +10,8 @@ http://rsim.cs.uiuc.edu/
 
 */
 
-#ifndef __l2_spandex_tb_HPP__
-#define __l2_spandex_tb_HPP__
+#ifndef __SPANDEX_SYSTEM_TB_HPP__
+#define __SPANDEX_SYSTEM_TB_HPP__
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +21,7 @@ http://rsim.cs.uiuc.edu/
 
 #define MAIN_MEMORY_SPACE 0x80000
 
-class l2_spandex_tb : public sc_module
+class spandex_system_tb : public sc_module
 {
 public:
 
@@ -73,7 +73,7 @@ public:
 #endif
 
     // Constructor
-    SC_CTOR(l2_spandex_tb) : main_mem({})
+    SC_CTOR(spandex_system_tb) : main_mem({})
     {
         /*
         * Random seed
@@ -83,7 +83,7 @@ public:
         srand(0);
 
 	    // Process performing the test
-	    SC_CTHREAD(l2_test, clk.pos());
+	    SC_CTHREAD(spandex_system_test, clk.pos());
 	    reset_signal_is(rst, false);
 
         // Processes handling the inter-$ comms
@@ -141,7 +141,7 @@ public:
     }
 
     // Processes
-    void l2_test();
+    void spandex_system_test();
 
     // Inter-$ communication process
     void l2_req_out_if();
@@ -160,7 +160,7 @@ public:
 #endif
 
     // Functions
-    inline void reset_l2_test();
+    inline void reset_spandex_system_test();
 
     void system_test();
 
@@ -207,6 +207,6 @@ private:
 };
 
 
-#endif /* __l2_spandex_tb_HPP__ */
+#endif /* __SPANDEX_SYSTEM_TB_HPP__ */
 
 
