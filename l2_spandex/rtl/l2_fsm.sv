@@ -934,15 +934,15 @@ module l2_fsm(
                         /* amo */ l2_cpu_req.amo,
                         /* word_mask */ ~word_mask_owned_next
                     );
-                end
 
-                send_req_out (
-                    /* coh_msg */ `REQ_Odata,
-                    /* hprot */ l2_cpu_req.hprot,
-                    /* line_addr */ addr_br.line_addr,
-                    /* line */ 'h0,
-                    /* word_mask */ ~word_mask_owned_next
-                );
+                    send_req_out (
+                        /* coh_msg */ `REQ_Odata,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ 'h0,
+                        /* word_mask */ ~word_mask_owned_next
+                    );
+                end
             end
             CPU_REQ_READ_ATOMIC_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
@@ -961,15 +961,15 @@ module l2_fsm(
                         /* amo */ 'h0,
                         /* word_mask */ ~word_mask_owned_next
                     );
-                end
 
-                send_req_out (
-                    /* coh_msg */ `REQ_Odata,
-                    /* hprot */ l2_cpu_req.hprot,
-                    /* line_addr */ addr_br.line_addr,
-                    /* line */ 'h0,
-                    /* word_mask */ ~word_mask_owned_next
-                );
+                    send_req_out (
+                        /* coh_msg */ `REQ_Odata,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ 'h0,
+                        /* word_mask */ ~word_mask_owned_next
+                    );
+                end
             end            
             CPU_REQ_READ_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
@@ -988,15 +988,15 @@ module l2_fsm(
                         /* amo */ 'h0,
                         /* word_mask */ ~word_mask_shared_next
                     );
-                end
 
-                send_req_out (
-                    /* coh_msg */ `REQ_S,
-                    /* hprot */ l2_cpu_req.hprot,
-                    /* line_addr */ addr_br.line_addr,
-                    /* line */ 'h0,
-                    /* word_mask */ ~word_mask_shared_next
-                );
+                    send_req_out (
+                        /* coh_msg */ `REQ_S,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ 'h0,
+                        /* word_mask */ ~word_mask_shared_next
+                    );
+                end
             end
             CPU_REQ_WRITE_ATOMIC_NO_REQ : begin
                 lmem_set_in = addr_br.set;
@@ -1043,17 +1043,17 @@ module l2_fsm(
                         /* amo */ 'h0,
                         /* word_mask */ ~word_mask_owned_next
                     );
-                end
 
-                // TODO: REQ_O currently using WORD_MASK_ALL. Need to change to
-                // word granularity at some point.
-                send_req_out (
-                    /* coh_msg */ `REQ_Odata,
-                    /* hprot */ l2_cpu_req.hprot,
-                    /* line_addr */ addr_br.line_addr,
-                    /* line */ 'h0,
-                    /* word_mask */ ~word_mask_owned_next
-                );
+                    // TODO: REQ_O currently using WORD_MASK_ALL. Need to change to
+                    // word granularity at some point.
+                    send_req_out (
+                        /* coh_msg */ `REQ_Odata,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ 'h0,
+                        /* word_mask */ ~word_mask_owned_next
+                    );
+                end
             end
             CPU_REQ_EVICT: begin
                 // Store the evict_way in a different register.
@@ -1076,15 +1076,15 @@ module l2_fsm(
                             /* amo */ 'h0,
                             /* word_mask */ word_mask_owned_evict
                         );
-                    end
 
-                    send_req_out (
-                        /* coh_msg */ `REQ_WB,
-                        /* hprot */ hprots_buf[evict_way_reg],
-                        /* line_addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
-                        /* line */ lines_buf[evict_way_reg],
-                        /* word_mask */ word_mask_owned_evict
-                    );
+                        send_req_out (
+                            /* coh_msg */ `REQ_WB,
+                            /* hprot */ hprots_buf[evict_way_reg],
+                            /* line_addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
+                            /* line */ lines_buf[evict_way_reg],
+                            /* word_mask */ word_mask_owned_evict
+                        );
+                    end
 
                     set_evict_stall = 1'b1;
                 end else begin
