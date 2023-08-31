@@ -118,8 +118,7 @@ module llc_fsm (
     output logic set_evict_stall,
     output logic set_set_conflict_fsm,
     output logic clr_set_conflict_fsm,
-    output logic set_req_in_stalled,
-    output logic set_req_in_stalled_valid, 
+    output logic set_req_conflict,
 
     llc_mem_req_t.out llc_mem_req_o, 
     llc_fwd_out_t.out llc_fwd_out_o, 
@@ -345,13 +344,13 @@ module llc_fsm (
                             end               
                         end else begin
                             if (llc_fwd_out_ready_int) begin 
-                                next_state = DECODE;
+                                next_state = REQ_MSHR_LOOKUP;
                             end                
                         end
                     end                    
                     `LLC_S : begin
                         if (llc_fwd_out_ready_int) begin 
-                            next_state = DECODE;
+                            next_state = REQ_MSHR_LOOKUP;
                         end
                     end
                     default : begin
@@ -452,10 +451,9 @@ module llc_fsm (
         set_evict_stall = 1'b0;
         set_set_conflict_fsm = 1'b0;
         clr_set_conflict_fsm = 1'b0;
+        set_req_conflict = 1'b0;
         set_update_evict_way = 1'b0;  
         mem_rsp_way_next = 'h0;
-        set_req_in_stalled = 1'b0;
-        set_req_in_stalled_valid = 1'b0;
         
         case (state)
             RESET : begin
@@ -511,7 +509,6 @@ module llc_fsm (
                             incr_evict_way_buf = 1'b1;
                             set_update_evict_way = 1'b1;  
                             clr_evict_stall = 1'b1;
-                            set_req_in_stalled_valid = 1'b1;
                         end
                         `LLC_SI : begin
                             // Update the states RAM
@@ -531,7 +528,6 @@ module llc_fsm (
                             incr_evict_way_buf = 1'b1;
                             set_update_evict_way = 1'b1;  
                             clr_evict_stall = 1'b1;
-                            set_req_in_stalled_valid = 1'b1;
                         end
                     endcase
                 end
@@ -583,7 +579,6 @@ module llc_fsm (
                         incr_evict_way_buf = 1'b1;
                         set_update_evict_way = 1'b1;  
                         clr_evict_stall = 1'b1;
-                        set_req_in_stalled_valid = 1'b1;
                     end
                 endcase
             end
@@ -593,7 +588,7 @@ module llc_fsm (
                 lmem_set_in = line_br.set;
             end
             REQ_SET_CONFLICT : begin
-                set_set_conflict_fsm = 1'b1;
+                set_req_conflict = 1'b1;
             end
             REQ_TAG_LOOKUP : begin
                 lookup_en = 1'b1;
@@ -858,7 +853,6 @@ module llc_fsm (
                             end
                             
                             set_evict_stall = 1'b1;
-                            set_req_in_stalled = 1'b1;
                         end
                     end
                     `LLC_S : begin
@@ -900,7 +894,6 @@ module llc_fsm (
                         end
                             
                         set_evict_stall = 1'b1;
-                        set_req_in_stalled = 1'b1;
                     end
                 endcase
             end

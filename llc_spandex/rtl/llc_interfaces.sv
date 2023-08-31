@@ -22,8 +22,8 @@ module llc_interfaces (
     input logic llc_mem_req_ready, 
     input logic llc_mem_req_valid_int,
     
-    input logic update_req_in_from_stalled,
-    input logic set_req_in_stalled,
+    input logic set_req_from_conflict,
+    input logic set_req_conflict,
  
     llc_req_in_t.in llc_req_in_i,
     llc_dma_req_in_t.in llc_dma_req_in_i,
@@ -375,7 +375,7 @@ module llc_interfaces (
     //read from interfaces 
 
    //llc req in
-    llc_req_in_t req_in_stalled();
+    llc_req_in_t llc_req_conflict();
     always_ff @(posedge clk or negedge rst) begin 
         if(!rst) begin 
             llc_req_in.coh_msg <= 0; 
@@ -386,15 +386,15 @@ module llc_interfaces (
             llc_req_in.word_offset <= 0; 
             llc_req_in.valid_words <= 0; 
             llc_req_in.word_mask <= 0; 
-       end else if (update_req_in_from_stalled) begin
-            llc_req_in.coh_msg <= req_in_stalled.coh_msg; 
-            llc_req_in.hprot <= req_in_stalled.hprot; 
-            llc_req_in.addr <= req_in_stalled.addr; 
-            llc_req_in.line <= req_in_stalled.line; 
-            llc_req_in.req_id <= req_in_stalled.req_id; 
-            llc_req_in.word_offset <= req_in_stalled.word_offset; 
-            llc_req_in.valid_words <= req_in_stalled.valid_words; 
-            llc_req_in.word_mask <= req_in_stalled.word_mask; 
+       end else if (set_req_from_conflict) begin
+            llc_req_in.coh_msg <= llc_req_conflict.coh_msg; 
+            llc_req_in.hprot <= llc_req_conflict.hprot; 
+            llc_req_in.addr <= llc_req_conflict.addr; 
+            llc_req_in.line <= llc_req_conflict.line; 
+            llc_req_in.req_id <= llc_req_conflict.req_id; 
+            llc_req_in.word_offset <= llc_req_conflict.word_offset; 
+            llc_req_in.valid_words <= llc_req_conflict.valid_words; 
+            llc_req_in.word_mask <= llc_req_conflict.word_mask; 
         end else if (llc_req_in_valid_int && llc_req_in_ready_int) begin
             llc_req_in.coh_msg <= llc_req_in_next.coh_msg; 
             llc_req_in.hprot <= llc_req_in_next.hprot; 
@@ -410,23 +410,23 @@ module llc_interfaces (
     //req in stalled
     always_ff @(posedge clk or negedge rst) begin 
         if(!rst) begin 
-            req_in_stalled.coh_msg <= 0; 
-            req_in_stalled.hprot <= 0; 
-            req_in_stalled.addr <= 0; 
-            req_in_stalled.line <= 0; 
-            req_in_stalled.req_id <= 0; 
-            req_in_stalled.word_offset <= 0; 
-            req_in_stalled.valid_words <= 0; 
-            req_in_stalled.word_mask <= 0; 
-       end else if (set_req_in_stalled) begin
-            req_in_stalled.coh_msg <= llc_req_in.coh_msg; 
-            req_in_stalled.hprot <= llc_req_in.hprot; 
-            req_in_stalled.addr <= llc_req_in.addr; 
-            req_in_stalled.line <= llc_req_in.line; 
-            req_in_stalled.req_id <= llc_req_in.req_id; 
-            req_in_stalled.word_offset <= llc_req_in.word_offset; 
-            req_in_stalled.valid_words <= llc_req_in.valid_words; 
-            req_in_stalled.word_mask <= llc_req_in.word_mask; 
+            llc_req_conflict.coh_msg <= 0; 
+            llc_req_conflict.hprot <= 0; 
+            llc_req_conflict.addr <= 0; 
+            llc_req_conflict.line <= 0; 
+            llc_req_conflict.req_id <= 0; 
+            llc_req_conflict.word_offset <= 0; 
+            llc_req_conflict.valid_words <= 0; 
+            llc_req_conflict.word_mask <= 0; 
+       end else if (set_req_conflict) begin
+            llc_req_conflict.coh_msg <= llc_req_in.coh_msg; 
+            llc_req_conflict.hprot <= llc_req_in.hprot; 
+            llc_req_conflict.addr <= llc_req_in.addr; 
+            llc_req_conflict.line <= llc_req_in.line; 
+            llc_req_conflict.req_id <= llc_req_in.req_id; 
+            llc_req_conflict.word_offset <= llc_req_in.word_offset; 
+            llc_req_conflict.valid_words <= llc_req_in.valid_words; 
+            llc_req_conflict.word_mask <= llc_req_in.word_mask; 
         end 
     end
 
@@ -477,7 +477,7 @@ module llc_interfaces (
         end
     end
     
-    assign req_in_addr = update_req_in_from_stalled ? req_in_stalled.addr : (llc_req_in_valid_tmp ? llc_req_in_tmp.addr : llc_req_in_i.addr);
+    assign req_in_addr = set_req_from_conflict ? llc_req_conflict.addr : (llc_req_in_valid_tmp ? llc_req_in_tmp.addr : llc_req_in_i.addr);
     assign rsp_in_addr = (llc_rsp_in_valid_tmp) ? llc_rsp_in_tmp.addr : llc_rsp_in_i.addr;
 
 endmodule

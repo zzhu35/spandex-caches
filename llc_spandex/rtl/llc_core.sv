@@ -67,6 +67,7 @@ module llc_core (
     line_addr_t req_in_addr, rsp_in_addr, dma_req_in_addr, req_in_stalled_addr, req_in_recall_addr; 
     logic update_req_in_stalled, update_req_in_from_stalled, set_req_in_stalled; 
     logic req_in_stalled_valid, clr_req_in_stalled_valid, set_req_in_stalled_valid;  
+    logic set_req_from_conflict, set_req_conflict;  
 
     logic lmem_wr_en_state, lmem_wr_en_line, lmem_wr_en_evict_way, lmem_wr_en_sharers, lmem_wr_en_owner, lmem_wr_en_dirty_bit, lmem_wr_en_all_mem;
     llc_set_t lmem_set_in;
