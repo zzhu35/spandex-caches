@@ -635,6 +635,13 @@ module l2_fsm(
         write_word_hsize_in = 'h0;
         write_word_line_in = 'h0;
 
+        write_word_amo_word_in = 'h0;
+        write_word_amo_w_off_in = 'h0;
+        write_word_amo_b_off_in = 'h0;
+        write_word_amo_hsize_in = 'h0;
+        write_word_amo_amo_in = 'h0;
+        write_word_amo_line_in = 'h0;
+
         addr_br_reqs.line = 'h0;
         addr_br_reqs.line_addr = 'h0;
         addr_br_reqs.word = 'h0;
