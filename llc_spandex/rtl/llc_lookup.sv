@@ -1,10 +1,10 @@
-`timescale 1ps / 1ps 
+`timescale 1ps / 1ps
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
 module llc_lookup (
-    input logic clk, 
-    input logic rst, 
+    input logic clk,
+    input logic rst,
     // Lookup command and trigger
     input logic lookup_mode,
     input logic lookup_en,
@@ -32,7 +32,7 @@ module llc_lookup (
     output word_mask_t word_mask_owned_next,
     // Read the line_bufs to get the cache ID of owners, if any.
     output cache_id_t owners_cache_id[`WORDS_PER_LINE]
-    ); 
+    );
 
     always_comb begin
         way_hit_next = 'h0;
@@ -83,15 +83,15 @@ module llc_lookup (
     end
 
     genvar i;
-    generate 
-        for (i = 0; i < `WORDS_PER_LINE; i++) begin 
-            always_ff @(posedge clk or negedge rst) begin 
+    generate
+        for (i = 0; i < `WORDS_PER_LINE; i++) begin
+            always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
-                    owners_cache_id[i] <= 0; 
-                // end else if (tag_hit & word_mask_owned[i]) begin 
+                    owners_cache_id[i] <= 0;
+                // end else if (tag_hit & word_mask_owned[i]) begin
                 //     owners_cache_id[i] <= lines_buf[i * `BITS_PER_WORD +: `CACHE_ID_WIDTH];
                 end else begin
-                    owners_cache_id[i] <= 0; 
+                    owners_cache_id[i] <= 0;
                 end
             end
         end

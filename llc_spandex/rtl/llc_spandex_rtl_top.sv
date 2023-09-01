@@ -82,7 +82,7 @@ module llc_spandex_rtl_top (
       output logic llc_stats_data
       );
 
-      //llc req in 
+      //llc req in
       llc_req_in_t llc_req_in_i();
       assign llc_req_in_i.coh_msg = llc_req_in_data_coh_msg;
       assign llc_req_in_i.hprot = llc_req_in_data_hprot[0];
@@ -93,7 +93,7 @@ module llc_spandex_rtl_top (
       assign llc_req_in_i.valid_words = llc_req_in_data_valid_words;
       assign llc_req_in_i.word_mask = llc_req_in_data_word_mask;
 
-      //llc dma req in 
+      //llc dma req in
       llc_dma_req_in_t llc_dma_req_in_i();
       assign llc_dma_req_in_i.coh_msg     = llc_dma_req_in_data_coh_msg;
       assign llc_dma_req_in_i.hprot       = llc_dma_req_in_data_hprot[0];
@@ -110,15 +110,15 @@ module llc_spandex_rtl_top (
       assign llc_rsp_in_i.line = llc_rsp_in_data_line;
       assign llc_rsp_in_i.req_id = llc_rsp_in_data_req_id;
       assign llc_rsp_in_i.word_mask = llc_rsp_in_data_word_mask;
-  
-      //llc mem rsp 
+
+      //llc mem rsp
       llc_mem_rsp_t llc_mem_rsp_i();
       assign llc_mem_rsp_i.line = llc_mem_rsp_data_line;
-      
+
       //llc rst tb
-      logic llc_rst_tb_i; 
+      logic llc_rst_tb_i;
       assign llc_rst_tb_i = llc_rst_tb_data;
- 
+
       //llc rsp out
       llc_rsp_out_t llc_rsp_out();
       assign llc_rsp_out_data_coh_msg = llc_rsp_out.coh_msg;
@@ -129,7 +129,7 @@ module llc_spandex_rtl_top (
       assign llc_rsp_out_data_dest_id = llc_rsp_out.dest_id;
       assign llc_rsp_out_data_word_offset = llc_rsp_out.word_offset;
       assign llc_rsp_out_data_word_mask = llc_rsp_out.word_mask;
-        
+
       //llc dma rsp out
       llc_dma_rsp_out_t llc_dma_rsp_out();
       assign llc_dma_rsp_out_data_coh_msg = llc_dma_rsp_out.coh_msg;
@@ -139,9 +139,9 @@ module llc_spandex_rtl_top (
       assign llc_dma_rsp_out_data_req_id = llc_dma_rsp_out.req_id;
       assign llc_dma_rsp_out_data_dest_id = llc_dma_rsp_out.dest_id;
       assign llc_dma_rsp_out_data_word_offset = llc_dma_rsp_out.word_offset;
-     
-      //llc fwd out 
-      llc_fwd_out_t llc_fwd_out(); 
+
+      //llc fwd out
+      llc_fwd_out_t llc_fwd_out();
       assign llc_fwd_out_data_coh_msg = llc_fwd_out.coh_msg;
       assign llc_fwd_out_data_addr = llc_fwd_out.addr;
       assign llc_fwd_out_data_req_id = llc_fwd_out.req_id;
@@ -156,10 +156,10 @@ module llc_spandex_rtl_top (
       assign llc_mem_req_data_hprot = {1'b0, llc_mem_req.hprot};
       assign llc_mem_req_data_addr = llc_mem_req.addr;
       assign llc_mem_req_data_line = llc_mem_req.line;
-      
-      //llc rst tb done  
+
+      //llc rst tb done
       logic llc_rst_tb_done;
-      assign llc_rst_tb_done_data = llc_rst_tb_done; 
+      assign llc_rst_tb_done_data = llc_rst_tb_done;
       assign llc_rst_tb_ready = 1'b1;
       assign llc_rst_tb_done_valid = 1'b0;
 

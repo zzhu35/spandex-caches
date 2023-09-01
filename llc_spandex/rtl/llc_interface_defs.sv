@@ -10,10 +10,10 @@ interface llc_rsp_out_t;
     cache_id_t dest_id;
     word_offset_t word_offset;
     word_mask_t word_mask;
-    
-    modport in (input coh_msg, addr, line, invack_cnt, req_id, dest_id, word_offset, word_mask); 
-    modport out (output coh_msg, addr, line, invack_cnt, req_id, dest_id, word_offset, word_mask); 
-    
+
+    modport in (input coh_msg, addr, line, invack_cnt, req_id, dest_id, word_offset, word_mask);
+    modport out (output coh_msg, addr, line, invack_cnt, req_id, dest_id, word_offset, word_mask);
+
 endinterface
 
 interface llc_dma_rsp_out_t;
@@ -38,8 +38,8 @@ interface llc_fwd_out_t;
     line_t line;
     word_mask_t word_mask;
 
-    modport in (input coh_msg, addr, req_id, dest_id, line, word_mask); 
-    modport out (output coh_msg, addr, req_id, dest_id, line, word_mask); 
+    modport in (input coh_msg, addr, req_id, dest_id, line, word_mask);
+    modport out (output coh_msg, addr, req_id, dest_id, line, word_mask);
 
 endinterface
 
@@ -83,7 +83,7 @@ interface llc_rsp_in_t;
     modport out (output coh_msg, addr, line, req_id, word_mask);
 
 endinterface
-   
+
 /* LLC to Memory */
 
 // requests
@@ -94,8 +94,8 @@ interface llc_mem_req_t;
     line_addr_t addr;
     line_t line;
 
-    modport in (input hwrite, hsize, hprot, addr, line); 
-    modport out (output hwrite, hsize, hprot, addr, line); 
+    modport in (input hwrite, hsize, hprot, addr, line);
+    modport out (output hwrite, hsize, hprot, addr, line);
 
 endinterface
 
@@ -104,8 +104,8 @@ endinterface
 interface llc_mem_rsp_t;
     line_t line;
 
-    modport in (input line); 
-    modport out (output line); 
+    modport in (input line);
+    modport out (output line);
 
 endinterface
 
@@ -113,8 +113,8 @@ interface line_breakdown_llc_t;
     llc_tag_t tag;
     llc_set_t set;
 
-    modport in (input tag, set); 
-    modport out (output tag, set); 
+    modport in (input tag, set);
+    modport out (output tag, set);
 
 endinterface
 
