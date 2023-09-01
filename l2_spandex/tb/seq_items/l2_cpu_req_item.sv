@@ -1,6 +1,3 @@
-`include "uvm_macros.svh"
-import uvm_pkg::*;
-
 class l2_cpu_req_item extends uvm_sequence_item;
     rand cpu_msg_t cpu_msg;
     rand hsize_t hsize;
@@ -24,4 +21,5 @@ class l2_cpu_req_item extends uvm_sequence_item;
     function new(string name = "l2_cpu_req_item");
         super.new(name);
     endfunction
-endclass
+
+endclass : l2_cpu_req_item

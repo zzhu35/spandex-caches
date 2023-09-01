@@ -2,6 +2,9 @@
 `include "cache_consts.svh"
 `include "cache_types.svh"
 
+`include "uvm_macros.svh"
+import uvm_pkg::*;
+
 module l2_tb_top();
 
 l2_cpu_req_if l2_cpu_req_intf();
@@ -86,6 +89,26 @@ l2_rtl_top l2_top_u(
     .l2_stats_ready(l2_stats_intf.ready),
     .flush_done(flush_done)
 );
+
+// Generate clock
+always #`CLOCK_PERIOD clk = ~clk;
+
+// Release reset
+initial begin
+    rst = 1;
+    #5 rst = 0;
+end
+
+  
+  // Adding the interface to config_db
+initial begin 
+    uvm_config_db#(virtual l2_cpu_req_if)::set(uvm_root::get(),"*","l2_cpu_req_intf",l2_cpu_req_intf);
+    $dumpfile("dump.vcd"); $dumpvars;
+end
+  
+initial begin 
+    run_test();
+end
 
 endmodule
 

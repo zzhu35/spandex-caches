@@ -11,6 +11,7 @@ CC_OPTS += '+warn=noPCWM-W'
 CC_OPTS += '+warn=noIPC'
 CC_OPTS += -ntb_opts uvm
 CC_OPTS += -timescale=1ps/1ps
+CC_OPTS += '+define+CLOCK_PERIOD=12500'
 
 INCDIR ?=
 INCDIR += '+incdir+../common/defs'
@@ -29,8 +30,16 @@ MEM_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
 MEM_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
 
 L2_TB ?= 
-L2_TB += tb/*.sv
+L2_TB += tb/l2_tb_top.sv
 L2_TB += tb/seq_items/*.sv
+L2_TB += tb/sequences/*.sv
+L2_TB += tb/sequencers/*.sv
+L2_TB += tb/drivers/*.sv
+L2_TB += tb/monitors/*.sv
+L2_TB += tb/agents/*.sv
+L2_TB += tb/scoreboards/*.sv
+L2_TB += tb/*.sv
+L2_TB += tb/tests/*.sv
 
 DUMP_VPD?=
 
@@ -40,7 +49,7 @@ l2-compile: $(L2_TB) $(L2_SRC) $(MEM_SRC)
 	$(VCS_HOME)/bin/vcs $^ $(INCDIR) $(CC_OPTS) -o $(WORKAREA)/$(PROJECT).simv
 
 l2-run:
-	$(WORKAREA)/$(PROJECT).simv
+	$(WORKAREA)/$(PROJECT).simv +UVM_TESTNAME=l2_cpu_req_test
 
 clean:
 	rm -rf *DB DVEfiles *novas* csrc *simv *daidir \
