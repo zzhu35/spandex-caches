@@ -304,6 +304,134 @@ void llc_spandex_tb::llc_test()
 
     wait();
 
+    ////////////////////////////////////////////////////////////////
+    // TEST 0.5: ReqOdata + Evict (+ ReqOdata at same time)
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x82508750;
+    addr.breakdown(base_addr);
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+
+    for (int i = 0; i < LLC_WAYS; i++) {
+      word = i+0x1;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+
+      put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+      DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+      get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+      wait();
+
+      put_mem_rsp(line /* line */);
+
+      get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();
+
+      addr.tag_incr(1);
+    }
+
+    // Write one more line in same set.
+    word = LLC_WAYS+0x1;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    // LLC must send revoke of first line.
+    base_addr = 0x82508750;
+    addr.breakdown(base_addr);
+
+    get_fwd_out(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 0 /* req_id */, 0 /* dest_id */, 0b11 /* word_mask*/);
+
+    wait();
+
+    // Send requests for two lines on different set before sending the response.
+    base_addr = 0x82508850;
+    addr.breakdown(base_addr);
+
+    word = LLC_WAYS+0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    wait();
+
+    addr.tag_incr(1);
+
+    word = LLC_WAYS+0x3;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    wait();
+
+    // Send response for the first revoke
+    base_addr = 0x82508750;
+    addr.breakdown(base_addr);
+
+    word = 0x11;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */, 0b11 /* word_mask */);
+
+    get_mem_req(LLC_WRITE /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, line /* line */);
+
+    wait();
+
+    addr.tag_incr(LLC_WAYS);
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+    wait();
+
+    word = LLC_WAYS+0x1;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    // Now, we should get the response for the remaining two words to the other line.
+    base_addr = 0x82508850;
+    addr.breakdown(base_addr);
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+    wait();
+
+    word = LLC_WAYS+0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    addr.tag_incr(1);
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+    wait();
+
+    word = LLC_WAYS+0x3;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
 	  CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     // End simulation
