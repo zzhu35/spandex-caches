@@ -5,11 +5,11 @@ http://rsim.cs.uiuc.edu/
 
 	Modified by Zeran Zhu, Robert Jin, Vignesh Suresh
 	zzhu35@illinois.edu
-	
+
 	April 9 2021
 
 */
- 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -29,7 +29,7 @@ void llc_spandex_tb::get_stats()
     wait();
 
     while(true) {
-	
+
 	bool tmp;
 
 	llc_stats_tb.get(tmp);
@@ -44,7 +44,7 @@ void llc_spandex_tb::llc_test()
     /*
      * Random seed
      */
-    
+
     // initialize
     srand(time(NULL));
 
@@ -78,7 +78,7 @@ void llc_spandex_tb::llc_test()
 
     reset_llc_test();
 
-    CACHE_REPORT_INFO("[SPANDEX] Reset done!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Reset done!");
 
     error_count = 0;
 
@@ -159,7 +159,7 @@ void llc_spandex_tb::llc_test()
     wait();
 
     word = 0x2;
-    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word; 
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
     put_req_in(REQ_WB /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */,
 		DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
@@ -303,7 +303,7 @@ void llc_spandex_tb::llc_test()
     0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
 
     wait();
-    
+
 	  CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     // End simulation
@@ -452,7 +452,7 @@ void llc_spandex_tb::llc_test()
 
     // put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 1 /* req_id */,
 		// DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b10 /* word_mask */);
-    
+
     // wait();
 
     // put_mem_rsp(0 /* line */);
@@ -534,7 +534,7 @@ void llc_spandex_tb::llc_test()
     // wait();
 
     // ////////////////////////////////////////////////////////////////
-    // // now send a ReqV from the first cache again - 
+    // // now send a ReqV from the first cache again -
     // // There should be no coherence action
     // ////////////////////////////////////////////////////////////////
     // put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
@@ -546,7 +546,7 @@ void llc_spandex_tb::llc_test()
     // wait();
 
     // ////////////////////////////////////////////////////////////////
-    // // now send a ReqO from the second cache again - 
+    // // now send a ReqO from the second cache again -
     // // again no invalidation
     // ////////////////////////////////////////////////////////////////
     // put_req_in(REQ_O /* coh_msg */, addr.word /* addr */, 0 /* line */, 1 /* req_id */,
@@ -599,7 +599,7 @@ void llc_spandex_tb::get_rsp_out(coh_msg_t coh_msg, addr_t addr, line_t line, in
 	rsp_out.word_offset != woff ||
 	rsp_out.word_mask != word_mask
 	) {
-	
+
 	CACHE_REPORT_ERROR("coh_msg get rsp out", rsp_out.coh_msg);
 	CACHE_REPORT_ERROR("coh_msg get rsp out gold", coh_msg);
 	CACHE_REPORT_ERROR("addr get rsp out", rsp_out.addr);
@@ -638,7 +638,7 @@ void llc_spandex_tb::get_dma_rsp_out(coh_msg_t coh_msg, addr_t addr, line_t line
 	rsp_out.dest_id != dest_id ||
 	rsp_out.word_offset != woff
 	) {
-	
+
 	CACHE_REPORT_ERROR("coh_msg get rsp out", rsp_out.coh_msg);
 	CACHE_REPORT_ERROR("coh_msg get rsp out gold", coh_msg);
 	CACHE_REPORT_ERROR("addr get rsp out", rsp_out.addr);
@@ -672,7 +672,7 @@ void llc_spandex_tb::get_fwd_out(mix_msg_t coh_msg, addr_t addr, cache_id_t req_
 	fwd_out.dest_id != dest_id ||
 	fwd_out.word_mask != word_mask
 	) {
-	
+
 	CACHE_REPORT_ERROR("coh_msg get fwd out", fwd_out.coh_msg);
 	CACHE_REPORT_ERROR("coh_msg get fwd out gold", coh_msg);
 	CACHE_REPORT_ERROR("addr get fwd out", fwd_out.addr);
@@ -701,7 +701,7 @@ void llc_spandex_tb::get_mem_req(bool hwrite, hsize_t hsize, hprot_t hprot, addr
 	mem_req.hprot  != hprot ||
 	mem_req.addr   != addr.range(TAG_RANGE_HI, SET_RANGE_LO)   ||
 	mem_req.line   != line) {
-	
+
 	CACHE_REPORT_ERROR("get mem req", mem_req.hwrite);
 	CACHE_REPORT_ERROR("get mem req gold", hwrite);
 	CACHE_REPORT_ERROR("get mem req", mem_req.hsize);

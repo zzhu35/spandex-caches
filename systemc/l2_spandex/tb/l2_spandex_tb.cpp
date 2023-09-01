@@ -5,7 +5,7 @@ http://rsim.cs.uiuc.edu/
 
 	Modified by Zeran Zhu, Robert Jin, Vignesh Suresh
 	zzhu35@illinois.edu
-	
+
 	April 9 2021
 
 */
@@ -24,7 +24,7 @@ void l2_spandex_tb::get_stats()
     wait();
 
     while(true) {
-	
+
 	bool tmp;
 
 	l2_stats_tb.get(tmp);
@@ -43,7 +43,7 @@ void l2_spandex_tb::l2_test()
     /*
      * Random seed
      */
-    
+
     // initialize
     srand(time(NULL));
 
@@ -69,14 +69,14 @@ void l2_spandex_tb::l2_test()
 
     reset_l2_test();
 
-    CACHE_REPORT_INFO("[SPANDEX] Reset done!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Reset done!");
 
     error_count = 0;
 
     ////////////////////////////////////////////////////////////////
     // TEST 0 - Write + Read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0!");
     addr.breakdown(base_addr);
 
     wait();
@@ -115,7 +115,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 0.1 - Write (hit) + Read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.1!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.1!");
     base_addr = 0x82508258;
     addr.breakdown(base_addr);
 
@@ -134,7 +134,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-    
+
     get_rd_rsp(line /* line */);
 
     wait();
@@ -142,7 +142,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 0.2 - Write (hit) WORD_32 aligned + Read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.2!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.2!");
     base_addr = 0x82508254;
     addr.breakdown(base_addr);
 
@@ -161,7 +161,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-    
+
     get_rd_rsp(line /* line */);
 
     wait();
@@ -169,7 +169,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 0.3 - Read + Write (miss) + Read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.3!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.3!");
     base_addr = 0x82508260;
     addr.breakdown(base_addr);
 
@@ -217,7 +217,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-    
+
     get_rd_rsp(line /* line */);
 
     wait();
@@ -225,7 +225,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 0.4 - Read + Write (miss) WORD_32 aligned + Read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.4!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.4!");
     base_addr = 0x82508270;
     addr.breakdown(base_addr);
 
@@ -274,7 +274,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-    
+
     get_rd_rsp(line /* line */);
 
     wait();
@@ -282,7 +282,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 0.5 - Read L2_WAYS+1 times + evict + Read back 1st
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.5!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.5!");
     base_addr = 0x82508280;
     addr.breakdown(base_addr);
 
@@ -345,7 +345,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-    
+
     get_rd_rsp(line /* line */);
 
     wait();
@@ -354,7 +354,7 @@ void l2_spandex_tb::l2_test()
     // TEST 0.6 - Write L2_WAYS+1 times + evict (write-back)
     // + Read back 1st
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.6!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.6!");
     base_addr = 0x82508380;
     addr.breakdown(base_addr);
 
@@ -386,7 +386,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, word /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-        
+
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
     line.range(BITS_PER_WORD - 1, 0) = 0x1;
 
@@ -441,7 +441,7 @@ void l2_spandex_tb::l2_test()
     // TEST 0.7 - Back-to-back writes to same line (set conflict),
     // and read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.7!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.7!");
     base_addr = 0x82508480;
     addr.breakdown(base_addr);
 
@@ -517,7 +517,7 @@ void l2_spandex_tb::l2_test()
     // TEST 0.8 - Write L2_WAYS+1 times + evict (write-back) + write
     // at same time + Read back 1st
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.8!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.8!");
     base_addr = 0x82508580;
     addr.breakdown(base_addr);
 
@@ -549,7 +549,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, word /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-        
+
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
     line.range(BITS_PER_WORD - 1, 0) = 0x1;
 
@@ -634,7 +634,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 0.9 - Read, invalidate (no fwd_stall) and read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 0.9!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 0.9!");
     base_addr = 0x82508680;
     addr.breakdown(base_addr);
 
@@ -695,7 +695,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 1.0 - Read, invalidate (with fwd_stall) and read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.0!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.0!");
     base_addr = 0x82508780;
     addr.breakdown(base_addr);
 
@@ -756,7 +756,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 1.1 - Write, revoke (no fwd_stall) and read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.1!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.1!");
     base_addr = 0x82508880;
     addr.breakdown(base_addr);
 
@@ -819,7 +819,7 @@ void l2_spandex_tb::l2_test()
     // TEST 1.2: setting a counter (AMO_SWAP) and reading back,
     // incrementing the counter (AMO_ADD) and reading back.
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.2!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.2!");
     base_addr = 0x82508980;
     addr.breakdown(base_addr);
 
@@ -880,10 +880,10 @@ void l2_spandex_tb::l2_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 1.3: LR, followed by SC and read back. Just SC and get 
+    // TEST 1.3: LR, followed by SC and read back. Just SC and get
     // error. LR, revoke, SC and get error.
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.3!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.3!");
     base_addr = 0x82508A80;
     addr.breakdown(base_addr);
 
@@ -1007,7 +1007,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // TEST 1.4 - Write, revoke (with fwd_stall) and read back
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.4!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.4!");
     base_addr = 0x82508B80;
     addr.breakdown(base_addr);
 
@@ -1068,7 +1068,7 @@ void l2_spandex_tb::l2_test()
     // TEST 1.5 - Write L2_WAYS+1 times + evict (write-back) + write
     // at same time + Read back 1st
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.5!"); 
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.5!");
     base_addr = 0x82508C80;
     addr.breakdown(base_addr);
 
@@ -1101,7 +1101,7 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, word /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
-        
+
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
     line.range(BITS_PER_WORD - 1, 0) = 0x1;
 
@@ -1244,7 +1244,7 @@ void l2_spandex_tb::l2_test()
     // get_rsp_out(RSP_Odata /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
     //     line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // wait();
 
@@ -1324,7 +1324,7 @@ void l2_spandex_tb::l2_test()
     // get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
     //     DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
     //      0b0001 /* word_mask */, 0 /* invack_cnt */);
@@ -1521,11 +1521,11 @@ void l2_spandex_tb::l2_test()
 
     // // current_valid_state = 6;
 
-    // // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // // wait();
 
-    // // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // ////////////////////////////////////////////////////////////////
     // // TEST 4: write to this line and try to return with ReqV
@@ -1576,7 +1576,7 @@ void l2_spandex_tb::l2_test()
     // get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
     //     DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
     //      0b0001 /* word_mask */, 0 /* invack_cnt */);
@@ -1645,7 +1645,7 @@ void l2_spandex_tb::l2_test()
     // get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
     //     DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
     //      0b0001 /* word_mask */, 0 /* invack_cnt */);
@@ -1704,7 +1704,7 @@ void l2_spandex_tb::l2_test()
 
     //     // get_inval(addr.word /* addr */, DATA /* hprot */);
 
-    //     wait();  
+    //     wait();
     // }
 
     // ////////////////////////////////////////////////////////////////
@@ -1856,7 +1856,7 @@ void l2_spandex_tb::l2_test()
     // put_fwd_in(FWD_INV_SPDX /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
     //         0 /* line */, 0b0011 /* word_mask */);
 
-    // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // wait();
 
@@ -2244,7 +2244,7 @@ void l2_spandex_tb::l2_test()
     // // get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
     // //     DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // // put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
     // //     0 /* line */, 0b0001 /* word_mask */);
@@ -2355,7 +2355,7 @@ void l2_spandex_tb::l2_test()
     // // get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
     // //     DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
 
-    // // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // // put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
     // //     0 /* line */, 0b0001 /* word_mask */);
@@ -2464,7 +2464,7 @@ void l2_spandex_tb::l2_test()
     // // get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
     // //     DATA /* hprot */, line /* line */, 0b0010 /* word_mask */);
 
-    // // get_inval(addr.word /* addr */, DATA /* hprot */);    
+    // // get_inval(addr.word /* addr */, DATA /* hprot */);
 
     // // put_fwd_in(FWD_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
     // //     0 /* line */, 0b0010 /* word_mask */);
@@ -2556,8 +2556,8 @@ inline void l2_spandex_tb::reset_l2_test()
     wait();
 }
 
-void l2_spandex_tb::put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize, 
-    addr_t addr, word_t word, hprot_t hprot, amo_t amo, bool aq, bool rl, bool dcs_en, 
+void l2_spandex_tb::put_cpu_req(l2_cpu_req_t &cpu_req, cpu_msg_t cpu_msg, hsize_t hsize,
+    addr_t addr, word_t word, hprot_t hprot, amo_t amo, bool aq, bool rl, bool dcs_en,
     bool use_owner_pred, dcs_t dcs, cache_id_t pred_cid)
 {
     cpu_req.cpu_msg = cpu_msg;
@@ -2619,8 +2619,8 @@ void l2_spandex_tb::get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_re
 	(rsp_out.req_id != req_id && to_req) ||
 	rsp_out.addr != addr.range(TAG_RANGE_HI, SET_RANGE_LO) ||
 	(rsp_out.line != line && (rsp_out.coh_msg == RSP_S ||
-                              rsp_out.coh_msg == RSP_Odata || 
-                              rsp_out.coh_msg == RSP_RVK_O || 
+                              rsp_out.coh_msg == RSP_Odata ||
+                              rsp_out.coh_msg == RSP_RVK_O ||
                               rsp_out.coh_msg == RSP_V)) ||
     rsp_out.word_mask != word_mask) {
 
@@ -2646,7 +2646,7 @@ void l2_spandex_tb::get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_re
 void l2_spandex_tb::put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask)
 {
     l2_fwd_in_t fwd_in;
-    
+
     fwd_in.coh_msg = coh_msg;
     fwd_in.addr = addr.range(TAG_RANGE_HI, SET_RANGE_LO);
     fwd_in.req_id = req_id;
@@ -2661,7 +2661,7 @@ void l2_spandex_tb::put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id
 void l2_spandex_tb::put_rsp_in(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt)
 {
     l2_rsp_in_t rsp_in;
-    
+
     rsp_in.coh_msg = coh_msg;
     rsp_in.addr = addr.range(TAG_RANGE_HI, SET_RANGE_LO);
     rsp_in.invack_cnt = invack_cnt;
@@ -2708,7 +2708,7 @@ void l2_spandex_tb::get_bresp(sc_uint<2> gold_bresp_val)
 void l2_spandex_tb::get_inval(addr_t addr, hprot_t hprot)
 {
     l2_inval_t inval;
-    
+
     l2_inval_tb.get(inval);
 
     if (inval.addr != addr.range(TAG_RANGE_HI, SET_RANGE_LO) || inval.hprot != hprot) {
