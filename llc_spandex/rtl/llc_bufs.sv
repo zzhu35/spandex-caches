@@ -9,8 +9,6 @@ module llc_bufs(
     input logic rd_set_into_bufs,
     // Way to store memory response once received.
     input llc_way_t mem_rsp_way,
-    // Increment evict way after current eviction.
-    input logic incr_evict_way_buf,
     // Update lines buf when mem rsp returns.
     input logic llc_mem_rsp_ready_int,
     input logic llc_mem_rsp_valid_int,
@@ -41,8 +39,6 @@ module llc_bufs(
             evict_way_buf <= 0;
         end else if (rd_set_into_bufs) begin
             evict_way_buf <= lmem_rd_data_evict_way;
-        end else if (incr_evict_way_buf) begin
-            evict_way_buf <= evict_way_buf + 1;
         end
     end
 

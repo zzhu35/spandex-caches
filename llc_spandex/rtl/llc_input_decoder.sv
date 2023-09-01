@@ -42,6 +42,11 @@ module llc_input_decoder (
         line_br_next.set = 0;
 
         if (decode_en) begin
+            // If a response is ready and there is at least one MSHR entry (you should have at least one),
+            // accept the response, and inform FSM 2 to mvoe to the response handler.
+            // Else if a new request is ready or if there is an ongoing set conflict, check if there are
+            // free entires in the MSHR and that we are not in an eviction stall, then accept one of them -
+            // with priority to the set conflicted pending request (backed up in interfaces).
             if (llc_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
                 do_get_rsp_next =  1'b1;
                 llc_rsp_in_ready_int = 1'b1;
@@ -54,7 +59,7 @@ module llc_input_decoder (
                 end
             end
 
-            // Parse line addresses for rsp and req as line_br
+            // Parse line addresses for rsp and req as line_br - this is used in the FSM 2.
             if (do_get_rsp_next) begin
                 line_br_next.tag = rsp_in_addr[`ADDR_BITS - `OFFSET_BITS - 1 : `LLC_SET_BITS];
                 line_br_next.set = rsp_in_addr[`LLC_SET_BITS - 1 : 0];

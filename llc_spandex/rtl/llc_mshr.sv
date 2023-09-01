@@ -134,7 +134,7 @@ module llc_mshr(
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
-            // Check if there is a free MSHR entry
+            // Check if there is a matching MSHR entry for the incoming response.
             `LLC_MSHR_LOOKUP : begin
                 for (int i = 0; i < `N_MSHR; i++) begin
                     if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `LLC_I) begin

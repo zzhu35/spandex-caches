@@ -14,7 +14,6 @@ module llc_regs (
     input logic set_evict_stall,
     input logic clr_set_conflict,
     input logic set_set_conflict,
-    input logic set_update_evict_way,
     input logic clr_req_in_stalled_valid,
     input logic set_req_in_stalled_valid,
 
@@ -22,7 +21,6 @@ module llc_regs (
     output logic evict_stall,
     output logic set_conflict,
     output logic req_in_stalled_valid,
-    output logic update_evict_way,
     output logic [`MSHR_BITS_P1-1:0] mshr_cnt
     );
 
@@ -34,16 +32,6 @@ module llc_regs (
             mshr_cnt <= mshr_cnt - 1;
         end else if (incr_mshr_cnt) begin
             mshr_cnt <= mshr_cnt + 1;
-        end
-    end
-
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            update_evict_way <= 1'b0;
-        end else if (decode_en) begin
-            update_evict_way <=  1'b0;
-        end else if (set_update_evict_way) begin
-            update_evict_way <= 1'b1;
         end
     end
 
