@@ -656,6 +656,7 @@ module llc_fsm (
                         // First, we remove the requestor from the sharers list (if present)
                         // TODO: Since we're assuming single core, we do not need to send an invalidate,
                         // because we assume that the core will overwrite the state once the response is received.
+                        lmem_set_in = line_br.set;
                         lmem_way_in = req_in_way;
                         lmem_wr_data_sharers = sharers_buf[req_in_way] & ~(1 << llc_req_in.req_id);
                         lmem_wr_en_sharers = 1'b1;
@@ -863,7 +864,7 @@ module llc_fsm (
 
                             // Update the states RAM
                             lmem_set_in = line_br.set;
-                            lmem_way_in = req_in_way;
+                            lmem_way_in = evict_way_buf;
                             lmem_wr_data_state = `LLC_I;
                             lmem_wr_en_state = 1'b1;
                         end else begin
