@@ -37,7 +37,7 @@ module l2_spandex_rtl_top(
     input logic l2_flush_valid,
     input logic l2_flush_data,
     input logic l2_fence_valid,
-    input logic[1:0] l2_fence_data,
+    input fence_t l2_fence_data,
     input logic l2_inval_ready,
     input logic l2_stats_ready,
     input logic l2_bresp_ready,
@@ -137,7 +137,7 @@ module l2_spandex_rtl_top(
     logic l2_flush_i;
     assign l2_flush_i = l2_flush_data;
 
-    logic[1:0] l2_fence_i;
+    fence_t l2_fence_i;
     assign l2_fence_i = l2_fence_data;
 
     l2_inval_t l2_inval();

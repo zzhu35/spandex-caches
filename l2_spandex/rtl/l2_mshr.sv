@@ -8,6 +8,7 @@ module l2_mshr(
     input logic rst,
     input logic add_mshr_entry,
     input mix_msg_t fwd_in_coh_msg,
+    input logic ongoing_drain,
     // Update parts of an MSHR entry.
     input logic update_mshr_state,
     input logic update_mshr_line,
@@ -38,6 +39,8 @@ module l2_mshr(
     output logic clr_fwd_stall,
     output logic set_fwd_stall_entry,
     output logic [`MSHR_BITS-1:0] set_fwd_stall_entry_data,
+    // Drain status - any ownership requests pending.
+    output logic drain_in_progress,
     // Signals indicating whether there was a hit and the index for hit.
     output logic mshr_hit_next,
     output logic mshr_hit,
@@ -218,6 +221,16 @@ module l2_mshr(
         end else if (mshr_op_code != `L2_MSHR_IDLE) begin
             mshr_i <= mshr_i_next;
             mshr_hit <= mshr_hit_next;
+        end
+    end
+
+    always_comb begin
+        drain_in_progress = 1'b0;
+
+        for (int i = 0; i < `N_MSHR; i++) begin
+            if (ongoing_drain && (mshr[i].state == `SPX_XR || mshr[i].state == `SPX_XRV || mshr[i].state == `SPX_AMO)) begin
+                drain_in_progress = 1'b1;
+            end
         end
     end
 

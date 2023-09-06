@@ -67,6 +67,7 @@ typedef sc_uint<MAX_N_L2>		    sharers_t;
 typedef sc_uint<DMA_BURST_LENGTH_BITS>  dma_length_t;
 typedef sc_uint<BRESP_WIDTH>    bresp_t;
 typedef sc_uint<AMO_WIDTH>    amo_t;
+typedef sc_uint<2>    fence_t;
 
 /*
  * L2 cache coherence channels types

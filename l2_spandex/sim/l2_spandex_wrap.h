@@ -90,7 +90,7 @@ public:
     sc_out<bresp_t> l2_bresp_data;
 
     sc_in<bool> l2_fence_valid;
-    sc_in<sc_uint<2> > l2_fence_data;
+    sc_in<fence_t> l2_fence_data;
     sc_out<bool> l2_fence_ready;
  
     sc_out<bool> flush_done;
@@ -196,7 +196,7 @@ public:
     cynw::cynw_get_port_base<l2_fwd_in_t> l2_fwd_in;
     cynw::cynw_get_port_base<l2_rsp_in_t> l2_rsp_in;
     cynw::cynw_get_port_base<bool> l2_flush;
-    cynw::cynw_get_port_base<sc_uint<2> > l2_fence;
+    cynw::cynw_get_port_base<fence_t> l2_fence;
     
     cynw::cynw_put_port_base<l2_req_out_t> l2_req_out;
     cynw::cynw_put_port_base<l2_rsp_out_t> l2_rsp_out;
@@ -286,6 +286,8 @@ public:
         sensitive << l2_rsp_in.data;
         SC_METHOD(thread_l2_flush_data_conv);
         sensitive << l2_flush.data;
+        SC_METHOD(thread_l2_fence_data_conv);
+        sensitive << l2_fence.data;
 
         SC_METHOD(thread_l2_req_out_data_conv);
         sensitive << l2_req_out_data_conv_coh_msg << l2_req_out_data_conv_addr << l2_req_out_data_conv_line << l2_req_out_data_conv_hprot << l2_req_out_data_conv_word_mask; 
@@ -437,7 +439,7 @@ public:
     
     sc_signal<bresp_t> l2_bresp_data_conv;
 
-    sc_signal<sc_uint<2> > l2_fence_data_conv;
+    sc_signal<fence_t> l2_fence_data_conv;
 #ifdef STATS_ENABLE
     sc_signal<bool> l2_stats_data_conv;
 #endif

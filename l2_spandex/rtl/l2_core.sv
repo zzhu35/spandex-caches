@@ -15,7 +15,7 @@ module l2_core(
     input logic l2_flush_valid,
     input logic l2_flush_i,
     input logic l2_fence_valid,
-    input logic[1:0] l2_fence_i,
+    input fence_t l2_fence_i,
     input logic l2_inval_ready,
     input logic l2_bresp_ready,
 
@@ -134,6 +134,11 @@ module l2_core(
     word_mask_t update_mshr_value_word_mask;
     word_mask_t update_mshr_value_word_mask_reg;
 
+    fence_t l2_fence;
+    logic ongoing_fence, drain_in_progress, clr_ongoing_fence, set_ongoing_fence;
+    logic ongoing_drain, clr_ongoing_drain, set_ongoing_drain;
+    logic do_fence, do_fence_next, do_ongoing_fence, do_ongoing_fence_next;
+
     assign ongoing_flush = 1'b0;
     assign ongoing_atomic = 1'b0;
     assign do_ongoing_flush = 1'b0;
@@ -160,7 +165,6 @@ module l2_core(
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
     assign lmem_rd_en = 1'b1;
 
-    assign acc_flush_done = 1'b0;
     assign flush_done = 1'b0;
     assign l2_fwd_out_valid = 1'b0;
     assign l2_fwd_out_o.coh_msg = 'h0;

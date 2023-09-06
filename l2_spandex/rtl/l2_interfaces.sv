@@ -16,7 +16,7 @@ module l2_interfaces(
     input logic l2_flush_i,
     input logic l2_fence_valid,
     input logic l2_fence_ready_int,
-    input logic[1:0] l2_fence_i,
+    input fence_t l2_fence_i,
     input logic l2_req_out_valid_int,
     input logic l2_req_out_ready,
     input logic l2_rsp_out_valid_int,
@@ -71,6 +71,7 @@ module l2_interfaces(
     output line_addr_t rsp_in_addr,
     output line_addr_t fwd_in_addr,
     output addr_t cpu_req_addr,
+    output fence_t l2_fence,
 
     l2_req_out_t.out l2_req_out,
     l2_rsp_out_t.out l2_rsp_out,
@@ -239,7 +240,7 @@ module l2_interfaces(
 
     //L2 FENCE
     logic l2_fence_valid_tmp;
-    logic[1:0] l2_fence_tmp, l2_fence_next;
+    fence_t l2_fence_tmp, l2_fence_next;
 
     interface_controller l2_fence_intf(
         .clk(clk),
@@ -589,6 +590,15 @@ module l2_interfaces(
             is_flush_all <= 1'b1;
         end else if (l2_flush_valid_int && l2_flush_ready_int) begin
             is_flush_all <= l2_flush_next;
+        end
+    end
+
+    // fence
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            l2_fence <= 'h0;
+        end else if (l2_fence_valid_int && l2_fence_ready_int) begin
+            l2_fence <= l2_fence_next;
         end
     end
 

@@ -7,6 +7,8 @@ module l2_fsm(
     input logic clk,
     input logic rst,
     // From input_decoder - what to service next.
+    input logic do_fence_next,
+    input logic do_ongoing_fence_next,
     input logic do_rsp_next,
     input logic do_fwd_next,
     input logic do_cpu_req_next,
@@ -54,6 +56,7 @@ module l2_fsm(
     input logic evict_stall,
     input logic set_conflict,
     input logic fwd_stall,
+    input fence_t l2_fence,
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -133,6 +136,11 @@ module l2_fsm(
     output logic set_cpu_req_conflict,
     output logic set_fwd_in_stalled,
     output logic clr_fwd_stall_ended,
+    output logic set_ongoing_fence,
+    output logic clr_ongoing_fence,
+    output logic set_ongoing_drain,
+    output logic clr_ongoing_drain,
+    output logic acc_flush_done,
 
     output bresp_t l2_bresp_o,
 
@@ -159,8 +167,8 @@ module l2_fsm(
     localparam FWD_INV_HANDLER = 6'b001101;
     localparam FWD_RVK_O_HANDLER = 6'b001110;
 
-    localparam ONGOING_FLUSH_LOOKUP = 6'b100000;
-    localparam ONGOING_FLUSH_PROCESS = 6'b100001;
+    localparam NEW_FENCE_HANDLER = 6'b100000;
+    localparam ONGOING_FENCE_HANDLER = 6'b100001;
 
     localparam CPU_REQ_MSHR_LOOKUP = 6'b100010;
     localparam CPU_REQ_SET_CONFLICT = 6'b100011;
@@ -223,22 +231,36 @@ module l2_fsm(
             end
             // Default state for the controller; driven
             // by inputs from input_decoder module.
-            // - do_flush_next: New flush request received
+            // - do_fence_next: New fence request received
             // - do_rsp_next: Response to earlier req_out/fwd_out received
             // - do_fwd_next: Forward received from other L2/LLC
-            // - do_ongoing_flush_next: Continue next set of ongoing flush
+            // - do_ongoing_fence_next: Continue next half of ongoing fence
             // - do_cpu_req_next: New input request received
-            // TODO: add fences
-            // TODO: Removed flush
             DECODE : begin
-                if (do_rsp_next) begin
+                if (do_fence_next) begin
+                    next_state = NEW_FENCE_HANDLER;
+                end if (do_rsp_next) begin
                     next_state = RSP_MSHR_LOOKUP;
                 end else if (do_fwd_next) begin
                     next_state = FWD_MSHR_LOOKUP;
                     // TODO: Removed do_ongoing_flush_next temporarily
+                end else if (do_ongoing_fence_next) begin
+                    next_state = ONGOING_FENCE_HANDLER;
                 end else if (do_cpu_req_next) begin
                     next_state = CPU_REQ_MSHR_LOOKUP;
                 end
+            end
+            // -------------------
+            // Fence handler
+            // -------------------
+            // When we receive a new fence, we first check the type of fence:
+            // l2_fence[0] = acquire; self-invalidation
+            // l2_fence[1] = release; write-buffer and MSHR flush
+            NEW_FENCE_HANDLER : begin
+                next_state = DECODE;
+            end
+            ONGOING_FENCE_HANDLER : begin
+                next_state = DECODE;
             end
             // -------------------
             // Response handler
@@ -571,6 +593,11 @@ module l2_fsm(
         set_cpu_req_conflict = 1'b0;
         set_fwd_in_stalled = 1'b0;
         clr_fwd_stall_ended = 1'b0;
+        set_ongoing_fence = 1'b0;
+        clr_ongoing_fence = 1'b0;
+        set_ongoing_drain = 1'b0;
+        clr_ongoing_drain = 1'b0;
+        acc_flush_done = 1'b0;
 
         add_mshr_entry = 1'b0;
         update_mshr_state = 1'b0;
@@ -673,6 +700,19 @@ module l2_fsm(
                     lmem_set_in = addr_br_next.set;
                 end
             end
+            NEW_FENCE_HANDLER : begin
+                // Start drain of ongoing requests.
+                if (l2_fence[1]) begin
+                    set_ongoing_fence = 1'b1;
+                    set_ongoing_drain = 1'b1;
+                end
+            end
+            ONGOING_FENCE_HANDLER : begin
+                // TODO: Once we add valid states, self-invalidate will come here.
+                clr_ongoing_fence = 1'b1;
+                clr_ongoing_drain = 1'b1;
+                acc_flush_done = 1'b1;
+            end                 
             RSP_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_LOOKUP;
             end

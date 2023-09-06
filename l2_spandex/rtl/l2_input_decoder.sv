@@ -7,6 +7,7 @@ module l2_input_decoder (
     input logic rst,
     input logic decode_en,
     // Valid inputs from interfaces
+    input logic l2_fence_valid_int,
     input logic l2_rsp_in_valid_int,
     input logic l2_fwd_in_valid_int,
     input logic l2_cpu_req_valid_int,
@@ -20,16 +21,26 @@ module l2_input_decoder (
     input logic set_conflict,
     input logic fwd_stall,
     input logic fwd_stall_ended,
+    input logic ongoing_fence,
+    input logic drain_in_progress,
 
     // Assign cpu_req from conflict registers
     output logic set_cpu_req_from_conflict,
     // Assign fwd_in from conflict registers
     output logic set_fwd_in_from_stalled,
     // Accept the new input now
+    output logic do_fence,
+    output logic do_fence_next,
+    output logic do_ongoing_fence,
+    output logic do_ongoing_fence_next,
+    output logic do_rsp,
     output logic do_rsp_next,
+    output logic do_fwd,
     output logic do_fwd_next,
+    output logic do_cpu_req,
     output logic do_cpu_req_next,
     // Ready signals sent to interfaces
+    output logic l2_fence_ready_int,
     output logic l2_rsp_in_ready_int,
     output logic l2_fwd_in_ready_int,
     output logic l2_cpu_req_ready_int,
@@ -44,9 +55,13 @@ module l2_input_decoder (
         do_rsp_next = 1'b0;
         do_fwd_next = 1'b0;
         do_cpu_req_next = 1'b0;
+        do_fence_next = 1'b0;
+        do_ongoing_fence_next = 1'b0;
+
         l2_rsp_in_ready_int = 1'b0;
         l2_fwd_in_ready_int = 1'b0;
         l2_cpu_req_ready_int = 1'b0;
+        l2_fence_ready_int = 1'b0;
 
         line_br_next.tag = 0;
         line_br_next.set = 0;
@@ -65,8 +80,10 @@ module l2_input_decoder (
         set_fwd_in_from_stalled = 1'b0;
 
         if (decode_en) begin
-            // TODO: Add fence and flush check here
-            if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
+            if (l2_fence_valid_int && !ongoing_fence) begin
+                l2_fence_ready_int = 1'b1;            
+                do_fence_next = 1'b1;
+            end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
                 do_rsp_next = 1'b1;
                 l2_rsp_in_ready_int = 1'b1;
             end else if ((l2_fwd_in_valid_int && !fwd_stall) || fwd_stall_ended) begin
@@ -76,9 +93,9 @@ module l2_input_decoder (
                 end else begin
                     set_fwd_in_from_stalled = 1'b1;
                 end
-            // TODO: Add ongoing_flush logic
-            // TODO: cpu_req: add set_conflict, evict_stall, ongoing_atomic checks
-            end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall) begin
+            end else if (ongoing_fence && !drain_in_progress) begin
+                do_ongoing_fence_next = 1'b1;
+            end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !drain_in_progress) begin
                 do_cpu_req_next = 1'b1;
                 if (!set_conflict) begin
                     l2_cpu_req_ready_int = 1'b1;
@@ -115,6 +132,11 @@ module l2_input_decoder (
     // TODO: minor: add other signals that might need to be registered till next decode.
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
+            do_fence <= 0;
+            do_ongoing_fence <= 0;
+            do_rsp <= 0;
+            do_fwd <= 0;
+            do_cpu_req <= 0;
             line_br.tag <= 0;
             line_br.set <= 0;
             addr_br.line <= 0;
@@ -125,6 +147,11 @@ module l2_input_decoder (
             addr_br.w_off <= 0;
             addr_br.b_off <= 0;
         end else if (decode_en) begin
+            do_fence <= do_fence_next;
+            do_ongoing_fence <= do_ongoing_fence_next;
+            do_rsp <= do_rsp_next;
+            do_fwd <= do_fwd_next;
+            do_cpu_req <= do_cpu_req_next;
             line_br.tag <= line_br_next.tag;
             line_br.set <= line_br_next.set;
             addr_br.line <= addr_br_next.line;

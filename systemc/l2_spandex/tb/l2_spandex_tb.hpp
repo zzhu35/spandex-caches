@@ -38,7 +38,7 @@ public:
     put_initiator<l2_fwd_in_t>	l2_fwd_in_tb;
     put_initiator<l2_rsp_in_t>	l2_rsp_in_tb;
     put_initiator<bool>		    l2_flush_tb;
-    put_initiator<sc_uint<2> >  l2_fence_tb;
+    put_initiator<fence_t>      l2_fence_tb;
 
     // Output ports
     get_initiator<l2_rd_rsp_t>	l2_rd_rsp_tb;

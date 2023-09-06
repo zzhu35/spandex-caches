@@ -18,6 +18,10 @@ module l2_regs (
     input logic set_fwd_stall,
     input logic clr_fwd_stall,
     input logic clr_fwd_stall_ended,
+    input logic clr_ongoing_fence,
+    input logic set_ongoing_fence,
+    input logic clr_ongoing_drain,
+    input logic set_ongoing_drain,
     input logic lmem_wr_en_clear_mshr,
     // Entry in MSHR that corresponds to fwd_stall
     input logic set_fwd_stall_entry,
@@ -27,6 +31,8 @@ module l2_regs (
     output logic set_conflict,
     output logic fwd_stall,
     output logic fwd_stall_ended,
+    output logic ongoing_fence,
+    output logic ongoing_drain,
     output logic [`MSHR_BITS-1:0] fwd_stall_entry,
     output logic [`MSHR_BITS_P1-1:0] mshr_cnt
     );
@@ -89,6 +95,26 @@ module l2_regs (
             fwd_stall_ended <= 1'b0;
         end else if (lmem_wr_en_clear_mshr && fwd_stall && (fwd_stall_entry == mshr_i)) begin
             fwd_stall_ended <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            ongoing_fence <= 1'b0;
+        end else if (clr_ongoing_fence) begin
+            ongoing_fence <= 1'b0;
+        end else if (set_ongoing_fence) begin
+            ongoing_fence <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            ongoing_drain <= 1'b0;
+        end else if (clr_ongoing_drain) begin
+            ongoing_drain <= 1'b0;
+        end else if (set_ongoing_drain) begin
+            ongoing_drain <= 1'b1;
         end
     end
 

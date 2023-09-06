@@ -47,6 +47,7 @@ typedef logic[(`BRESP_WIDTH-1):0]   bresp_t;
 typedef logic[(`AMO_WIDTH-1):0] amo_t;
 typedef logic[(`DCS_WIDTH-1):0] dcs_t;
 typedef logic[(`WORDS_PER_LINE-1):0] word_mask_t;
+typedef logic[1:0] fence_t;
 
 // invalidate address
 typedef line_addr_t l2_inval_addr_t;

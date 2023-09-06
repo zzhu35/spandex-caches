@@ -31,7 +31,7 @@ public:
     put_get_channel<l2_fwd_in_t>	l2_fwd_in_chnl;
     put_get_channel<l2_rsp_in_t>	l2_rsp_in_chnl;
     put_get_channel<bool>		    l2_flush_chnl;
-    put_get_channel<sc_uint<2> >    l2_fence_chnl;
+    put_get_channel<fence_t>    	l2_fence_chnl;
     // From L2 cache
     put_get_channel<l2_rd_rsp_t>	l2_rd_rsp_chnl;
     put_get_channel<l2_inval_t>     l2_inval_chnl;
