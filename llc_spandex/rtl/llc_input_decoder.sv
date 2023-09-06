@@ -9,10 +9,10 @@ module llc_input_decoder (
     // Valid inputs from interfaces
     input logic llc_rsp_in_valid_int,
     input logic llc_req_in_valid_int,
-    input line_addr_t rsp_in_addr,
-    input line_addr_t req_in_addr,
+    `FPGA_DBG input line_addr_t rsp_in_addr,
+    `FPGA_DBG input line_addr_t req_in_addr,
     // To check if new request can be tracked
-    input logic [`REQS_BITS_P1-1:0] mshr_cnt,
+    `FPGA_DBG input logic [`REQS_BITS_P1-1:0] mshr_cnt,
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,
@@ -25,7 +25,7 @@ module llc_input_decoder (
     // Ready signals sent to interfaces
     output logic llc_rsp_in_ready_int,
     output logic llc_req_in_ready_int,
-    output logic set_req_from_conflict,
+    `FPGA_DBG output logic set_req_from_conflict,
 
     line_breakdown_llc_t.out line_br,
     line_breakdown_llc_t.out line_br_next

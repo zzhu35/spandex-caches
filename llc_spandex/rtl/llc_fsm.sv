@@ -3,49 +3,49 @@
 `include "spandex_types.svh"
 
 module llc_fsm (
-    input logic clk,
-    input logic rst,
+    `FPGA_DBG input logic clk,
+    `FPGA_DBG input logic rst,
     // From input decoder
-    input logic do_get_rsp,
-    input logic do_get_rsp_next,
-    input logic do_get_req,
-    input logic do_get_req_next,
+    `FPGA_DBG input logic do_get_rsp,
+    `FPGA_DBG input logic do_get_rsp_next,
+    `FPGA_DBG input logic do_get_req,
+    `FPGA_DBG input logic do_get_req_next,
     // From interfaces
-    input logic llc_mem_req_ready_int,
-    input logic llc_fwd_out_ready_int,
-    input logic llc_rsp_out_ready_int,
-    input logic llc_mem_rsp_valid_int,
+    `FPGA_DBG input logic llc_mem_req_ready_int,
+    `FPGA_DBG input logic llc_fwd_out_ready_int,
+    `FPGA_DBG input logic llc_rsp_out_ready_int,
+    `FPGA_DBG input logic llc_mem_rsp_valid_int,
     // From MSHR
-    input logic mshr_hit,
-    input logic mshr_hit_next,
-    input logic [`MSHR_BITS-1:0] mshr_i,
-    input logic [`MSHR_BITS-1:0] mshr_i_next,
-    input mshr_llc_buf_t mshr[`N_MSHR],
-    input logic set_set_conflict_mshr,
-    input logic clr_set_conflict_mshr,
+    `FPGA_DBG input logic mshr_hit,
+    `FPGA_DBG input logic mshr_hit_next,
+    `FPGA_DBG input logic [`MSHR_BITS-1:0] mshr_i,
+    `FPGA_DBG input logic [`MSHR_BITS-1:0] mshr_i_next,
+    `FPGA_DBG input mshr_llc_buf_t mshr[`N_MSHR],
+    `FPGA_DBG input logic set_set_conflict_mshr,
+    `FPGA_DBG input logic clr_set_conflict_mshr,
     // From lookup
-    input logic tag_hit,
-    input logic tag_hit_next,
-    input logic empty_way_found,
-    input logic empty_way_found_next,
-    input llc_way_t way_hit,
-    input llc_way_t way_hit_next,
-    input llc_way_t empty_way,
-    input llc_way_t empty_way_next,
-    input word_mask_t word_mask_owned,
-    input word_mask_t word_mask_owned_next,
+    `FPGA_DBG input logic tag_hit,
+    `FPGA_DBG input logic tag_hit_next,
+    `FPGA_DBG input logic empty_way_found,
+    `FPGA_DBG input logic empty_way_found_next,
+    `FPGA_DBG input llc_way_t way_hit,
+    `FPGA_DBG input llc_way_t way_hit_next,
+    `FPGA_DBG input llc_way_t empty_way,
+    `FPGA_DBG input llc_way_t empty_way_next,
+    `FPGA_DBG input word_mask_t word_mask_owned,
+    `FPGA_DBG input word_mask_t word_mask_owned_next,
     // Bufs populated from the current set in RAMs.
-    input var logic dirty_bits_buf[`LLC_WAYS],
-    input var line_t lines_buf[`LLC_WAYS],
-    input var llc_tag_t tags_buf[`LLC_WAYS],
-    input var sharers_t sharers_buf[`LLC_WAYS],
-    input var owner_t owners_buf[`LLC_WAYS],
-    input var hprot_t hprots_buf[`LLC_WAYS],
-    input var llc_state_t states_buf[`LLC_WAYS],
-    input llc_way_t evict_way_buf,
+    `FPGA_DBG input var logic dirty_bits_buf[`LLC_WAYS],
+    `FPGA_DBG input var line_t lines_buf[`LLC_WAYS],
+    `FPGA_DBG input var llc_tag_t tags_buf[`LLC_WAYS],
+    `FPGA_DBG input var sharers_t sharers_buf[`LLC_WAYS],
+    `FPGA_DBG input var owner_t owners_buf[`LLC_WAYS],
+    `FPGA_DBG input var hprot_t hprots_buf[`LLC_WAYS],
+    `FPGA_DBG input var llc_state_t states_buf[`LLC_WAYS],
+    `FPGA_DBG input llc_way_t evict_way_buf,
     // State registers from regs/others
-    input logic evict_stall,
-    input logic set_conflict,
+    `FPGA_DBG input logic evict_stall,
+    `FPGA_DBG input logic set_conflict,
 
     // Interface buses
     llc_req_in_t.in llc_req_in,
@@ -57,65 +57,65 @@ module llc_fsm (
     line_breakdown_llc_t.in line_br_next,
 
     // To input_decoder - get new input
-    output logic decode_en,
+    `FPGA_DBG output logic decode_en,
     // To lookup - check for hit/miss/conflict in new set.
-    output logic lookup_en,
-    output logic lookup_mode,
+    `FPGA_DBG output logic lookup_en,
+    `FPGA_DBG output logic lookup_mode,
     // To external interfaces - new data available.
-    output logic llc_mem_req_valid_int,
-    output logic llc_fwd_out_valid_int,
-    output logic llc_rsp_out_valid_int,
-    output logic llc_mem_rsp_ready_int,
-    output logic llc_dma_rsp_out_valid_int,
+    `FPGA_DBG output logic llc_mem_req_valid_int,
+    `FPGA_DBG output logic llc_fwd_out_valid_int,
+    `FPGA_DBG output logic llc_rsp_out_valid_int,
+    `FPGA_DBG output logic llc_mem_rsp_ready_int,
+    `FPGA_DBG output logic llc_dma_rsp_out_valid_int,
     // To bufs to read RAMs into bufs.
-    output logic rd_set_into_bufs,
+    `FPGA_DBG output logic rd_set_into_bufs,
     // Way to store memory response once received.
-    output llc_way_t mem_rsp_way,
+    `FPGA_DBG output llc_way_t mem_rsp_way,
     // To MSHR
-    output logic add_mshr_entry,
-    output logic update_mshr_tag,
-    output logic update_mshr_way,
-    output logic update_mshr_state,
-    output logic update_mshr_invack_cnt,
-    output logic update_mshr_line,
-    output logic update_mshr_word_mask,
-    output logic [2:0] mshr_op_code,
-    output logic incr_mshr_cnt,
-    output mix_msg_t update_mshr_value_msg,
-    output cache_id_t update_mshr_value_req_id,
-    output llc_tag_t update_mshr_value_tag,
-    output llc_way_t update_mshr_value_way,
-    output unstable_state_t update_mshr_value_state,
-    output hprot_t update_mshr_value_hprot,
-    output invack_cnt_calc_t update_mshr_value_invack_cnt,
-    output line_t update_mshr_value_line,
-    output word_mask_t update_mshr_value_word_mask,
-    output word_mask_t update_mshr_value_word_mask_reg,
+    `FPGA_DBG output logic add_mshr_entry,
+    `FPGA_DBG output logic update_mshr_tag,
+    `FPGA_DBG output logic update_mshr_way,
+    `FPGA_DBG output logic update_mshr_state,
+    `FPGA_DBG output logic update_mshr_invack_cnt,
+    `FPGA_DBG output logic update_mshr_line,
+    `FPGA_DBG output logic update_mshr_word_mask,
+    `FPGA_DBG output logic [2:0] mshr_op_code,
+    `FPGA_DBG output logic incr_mshr_cnt,
+    `FPGA_DBG output mix_msg_t update_mshr_value_msg,
+    `FPGA_DBG output cache_id_t update_mshr_value_req_id,
+    `FPGA_DBG output llc_tag_t update_mshr_value_tag,
+    `FPGA_DBG output llc_way_t update_mshr_value_way,
+    `FPGA_DBG output unstable_state_t update_mshr_value_state,
+    `FPGA_DBG output hprot_t update_mshr_value_hprot,
+    `FPGA_DBG output invack_cnt_calc_t update_mshr_value_invack_cnt,
+    `FPGA_DBG output line_t update_mshr_value_line,
+    `FPGA_DBG output word_mask_t update_mshr_value_word_mask,
+    `FPGA_DBG output word_mask_t update_mshr_value_word_mask_reg,
     // To localmem - update triggers
-    output llc_set_t lmem_set_in,
-    output llc_way_t lmem_way_in,
-    output logic lmem_wr_en_state,
-    output logic lmem_wr_en_line,
-    output logic lmem_wr_en_evict_way,
-    output logic lmem_wr_en_sharers,
-    output logic lmem_wr_en_owner,
-    output logic lmem_wr_en_dirty_bit,
-    output logic lmem_wr_en_all_mem,
+    `FPGA_DBG output llc_set_t lmem_set_in,
+    `FPGA_DBG output llc_way_t lmem_way_in,
+    `FPGA_DBG output logic lmem_wr_en_state,
+    `FPGA_DBG output logic lmem_wr_en_line,
+    `FPGA_DBG output logic lmem_wr_en_evict_way,
+    `FPGA_DBG output logic lmem_wr_en_sharers,
+    `FPGA_DBG output logic lmem_wr_en_owner,
+    `FPGA_DBG output logic lmem_wr_en_dirty_bit,
+    `FPGA_DBG output logic lmem_wr_en_all_mem,
     // To localmem - update values
-    output state_t lmem_wr_data_state,
-    output line_t lmem_wr_data_line,
-    output hprot_t lmem_wr_data_hprot,
-    output llc_tag_t lmem_wr_data_tag,
-    output llc_way_t lmem_wr_data_evict_way,
-    output sharers_t lmem_wr_data_sharers,
-    output owner_t lmem_wr_data_owner,
-    output logic lmem_wr_data_dirty_bit,
+    `FPGA_DBG output state_t lmem_wr_data_state,
+    `FPGA_DBG output line_t lmem_wr_data_line,
+    `FPGA_DBG output hprot_t lmem_wr_data_hprot,
+    `FPGA_DBG output llc_tag_t lmem_wr_data_tag,
+    `FPGA_DBG output llc_way_t lmem_wr_data_evict_way,
+    `FPGA_DBG output sharers_t lmem_wr_data_sharers,
+    `FPGA_DBG output owner_t lmem_wr_data_owner,
+    `FPGA_DBG output logic lmem_wr_data_dirty_bit,
     // Outputs to regs to register states
-    output logic clr_evict_stall,
-    output logic set_evict_stall,
-    output logic set_set_conflict_fsm,
-    output logic clr_set_conflict_fsm,
-    output logic set_req_conflict,
+    `FPGA_DBG output logic clr_evict_stall,
+    `FPGA_DBG output logic set_evict_stall,
+    `FPGA_DBG output logic set_set_conflict_fsm,
+    `FPGA_DBG output logic clr_set_conflict_fsm,
+    `FPGA_DBG output logic set_req_conflict,
 
     llc_mem_req_t.out llc_mem_req_o,
     llc_fwd_out_t.out llc_fwd_out_o,
@@ -155,7 +155,7 @@ module llc_fsm (
 
     localparam SEND_FWD_WITH_OWNER_MASK = 6'b110000;
 
-    logic [5:0] state, next_state;
+    `FPGA_DBG logic [5:0] state, next_state;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             state <= RESET;
@@ -178,11 +178,11 @@ module llc_fsm (
     end
 
     // Wrapper variable to store the way for the ongoing cpu request.
-    llc_way_t req_in_way;
+    `FPGA_DBG llc_way_t req_in_way;
     assign req_in_way = tag_hit ? way_hit : (empty_way_found ? empty_way : 'h0);
 
     // Way to store memory response once received.
-    llc_way_t mem_rsp_way_next;
+    `FPGA_DBG llc_way_t mem_rsp_way_next;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             mem_rsp_way <= 'h0;

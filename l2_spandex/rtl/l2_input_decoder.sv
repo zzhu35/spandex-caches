@@ -11,9 +11,9 @@ module l2_input_decoder (
     input logic l2_rsp_in_valid_int,
     input logic l2_fwd_in_valid_int,
     input logic l2_cpu_req_valid_int,
-    input line_addr_t rsp_in_addr,
-    input line_addr_t fwd_in_addr,
-    input addr_t cpu_req_addr,
+    `FPGA_DBG input line_addr_t rsp_in_addr,
+    `FPGA_DBG input line_addr_t fwd_in_addr,
+    `FPGA_DBG input addr_t cpu_req_addr,
     // To check if new request can be tracked
     input logic [`REQS_BITS_P1-1:0] mshr_cnt,
     // State registers from regs/others
@@ -21,13 +21,13 @@ module l2_input_decoder (
     input logic set_conflict,
     input logic fwd_stall,
     input logic fwd_stall_ended,
-    input logic ongoing_fence,
-    input logic drain_in_progress,
+    `FPGA_DBG input logic ongoing_fence,
+    `FPGA_DBG input logic drain_in_progress,
 
     // Assign cpu_req from conflict registers
-    output logic set_cpu_req_from_conflict,
+    `FPGA_DBG output logic set_cpu_req_from_conflict,
     // Assign fwd_in from conflict registers
-    output logic set_fwd_in_from_stalled,
+    `FPGA_DBG output logic set_fwd_in_from_stalled,
     // Accept the new input now
     output logic do_fence,
     output logic do_fence_next,
