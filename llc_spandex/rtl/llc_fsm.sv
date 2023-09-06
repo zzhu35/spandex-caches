@@ -36,7 +36,7 @@ module llc_fsm (
     `FPGA_DBG input word_mask_t word_mask_owned_next,
     // Bufs populated from the current set in RAMs.
     `FPGA_DBG input var logic dirty_bits_buf[`LLC_WAYS],
-    `FPGA_DBG input var line_t lines_buf[`LLC_WAYS],
+    input var line_t lines_buf[`LLC_WAYS],
     `FPGA_DBG input var llc_tag_t tags_buf[`LLC_WAYS],
     `FPGA_DBG input var sharers_t sharers_buf[`LLC_WAYS],
     `FPGA_DBG input var owner_t owners_buf[`LLC_WAYS],

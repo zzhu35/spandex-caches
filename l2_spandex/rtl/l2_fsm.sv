@@ -54,7 +54,7 @@ module l2_fsm(
     // Bufs populated from the current set in RAMs.
     `FPGA_DBG input state_t states_buf[`L2_WAYS][`WORDS_PER_LINE],
     `FPGA_DBG input hprot_t hprots_buf[`L2_WAYS],
-    `FPGA_DBG input line_t lines_buf[`L2_WAYS],
+    input line_t lines_buf[`L2_WAYS],
     `FPGA_DBG input l2_tag_t tags_buf[`L2_WAYS],
     `FPGA_DBG input l2_way_t evict_way_buf,
     // State registers from regs/others
@@ -121,18 +121,18 @@ module l2_fsm(
     `FPGA_DBG output l2_set_t lmem_set_in,
     `FPGA_DBG output l2_way_t lmem_way_in,
     // outputs to write_word
-    `FPGA_DBG output word_t write_word_word_in,
-    `FPGA_DBG output word_offset_t write_word_w_off_in,
-    `FPGA_DBG output byte_offset_t write_word_b_off_in,
-    `FPGA_DBG output hsize_t write_word_hsize_in,
-    `FPGA_DBG output line_t write_word_line_in,
+    output word_t write_word_word_in,
+    output word_offset_t write_word_w_off_in,
+    output byte_offset_t write_word_b_off_in,
+    output hsize_t write_word_hsize_in,
+    output line_t write_word_line_in,
     // outputs to write_word_amo
-    `FPGA_DBG output word_t write_word_amo_word_in,
-    `FPGA_DBG output word_offset_t write_word_amo_w_off_in,
-    `FPGA_DBG output byte_offset_t write_word_amo_b_off_in,
-    `FPGA_DBG output hsize_t write_word_amo_hsize_in,
-    `FPGA_DBG output amo_t write_word_amo_amo_in,
-    `FPGA_DBG output line_t write_word_amo_line_in,
+    output word_t write_word_amo_word_in,
+    output word_offset_t write_word_amo_w_off_in,
+    output byte_offset_t write_word_amo_b_off_in,
+    output hsize_t write_word_amo_hsize_in,
+    output amo_t write_word_amo_amo_in,
+    output line_t write_word_amo_line_in,
     // Outputs to regs to register states
     `FPGA_DBG output logic clr_evict_stall,
     `FPGA_DBG output logic set_evict_stall,
@@ -707,8 +707,8 @@ module l2_fsm(
             end
             NEW_FENCE_HANDLER : begin
                 // Start drain of ongoing requests.
+                set_ongoing_fence = 1'b1;
                 if (l2_fence[1]) begin
-                    set_ongoing_fence = 1'b1;
                     set_ongoing_drain = 1'b1;
                 end
             end

@@ -1362,7 +1362,7 @@ void l2_spandex_tb::l2_test()
     wait();
 
     // Back to back fences
-    l2_fence_tb.put(0x2);
+    l2_fence_tb.put(0x1);
 
     wait(); 
 
