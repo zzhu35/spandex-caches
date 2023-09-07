@@ -304,7 +304,7 @@ module l2_fsm(
                 // In the case of AMO, we need to wait for the read response to be sent
                 // back, but in case of regular writes, there is no read response to wait for.
                 if (mshr[mshr_i].state == `SPX_AMO) begin
-                    if (mshr[mshr_i].word_mask == `WORD_MASK_ALL) begin
+                    if (~mshr[mshr_i].word_mask) begin
                         if (l2_rd_rsp_ready_int) begin
                             next_state = DECODE;
                         end
@@ -322,7 +322,7 @@ module l2_fsm(
                 // If all words are not received, FSM 2 will update word_mask in the reqs entry
                 // and FSM 1 will go back to decode.
                 if (mshr[mshr_i].state == `SPX_IS) begin
-                    if (mshr[mshr_i].word_mask == `WORD_MASK_ALL) begin
+                    if (~mshr[mshr_i].word_mask) begin
                         if (l2_rd_rsp_ready_int) begin
                             next_state = DECODE;
                         end
@@ -330,7 +330,6 @@ module l2_fsm(
                         next_state = DECODE;
                     end
                 end else begin
-                    // TODO: Add new state to handle SPX_II
                     next_state = DECODE;
                 end
             end
@@ -741,15 +740,20 @@ module l2_fsm(
                         if (mshr[mshr_i].state == `SPX_AMO) begin
                             send_rd_rsp(/* line */ update_mshr_value_line);
 
-                            write_word_amo_helper (
-                                /* line_in */ update_mshr_value_line,
-                                /* word */ mshr[mshr_i].word,
-                                /* w_off */ mshr[mshr_i].w_off,
-                                /* b_off */ mshr[mshr_i].b_off,
-                                /* hsize */ mshr[mshr_i].hsize,
-                                /* amo */ mshr[mshr_i].amo,
-                                /* line_out */ update_mshr_value_line
-                            );
+                            // Only AMO update the line if read response is accepted, else
+                            // the FSM will remain in this state and non-idempotent AMO operations
+                            // (like AMO add) might be repetitively applied.
+                            if (l2_rd_rsp_ready_int) begin
+                                write_word_amo_helper (
+                                    /* line_in */ update_mshr_value_line,
+                                    /* word */ mshr[mshr_i].word,
+                                    /* w_off */ mshr[mshr_i].w_off,
+                                    /* b_off */ mshr[mshr_i].b_off,
+                                    /* hsize */ mshr[mshr_i].hsize,
+                                    /* amo */ mshr[mshr_i].amo,
+                                    /* line_out */ update_mshr_value_line
+                                );
+                            end
                         end else begin
                             write_word_helper (
                                 /* line_in */ update_mshr_value_line,
@@ -763,7 +767,7 @@ module l2_fsm(
                         update_mshr_line = 1'b1;
                     end
 
-                    // Update the RAMs and clear entry
+                    // Update the RAMs
                     clear_mshr_entry (
                         /* set */ line_br.set,
                         /* way */ mshr[mshr_i].way,
@@ -774,9 +778,12 @@ module l2_fsm(
                         /* word_mask_reg */ mshr[mshr_i].word_mask_reg
                     );
 
-                    update_mshr_state = 1'b1;
-                    update_mshr_value_state = `SPX_I;
-                    incr_mshr_cnt = 1'b1;
+                    // Clear the MSHR entry only if response is accepted or if it is a write.
+                    if ((mshr[mshr_i].cpu_msg != `READ_ATOMIC && mshr[mshr_i].state != `SPX_AMO) || l2_rd_rsp_ready_int) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_I;
+                        incr_mshr_cnt = 1'b1;
+                    end
                 end
             end
             RSP_S_HANDLER : begin
@@ -885,7 +892,8 @@ module l2_fsm(
                     lmem_wr_en_state = 1'b1;
                 end
 
-                // send invalidate response back
+                // send inv response back - we send this irrespective of  MSHR/tag hit
+                // else the system will deadlock, but ideally one of them should happen.
                 send_rsp_out (
                     /* coh_msg */ `RSP_INV_ACK,
                     /* req_id */ 'h0,
@@ -915,7 +923,8 @@ module l2_fsm(
                     lmem_wr_en_state = 1'b1;
                 end
 
-                // send invalidate response back
+                // send revoke response back - we send this irrespective of  MSHR/tag hit
+                // else the system will deadlock, but ideally one of them should happen.
                 // TODO: Should we check the valid words in the line and forward word_mask
                 // to set the word_mask of the response?
                 send_rsp_out (
@@ -951,25 +960,28 @@ module l2_fsm(
             CPU_REQ_AMO_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
 
-                write_word_amo_helper (
-                    /* line_in */ lines_buf[cpu_req_way],
-                    /* word */ l2_cpu_req.word,
-                    /* w_off */ addr_br.w_off,
-                    /* b_off */ addr_br.b_off,
-                    /* hsize */ l2_cpu_req.hsize,
-                    /* amo */ l2_cpu_req.amo,
-                    /* line_out */ lmem_wr_data_line
-                );
+                // Only AMO update the line if read response is accepted, else
+                // the FSM will remain in this state and non-idempotent AMO operations
+                // (like AMO add) might be repetitively applied.
+                if (l2_rd_rsp_ready_int) begin
+                    write_word_amo_helper (
+                        /* line_in */ lines_buf[cpu_req_way],
+                        /* word */ l2_cpu_req.word,
+                        /* w_off */ addr_br.w_off,
+                        /* b_off */ addr_br.b_off,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* amo */ l2_cpu_req.amo,
+                        /* line_out */ lmem_wr_data_line
+                    );
 
-                lmem_set_in = addr_br.set;
-                lmem_way_in = cpu_req_way;
-                lmem_wr_en_line = 1'b1;
+                    lmem_set_in = addr_br.set;
+                    lmem_way_in = cpu_req_way;
+                    lmem_wr_en_line = 1'b1;
+                end
             end
             CPU_REQ_AMO_REQ : begin
-                // TODO: For all CPU requests, merge *_REQ and EMPTY_WAY states,
-                // such that EMPTY WAY calls *_REQ.
-                // Or not have an EMPTY_WAY state and directly go to *_REQ, such that
-                // write_way, read_way or amo_way are assigned the correct way.
+                // We add the MSHR entry (and decrement the MSHR count) only
+                // if the req_out is accepted.
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -997,6 +1009,8 @@ module l2_fsm(
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
             end
             CPU_REQ_READ_ATOMIC_REQ : begin
+                // We add the MSHR entry (and decrement the MSHR count) only
+                // if the req_out is accepted.
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -1024,6 +1038,10 @@ module l2_fsm(
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
             end
             CPU_REQ_READ_REQ : begin
+                // We add the MSHR entry (and decrement the MSHR count) only
+                // if the req_out is accepted.
+                // Though we request for a word_mask of ~word_mask_shared_next,
+                // in an ideal situation this should always be WORD_MASK_ALL.
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -1063,6 +1081,9 @@ module l2_fsm(
                 send_bresp(/* bresp */ `BRESP_EXOKAY);
             end
             CPU_REQ_WRITE_ATOMIC_REQ : begin
+                // If the write atomic (SC) missed in the cache,
+                // it means the LR was revoked before the SC is sent, or
+                // LR was never sent at all.
                 send_bresp(/* bresp */ `BRESP_OKAY);
             end
             CPU_REQ_WRITE_NO_REQ : begin
@@ -1079,6 +1100,8 @@ module l2_fsm(
                 lmem_wr_en_line = 1'b1;
             end
             CPU_REQ_WRITE_REQ : begin
+                // We add the MSHR entry (and decrement the MSHR count) only
+                // if the req_out is accepted.
                 if (l2_req_out_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -1149,13 +1172,25 @@ module l2_fsm(
                     lmem_wr_en_state = 1'b1;
                 end
 
-                // TODO: Add L1 inval
+                send_inval(
+                    /* addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
+                    /* hprot */ hprots_buf[evict_way_reg]
+                );
             end
             default : begin
                 mshr_op_code = `L2_MSHR_IDLE;
             end
         endcase
     end
+
+    function void send_inval;
+        input line_addr_t addr;
+        input hprot_t hprot;
+
+        l2_inval_valid_int = 1'b1;
+        l2_inval_o.addr = addr;
+        l2_inval_o.hprot = hprot;
+    endfunction
 
     function void send_rd_rsp;
         input line_t line;

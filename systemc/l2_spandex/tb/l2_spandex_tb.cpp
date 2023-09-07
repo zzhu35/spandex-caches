@@ -292,6 +292,10 @@ void l2_spandex_tb::l2_test()
             addr.word /* addr */, 0 /* word */, DATA /* hprot */,
             0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
             0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+    
+        if (i == L2_WAYS) {
+            get_inval(0x82508280 /* addr */, DATA /* hprot */);
+        }
 
         get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
             DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
@@ -317,6 +321,16 @@ void l2_spandex_tb::l2_test()
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    base_addr = 0x82508280;
+    addr.breakdown(base_addr);
+
+    addr.tag_incr(1);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    base_addr = 0x82508280;
+    addr.breakdown(base_addr);
 
     get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
@@ -395,6 +409,8 @@ void l2_spandex_tb::l2_test()
 
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -558,6 +574,8 @@ void l2_spandex_tb::l2_test()
 
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -1111,6 +1129,8 @@ void l2_spandex_tb::l2_test()
 
     get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
