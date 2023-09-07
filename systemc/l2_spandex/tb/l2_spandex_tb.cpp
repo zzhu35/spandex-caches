@@ -1411,6 +1411,129 @@ void l2_spandex_tb::l2_test()
     
     wait();
 
+    ////////////////////////////////////////////////////////////////
+    // TEST 1.8 - Write, AMO release, Write, Fwd, Read back
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.8!");
+    base_addr = 0x82509180;
+    addr.breakdown(base_addr);
+
+    word = 0x1;
+
+    // First write
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    // Send an AMO with rl semantic
+    base_addr = 0x82509280;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        AMO_SWAP /* amo */, 1 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    // Second write to another set
+    base_addr = 0x82509480;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    // Put forward in for another line in another set
+    base_addr = 0x82509080;
+    addr.breakdown(base_addr);
+
+    put_fwd_in(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
+            0 /* line */, 0b0011 /* word_mask */);
+
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x1;
+
+    get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    // Send response to original write.
+    base_addr = 0x82509180;
+    addr.breakdown(base_addr);
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x2;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    // Send response to AMO.
+    base_addr = 0x82509280;
+    addr.breakdown(base_addr);
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x2;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    // Get request for pending write
+    base_addr = 0x82509480;
+    addr.breakdown(base_addr);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x2;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    // Read back AMO line
+    base_addr = 0x82509280;
+    addr.breakdown(base_addr);
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+    addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+    0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+    0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    wait();
+
+    get_rd_rsp(line /* line */);      
+    
+    wait();
+
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     wait();

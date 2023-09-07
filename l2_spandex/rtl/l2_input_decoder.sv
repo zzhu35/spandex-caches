@@ -22,6 +22,7 @@ module l2_input_decoder (
     input logic fwd_stall,
     input logic fwd_stall_ended,
     `FPGA_DBG input logic ongoing_fence,
+    `FPGA_DBG input logic ongoing_drain,
     `FPGA_DBG input logic drain_in_progress,
 
     // Assign cpu_req from conflict registers
@@ -44,6 +45,8 @@ module l2_input_decoder (
     output logic l2_rsp_in_ready_int,
     output logic l2_fwd_in_ready_int,
     output logic l2_cpu_req_ready_int,
+    // Clear ongoing drain if drain is complete
+    `FPGA_DBG output logic clr_ongoing_drain,
     // Line and address breakdowns
     line_breakdown_l2_t.out line_br,
     addr_breakdown_t.out addr_br,
@@ -80,7 +83,7 @@ module l2_input_decoder (
         set_fwd_in_from_stalled = 1'b0;
 
         if (decode_en) begin
-            if (l2_fence_valid_int && !ongoing_fence) begin
+            if (l2_fence_valid_int && !ongoing_fence && !drain_in_progress) begin
                 l2_fence_ready_int = 1'b1;            
                 do_fence_next = 1'b1;
             end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
@@ -161,6 +164,14 @@ module l2_input_decoder (
             addr_br.set <= addr_br_next.set;
             addr_br.w_off <= addr_br_next.w_off;
             addr_br.b_off <= addr_br_next.b_off;
+        end
+    end
+
+    always_comb begin
+        clr_ongoing_drain = 1'b0;
+
+        if (!drain_in_progress && ongoing_drain) begin
+            clr_ongoing_drain = 1'b1;
         end
     end
 endmodule

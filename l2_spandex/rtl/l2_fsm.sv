@@ -144,7 +144,6 @@ module l2_fsm(
     `FPGA_DBG output logic set_ongoing_fence,
     `FPGA_DBG output logic clr_ongoing_fence,
     `FPGA_DBG output logic set_ongoing_drain,
-    `FPGA_DBG output logic clr_ongoing_drain,
     `FPGA_DBG output logic acc_flush_done,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
@@ -601,7 +600,6 @@ module l2_fsm(
         set_ongoing_fence = 1'b0;
         clr_ongoing_fence = 1'b0;
         set_ongoing_drain = 1'b0;
-        clr_ongoing_drain = 1'b0;
         acc_flush_done = 1'b0;
 
         add_mshr_entry = 1'b0;
@@ -715,7 +713,6 @@ module l2_fsm(
             ONGOING_FENCE_HANDLER : begin
                 // TODO: Once we add valid states, self-invalidate will come here.
                 clr_ongoing_fence = 1'b1;
-                clr_ongoing_drain = 1'b1;
                 acc_flush_done = 1'b1;
             end                 
             RSP_MSHR_LOOKUP : begin
@@ -943,6 +940,13 @@ module l2_fsm(
                 // TODO: Removed code related to setting ongoing_atomic if atomic read.
                 lookup_en = 1'b1;
                 lookup_mode = `L2_LOOKUP;
+
+                // In case the CPU request is a release, set the ongoing drain.
+                // The request with the release semantic must also be flushed before
+                // drain is complete.
+                if (l2_cpu_req.rl) begin
+                    set_ongoing_drain = 1'b1;
+                end
             end
             CPU_REQ_AMO_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
