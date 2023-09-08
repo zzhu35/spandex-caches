@@ -170,6 +170,9 @@ module l2_fsm(
     localparam FWD_LOOKUP_HIT = 6'b001100;
     localparam FWD_INV_HANDLER = 6'b001101;
     localparam FWD_RVK_O_HANDLER = 6'b001110;
+    localparam FWD_REQ_S_HANDLER = 6'b001111;
+    localparam FWD_REQ_S_HANDLER_RVK = 6'b010000;
+    localparam FWD_REQ_ODATA_HANDLER = 6'b010001;
 
     localparam NEW_FENCE_HANDLER = 6'b100000;
     localparam ONGOING_FENCE_HANDLER = 6'b100001;
@@ -374,6 +377,12 @@ module l2_fsm(
                     `FWD_RVK_O : begin
                         next_state = FWD_RVK_O_HANDLER;
                     end
+                    `FWD_REQ_S : begin
+                        next_state = FWD_REQ_S_HANDLER;
+                    end
+                    `FWD_REQ_Odata : begin
+                        next_state = FWD_REQ_ODATA_HANDLER;
+                    end
                     default : begin
                         next_state = DECODE;
                     end
@@ -386,6 +395,12 @@ module l2_fsm(
                     end
                     `FWD_RVK_O : begin
                         next_state = FWD_RVK_O_HANDLER;
+                    end
+                    `FWD_REQ_S : begin
+                        next_state = FWD_REQ_S_HANDLER;
+                    end
+                    `FWD_REQ_Odata : begin
+                        next_state = FWD_REQ_ODATA_HANDLER;
                     end
                     default : begin
                         next_state = DECODE;
@@ -404,6 +419,24 @@ module l2_fsm(
                     next_state = DECODE;
                 end
             end
+            FWD_REQ_S_HANDLER : begin
+                // TODO: When inval is implemented, wait inval_ready
+                if (l2_rsp_out_ready_int) begin
+                    next_state = FWD_REQ_S_HANDLER_RVK;
+                end
+            end
+            FWD_REQ_S_HANDLER_RVK : begin
+                // TODO: When inval is implemented, wait inval_ready
+                if (l2_rsp_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
+            FWD_REQ_ODATA_HANDLER : begin
+                // TODO: When inval is implemented, wait inval_ready
+                if (l2_rsp_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end            
             // Check if the flush_way (from l2_regs) has valid data,
             // and if it has data (instr don't need write-back). If yes,
             // go to next state ONGOING_FLUSH_PROCESS and wait
@@ -923,7 +956,7 @@ module l2_fsm(
                     lmem_wr_en_state = 1'b1;
                 end
 
-                // send revoke response back - we send this irrespective of  MSHR/tag hit
+                // send revoke response back - we send this irrespective of MSHR/tag hit
                 // else the system will deadlock, but ideally one of them should happen.
                 // TODO: Should we check the valid words in the line and forward word_mask
                 // to set the word_mask of the response?
@@ -936,6 +969,74 @@ module l2_fsm(
                     /* word_mask */ l2_fwd_in.word_mask
                 );
             end
+            FWD_REQ_S_HANDLER : begin
+                // TODO: When inval is implemented, wait inval_ready
+                if (tag_hit) begin
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = way_hit;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        // Update all words to invalid. Shared state if possible, if line granularity.
+                        // For word granularity, you could have partially owned words. As a result,
+                        // you will need to move to partially shared state for the words you own.
+                        // TODO: To optimize this, we could check if data is fully owned. If yes, move
+                        // to shared state and send the entire line to the requestor.
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end
+                    lmem_wr_en_state = 1'b1;
+                end
+
+                // send responses back - we send this irrespective of MSHR/tag hit
+                // else the system will deadlock, but ideally one of them should happen.
+                // Send RSP_S to requestor and revoke response to LLC for the fwd word_mask
+                // - assuming that LLC knows all the words the L2 owns, revoke in next state.
+                if (l2_rsp_out_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_S,
+                        /* req_id */ l2_fwd_in.req_id,
+                        /* to_req */ 1'b1,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ lines_buf[way_hit],
+                        /* word_mask */ l2_fwd_in.word_mask
+                    );
+                end
+            end
+            FWD_REQ_S_HANDLER_RVK : begin
+                if (l2_rsp_out_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_RVK_O,
+                        /* req_id */ l2_fwd_in.req_id,
+                        /* to_req */ 1'b0,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ lines_buf[way_hit],
+                        /* word_mask */ l2_fwd_in.word_mask
+                    );
+                end
+            end
+            FWD_REQ_ODATA_HANDLER : begin
+                // TODO: When inval is implemented, wait inval_ready
+                if (tag_hit) begin
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = way_hit;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        // Update all words to invalid.
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end
+                    lmem_wr_en_state = 1'b1;
+                end
+
+                // send RSP_Odata back - we send this irrespective of MSHR/tag hit
+                // else the system will deadlock, but ideally one of them should happen.
+                if (l2_rsp_out_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_Odata,
+                        /* req_id */ l2_fwd_in.req_id,
+                        /* to_req */ 1'b1,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ lines_buf[way_hit],
+                        /* word_mask */ l2_fwd_in.word_mask
+                    );
+                end
+            end     
             CPU_REQ_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;

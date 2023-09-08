@@ -34,6 +34,10 @@ module llc_fsm (
     `FPGA_DBG input llc_way_t empty_way_next,
     `FPGA_DBG input word_mask_t word_mask_owned,
     `FPGA_DBG input word_mask_t word_mask_owned_next,
+    `FPGA_DBG input word_mask_t word_mask_owned_evict,
+    `FPGA_DBG input word_mask_t word_mask_owned_evict_next,
+    `FPGA_DBG input cache_id_t owners_cache_id[`WORDS_PER_LINE],
+    `FPGA_DBG input cache_id_t owners_evict_cache_id[`WORDS_PER_LINE],
     // Bufs populated from the current set in RAMs.
     `FPGA_DBG input var logic dirty_bits_buf[`LLC_WAYS],
     input var line_t lines_buf[`LLC_WAYS],
@@ -136,17 +140,19 @@ module llc_fsm (
     localparam REQ_SET_CONFLICT = 6'b010001;
     localparam REQ_TAG_LOOKUP = 6'b010010;
     localparam REQ_ODATA_HANDLER_HIT = 6'b010011;
-    localparam REQ_ODATA_HANDLER_MISS = 6'b010100;
-    localparam REQ_ODATA_HANDLER_MISS_MEM_RSP = 6'b010101;
-    localparam REQ_ODATA_HANDLER_MISS_RSP = 6'b010110;
-    localparam REQ_S_HANDLER_HIT = 6'b010111;
-    localparam REQ_S_HANDLER_MISS = 6'b011000;
-    localparam REQ_S_HANDLER_MISS_MEM_RSP = 6'b011001;
-    localparam REQ_S_HANDLER_MISS_RSP = 6'b011010;
-    localparam REQ_WB_HANDLER_HIT = 6'b011011;
-    localparam REQ_EVICT = 6'b011100;
-    localparam REQ_EVICT_FWD_RVK = 6'b011101;
-    localparam REQ_EVICT_FWD_INV = 6'b011110;
+    localparam REQ_ODATA_HANDLER_HIT_RSP = 6'b010100;
+    localparam REQ_ODATA_HANDLER_MISS = 6'b010101;
+    localparam REQ_ODATA_HANDLER_MISS_MEM_RSP = 6'b010110;
+    localparam REQ_ODATA_HANDLER_MISS_RSP = 6'b010111;
+    localparam REQ_S_HANDLER_HIT = 6'b011000;
+    localparam REQ_S_HANDLER_HIT_RSP = 6'b011001;
+    localparam REQ_S_HANDLER_MISS = 6'b011010;
+    localparam REQ_S_HANDLER_MISS_MEM_RSP = 6'b011011;
+    localparam REQ_S_HANDLER_MISS_RSP = 6'b011100;
+    localparam REQ_WB_HANDLER_HIT = 6'b011101;
+    localparam REQ_EVICT = 6'b011110;
+    localparam REQ_EVICT_FWD_RVK = 6'b011111;
+    localparam REQ_EVICT_FWD_INV = 6'b100000;
 
     localparam SEND_FWD_WITH_OWNER_MASK = 6'b110000;
 
@@ -183,6 +189,36 @@ module llc_fsm (
             mem_rsp_way <= 'h0;
         end else begin
             mem_rsp_way <= mem_rsp_way_next;
+        end
+    end
+
+    // Helper signals for how which words are owned.
+    `FPGA_DBG word_mask_t word_owner_mask, word_no_owner_mask;
+    assign word_owner_mask = llc_req_in.word_mask & word_mask_owned;
+    assign word_no_owner_mask = llc_req_in.word_mask & ~word_mask_owned;
+
+    // Helper signals and registers to track FWD_INV destinations.
+    invack_cnt_calc_t fwd_l2_cnt, fwd_invack_cnt;
+    logic incr_l2_cnt, clr_l2_cnt;
+    logic incr_invack_cnt, clr_invack_cnt, skip_invack_cnt;
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            fwd_invack_cnt <= 0;
+        end else if (clr_invack_cnt) begin
+            fwd_invack_cnt <= 'h0;
+        end else if (incr_invack_cnt) begin
+            fwd_invack_cnt <= fwd_invack_cnt + 1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            fwd_l2_cnt <= 0;
+        end else if (clr_l2_cnt) begin
+            fwd_l2_cnt <= 'h0;
+        end else if (incr_l2_cnt) begin
+            fwd_l2_cnt <= fwd_l2_cnt + 1;
         end
     end
 
@@ -230,8 +266,13 @@ module llc_fsm (
                 // Therefore, we need to write-back the dirty line to memory after all invalidations are received (RSP_INV_HANDLER_MEM_REQ).
                 // IF LLC_SI, we don't need to write back the line and just overwrite the state RAM as invalid.
                 case(mshr[mshr_i].state)
+                    `LLC_SO : begin
+                        if (llc_rsp_out_ready_int) begin
+                            next_state = DECODE;
+                        end
+                    end                
                     `LLC_SWB : begin
-                        if (~update_mshr_value_invack_cnt) begin
+                        if (!update_mshr_value_invack_cnt) begin
                             next_state = RSP_INV_HANDLER_MEM_REQ;
                         end else begin
                             next_state = DECODE;
@@ -259,6 +300,9 @@ module llc_fsm (
                         if (llc_mem_req_ready_int) begin
                             next_state = DECODE;
                         end
+                    end
+                    `LLC_OS : begin
+                        next_state = DECODE;
                     end
                     default : begin
                         next_state = DECODE;
@@ -313,6 +357,28 @@ module llc_fsm (
                 end
             end
             REQ_ODATA_HANDLER_HIT : begin
+                case (states_buf[req_in_way])
+                    `LLC_V : begin
+                        if (word_owner_mask) begin
+                            if (llc_fwd_out_ready_int) begin
+                                next_state = REQ_ODATA_HANDLER_HIT_RSP;
+                            end
+                        end else begin
+                            next_state = REQ_ODATA_HANDLER_HIT_RSP;
+                        end
+                    end
+                    `LLC_S : begin
+                        // In FSM 2, we're invalidating each sharer one by one. Here, we
+                        // wait for going through all elements in the sharer's list (fwd_l2_cnt),
+                        // and then checking if the last element was successfully processed -
+                        // either skipped or a forward is sent.
+                        if ((fwd_l2_cnt == `MAX_N_L2 - 1) && (llc_fwd_out_ready_int || skip_invack_cnt)) begin
+                            next_state = REQ_ODATA_HANDLER_HIT_RSP;
+                        end
+                    end
+                endcase
+            end
+            REQ_ODATA_HANDLER_HIT_RSP : begin
                 if (llc_rsp_out_ready_int) begin
                     next_state = DECODE;
                 end
@@ -335,6 +401,24 @@ module llc_fsm (
                 end
             end
             REQ_S_HANDLER_HIT : begin
+                case (states_buf[req_in_way])
+                    `LLC_V : begin
+                        if (word_owner_mask) begin
+                            if (llc_fwd_out_ready_int) begin
+                                next_state = REQ_S_HANDLER_HIT_RSP;
+                            end
+                        end else begin
+                            next_state = REQ_S_HANDLER_HIT_RSP;
+                        end
+                    end
+                    `LLC_S : begin
+                        if (llc_rsp_out_ready_int) begin
+                            next_state = DECODE;
+                        end
+                    end
+                endcase
+            end
+            REQ_S_HANDLER_HIT_RSP : begin
                 if (llc_rsp_out_ready_int) begin
                     next_state = DECODE;
                 end
@@ -381,26 +465,24 @@ module llc_fsm (
                                 next_state = REQ_MSHR_LOOKUP;
                             end
                         end else begin
-                            next_state = REQ_EVICT_FWD_RVK;
+                            if (llc_fwd_out_ready_int) begin
+                                next_state = REQ_MSHR_LOOKUP;
+                            end
                         end
                     end
                     `LLC_S : begin
-                        next_state = REQ_EVICT_FWD_INV;
+                        // In FSM 2, we're invalidating each sharer one by one. Here, we
+                        // wait for going through all elements in the sharer's list (fwd_l2_cnt),
+                        // and then checking if the last element was successfully processed -
+                        // either skipped or a forward is sent.
+                        if ((fwd_l2_cnt == `MAX_N_L2 - 1) && (llc_fwd_out_ready_int || skip_invack_cnt)) begin
+                            next_state = REQ_MSHR_LOOKUP;
+                        end
                     end
                     default : begin
                         next_state = DECODE;
                     end
                 endcase
-            end
-            REQ_EVICT_FWD_RVK : begin
-                if (llc_fwd_out_ready_int) begin
-                    next_state = REQ_MSHR_LOOKUP;
-                end
-            end
-            REQ_EVICT_FWD_INV : begin
-                if (llc_fwd_out_ready_int) begin
-                    next_state = REQ_MSHR_LOOKUP;
-                end
             end
             default : begin
                 next_state = DECODE;
@@ -497,6 +579,12 @@ module llc_fsm (
         set_req_conflict = 1'b0;
         mem_rsp_way_next = 'h0;
 
+        incr_invack_cnt = 1'b0;
+        clr_invack_cnt = 1'b0;
+        skip_invack_cnt = 1'b0;
+        incr_l2_cnt = 1'b0;
+        clr_l2_cnt = 1'b0;
+
         case (state)
             RESET : begin
                 lmem_wr_en_state = 1'b1;
@@ -527,8 +615,27 @@ module llc_fsm (
                 lmem_wr_en_sharers = 1'b1;
 
                 // Once all invalidations are received, we clear the MSHR entry and invalidate the state RAM.
-                if (~update_mshr_value_invack_cnt) begin
+                if (!update_mshr_value_invack_cnt) begin
                     case (mshr[mshr_i].state)
+                        `LLC_SO : begin
+                            if (llc_rsp_out_ready_int) begin
+                                send_rsp_out (
+                                    /* coh_msg */ `RSP_Odata,
+                                    /* line_addr */ llc_req_in.addr,
+                                    /* line */ lines_buf[req_in_way],
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ llc_req_in.req_id,
+                                    /* invack_cnt */ 'h0,
+                                    /* word_offset */ 'h0,
+                                    /* word_mask */ llc_req_in.word_mask
+                                );                                
+
+                                // Clear the MSHR entry
+                                update_mshr_state = 1'b1;
+                                update_mshr_value_state = `LLC_I;
+                                incr_mshr_cnt = 1'b1;
+                            end
+                        end
                         `LLC_SWB : begin
                             // Update the states RAM to invalid.
                             lmem_set_in = line_br.set;
@@ -599,8 +706,10 @@ module llc_fsm (
                 );
                 // Clear the words that were owned earlier..
                 lmem_wr_data_owner = owners_buf[mshr[mshr_i].way] & ~llc_rsp_in.word_mask;
+                lmem_wr_data_dirty_bit = 1'b1;
                 lmem_wr_en_line = 1'b1;
                 lmem_wr_en_owner = 1'b1;
+                lmem_wr_en_dirty_bit = 1'b1;
 
                 // We do not change the sharers list because L2 invalidates on revoke rather than go to shared.
                 // State table shows to move to valid state, which is okay even on eviction from LLC. However,
@@ -638,6 +747,18 @@ module llc_fsm (
                         lmem_wr_en_evict_way = 1'b1;
                         clr_evict_stall = 1'b1;
                     end
+                    `LLC_OS : begin
+                        // Clear the MSHR entry
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `LLC_I;
+                        incr_mshr_cnt = 1'b1;
+
+                        // Update the states RAM
+                        lmem_set_in = line_br.set;
+                        lmem_way_in = mshr[mshr_i].way;
+                        lmem_wr_data_state = `LLC_S;
+                        lmem_wr_en_state = 1'b1;
+                    end                    
                 endcase
             end
             REQ_MSHR_LOOKUP : begin
@@ -656,23 +777,72 @@ module llc_fsm (
             REQ_ODATA_HANDLER_HIT : begin
                 case (states_buf[req_in_way])
                     `LLC_V : begin
-                        // TODO: We will need to check if there is an owner before we respond to the request.
-                        // For single core, this is okay.
-                        // Send response to requestor.
-                        if (llc_rsp_out_ready_int) begin
-                            send_rsp_out (
-                                /* coh_msg */ `RSP_Odata,
-                                /* line_addr */ llc_req_in.addr,
-                                /* line */ lines_buf[req_in_way],
-                                /* req_id */ llc_req_in.req_id,
-                                /* dest_id */ llc_req_in.req_id,
-                                /* invack_cnt */ 'h0,
-                                /* word_offset */ 'h0,
-                                /* word_mask */ llc_req_in.word_mask
-                            );
+                        // For words that are owned elsewhere, we need to send a FWD_REQ_Odata
+                        // to the owner. For the remaining words, we can send the response ourselves.
+                        // TODO: We assume line granularity here. Need coalescing for word granularity.
+                        if (word_owner_mask) begin
+                            // Send forward to owner, if we have any unowned words.
+                            if (llc_fwd_out_ready_int) begin
+                                send_fwd_out (
+                                    /* coh_msg */ `FWD_REQ_Odata,
+                                    /* addr */ llc_req_in.addr,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ owners_cache_id[0],
+                                    /* word_mask */ word_owner_mask,
+                                    /* line */ 'h0 
+                                );
+                            end
+                        end
+                    end
+                    `LLC_S : begin
+                        // If this line is shared elsewhere, we need to send a FWD_INV to all sharers.
+                        // We do this by checking each element of the sharer's list on by one.
+                        // If a sharer is found, a forward is sent, and fwd_invack_cnt is incremented.
+                        // We remove the requestor from the sharers list (if present) without FWD_INV.
+                        // TODO: this is going to take MAX_N_L2 cycles - possible to optimize?
+                        if ((sharers_buf[req_in_way] & (1 << fwd_l2_cnt)) && fwd_l2_cnt != llc_req_in.req_id) begin
+                            // Send forward to owner, if we have any unowned words.
+                            if (llc_fwd_out_ready_int) begin
+                                send_fwd_out (
+                                    /* coh_msg */ `FWD_INV,
+                                    /* addr */ llc_req_in.addr,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ fwd_l2_cnt,
+                                    /* word_mask */ `WORD_MASK_ALL,
+                                    /* line */ 'h0 
+                                );
+
+                                incr_invack_cnt = 1'b1;
+                            end
+                        end else begin
+                            skip_invack_cnt = 1'b1;
                         end
 
-                        // Update owner mask in owner RAM and owner ID in lines RAM.
+                        incr_l2_cnt = 1'b1;
+                    end
+                endcase                        
+            end
+            REQ_ODATA_HANDLER_HIT_RSP : begin
+                case (states_buf[req_in_way])
+                    `LLC_V : begin
+                        if (word_no_owner_mask) begin
+                            // Send response to requestor, if we have any unowned words.
+                            if (llc_rsp_out_ready_int) begin
+                                send_rsp_out (
+                                    /* coh_msg */ `RSP_Odata,
+                                    /* line_addr */ llc_req_in.addr,
+                                    /* line */ lines_buf[req_in_way],
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ llc_req_in.req_id,
+                                    /* invack_cnt */ 'h0,
+                                    /* word_offset */ 'h0,
+                                    /* word_mask */ word_no_owner_mask
+                                );
+                            end
+                        end
+
+                        // Update owner mask in owner RAM and owner ID in lines RAM
+                        // for all the words requested (owned elsewhere and otherwise).
                         lmem_set_in = line_br.set;
                         lmem_way_in = req_in_way;
                         write_owner_helper (
@@ -681,27 +851,42 @@ module llc_fsm (
                             /* word_mask_i */ llc_req_in.word_mask,
                             /* line_out */ lmem_wr_data_line
                         );
-                        lmem_wr_data_owner = llc_req_in.word_mask;
+                        lmem_wr_data_owner = owners_buf[req_in_way] | llc_req_in.word_mask;
                         lmem_wr_en_line = 1'b1;
                         lmem_wr_en_owner = 1'b1;
                     end
                     `LLC_S : begin
-                        // First, we remove the requestor from the sharers list (if present)
-                        // TODO: Since we're assuming single core, we do not need to send an invalidate,
-                        // because we assume that the core will overwrite the state once the response is received.
-                        if (llc_rsp_out_ready_int) begin
-                            send_rsp_out (
-                                /* coh_msg */ `RSP_Odata,
-                                /* line_addr */ llc_req_in.addr,
-                                /* line */ lines_buf[req_in_way],
+                        // If we sent any invalidations, we have to add an MSHR entry
+                        // before responding to the original requestor. If not, we
+                        // can directly respond now.
+                        if (fwd_invack_cnt) begin
+                            fill_mshr_entry (
+                                /* msg */ `FWD_INV,
                                 /* req_id */ llc_req_in.req_id,
-                                /* dest_id */ llc_req_in.req_id,
-                                /* invack_cnt */ 'h0,
-                                /* word_offset */ 'h0,
-                                /* word_mask */ llc_req_in.word_mask
+                                /* tag */ tags_buf[req_in_way],
+                                /* way */ req_in_way,
+                                /* state */ `LLC_SO,
+                                /* hprot */ hprots_buf[req_in_way],
+                                /* invack_cnt */ fwd_invack_cnt,
+                                /* line */ lines_buf[req_in_way],
+                                /* word_mask */ `WORD_MASK_ALL
                             );
+                        end else begin
+                            if (llc_rsp_out_ready_int) begin
+                                send_rsp_out (
+                                    /* coh_msg */ `RSP_Odata,
+                                    /* line_addr */ llc_req_in.addr,
+                                    /* line */ lines_buf[req_in_way],
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ llc_req_in.req_id,
+                                    /* invack_cnt */ 'h0,
+                                    /* word_offset */ 'h0,
+                                    /* word_mask */ llc_req_in.word_mask
+                                );
+                            end
                         end
 
+                        // We remove the requestor from the sharers list (if present) without FWD_INV.
                         lmem_set_in = line_br.set;
                         lmem_way_in = req_in_way;
                         lmem_wr_data_sharers = sharers_buf[req_in_way] & ~(1 << llc_req_in.req_id);
@@ -721,6 +906,10 @@ module llc_fsm (
                         lmem_wr_en_line = 1'b1;
                         lmem_wr_en_owner = 1'b1;
                         lmem_wr_en_state = 1'b1;
+
+                        // Clear the forward inv registers.
+                        clr_invack_cnt = 1'b1;
+                        clr_l2_cnt = 1'b1;
                     end
                 endcase
             end
@@ -778,31 +967,35 @@ module llc_fsm (
             end
             REQ_S_HANDLER_HIT : begin
                 case (states_buf[req_in_way])
-                    // TODO: In case of single core with line granularity, you will not get a ReqS from an owner.
-                    // However, when we move to multi-core, the owner needs to be revoked.
                     `LLC_V : begin
-                        // Send response to requestor.
-                        if (llc_rsp_out_ready_int) begin
-                            send_rsp_out (
-                                /* coh_msg */ `RSP_S,
-                                /* line_addr */ llc_req_in.addr,
-                                /* line */ lines_buf[req_in_way],
-                                /* req_id */ llc_req_in.req_id,
-                                /* dest_id */ llc_req_in.req_id,
-                                /* invack_cnt */ 'h0,
-                                /* word_offset */ 'h0,
-                                /* word_mask */ llc_req_in.word_mask
-                            );
-                        end
+                        // For words that are owned elsewhere, we need to send a FWD_REQ_S
+                        // to the owner. For the remaining words, we can send the response ourselves.
+                        // TODO: We assume line granularity here. Need coalescing for word granularity.
+                        if (word_owner_mask) begin
+                            // Send forward to owner, if we have any unowned words.
+                            if (llc_fwd_out_ready_int) begin
+                                send_fwd_out (
+                                    /* coh_msg */ `FWD_REQ_S,
+                                    /* addr */ llc_req_in.addr,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ owners_cache_id[0],
+                                    /* word_mask */ word_owner_mask,
+                                    /* line */ 'h0 
+                                );
 
-                        // Update sharer, states RAM
-                        lmem_set_in = line_br.set;
-                        lmem_way_in = req_in_way;
-                        // TODO: We need to read sharers buf and modify it.
-                        lmem_wr_data_sharers = 1 << llc_req_in.req_id;
-                        lmem_wr_data_state = `LLC_S;
-                        lmem_wr_en_sharers = 1'b1;
-                        lmem_wr_en_state = 1'b1;
+                                fill_mshr_entry (
+                                    /* msg */ `FWD_RVK_O,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* tag */ tags_buf[req_in_way],
+                                    /* way */ req_in_way,
+                                    /* state */ `LLC_OS,
+                                    /* hprot */ hprots_buf[req_in_way],
+                                    /* invack_cnt */ 'h0,
+                                    /* line */ lines_buf[req_in_way],
+                                    /* word_mask */ word_owner_mask
+                                );                                
+                            end
+                        end
                     end
                     `LLC_S : begin
                         // Send response to requestor.
@@ -824,6 +1017,36 @@ module llc_fsm (
                         lmem_way_in = req_in_way;
                         lmem_wr_data_sharers = sharers_buf[req_in_way] | (1 << llc_req_in.req_id);
                         lmem_wr_en_sharers = 1'b1;
+                    end
+                endcase
+            end
+            REQ_S_HANDLER_HIT_RSP : begin
+                case (states_buf[req_in_way])
+                    `LLC_V : begin
+                        if (word_no_owner_mask) begin
+                            // Send response to requestor, if we have any unowned words.
+                            if (llc_rsp_out_ready_int) begin
+                                send_rsp_out (
+                                    /* coh_msg */ `RSP_S,
+                                    /* line_addr */ llc_req_in.addr,
+                                    /* line */ lines_buf[req_in_way],
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ llc_req_in.req_id,
+                                    /* invack_cnt */ 'h0,
+                                    /* word_offset */ 'h0,
+                                    /* word_mask */ llc_req_in.word_mask
+                                );
+                            end
+                        end
+
+                        // Update sharer, states RAM
+                        lmem_set_in = line_br.set;
+                        lmem_way_in = req_in_way;
+                        // TODO: We need to read sharers buf and modify it.
+                        lmem_wr_data_sharers = 1 << llc_req_in.req_id;
+                        lmem_wr_data_state = `LLC_S;
+                        lmem_wr_en_sharers = 1'b1;
+                        lmem_wr_en_state = 1'b1;
                     end
                 endcase
             end
@@ -925,79 +1148,98 @@ module llc_fsm (
                             lmem_wr_data_state = `LLC_I;
                             lmem_wr_en_state = 1'b1;
                         end else begin
-                            fill_mshr_entry (
-                                /* msg */ `FWD_RVK_O,
-                                /* req_id */ llc_req_in.req_id,
-                                /* tag */ tags_buf[evict_way_buf],
-                                /* way */ evict_way_buf,
-                                /* state */ `LLC_OWB,
-                                /* hprot */ hprots_buf[evict_way_buf],
-                                /* invack_cnt */ 'h1,
-                                /* line */ lines_buf[evict_way_buf],
-                                /* word_mask */ owners_buf[evict_way_buf]
-                            );
+                            // For words that are owned elsewhere, we need to first revoke them. 
+                            // TODO: We assume line granularity here. Need coalescing for word granularity.
+                            if (llc_fwd_out_ready_int) begin
+                                send_fwd_out (
+                                    /* coh_msg */ `FWD_RVK_O,
+                                    /* addr */ (tags_buf[evict_way_buf] << `LLC_SET_BITS) | line_br.set,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ owners_evict_cache_id[0],
+                                    /* word_mask */ word_mask_owned_evict,
+                                    /* line */ 'h0 
+                                );    
+
+                                fill_mshr_entry (
+                                    /* msg */ `FWD_RVK_O,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* tag */ tags_buf[evict_way_buf],
+                                    /* way */ evict_way_buf,
+                                    /* state */ `LLC_OWB,
+                                    /* hprot */ hprots_buf[evict_way_buf],
+                                    /* invack_cnt */ 'h0,
+                                    /* line */ lines_buf[evict_way_buf],
+                                    /* word_mask */ owners_buf[evict_way_buf]
+                                );
+                            end
 
                             // Set evict stall, so that when the incoming request is checked again, set conflict is asserted.
                             set_evict_stall = 1'b1;
                         end
                     end
                     `LLC_S : begin
-                        if (dirty_bits_buf[evict_way_buf]) begin
-                            fill_mshr_entry (
-                                /* msg */ `FWD_INV,
-                                /* req_id */ llc_req_in.req_id,
-                                /* tag */ tags_buf[evict_way_buf],
-                                /* way */ evict_way_buf,
-                                /* state */ `LLC_SWB,
-                                /* hprot */ hprots_buf[evict_way_buf],
-                                /* invack_cnt */ 'h1,
-                                /* line */ lines_buf[evict_way_buf],
-                                /* word_mask */ `WORD_MASK_ALL
-                            );
+                        // If this line is shared elsewhere, we need to send a FWD_INV to all sharers.
+                        // We do this by checking each element of the sharer's list on by one.
+                        // If a sharer is found, a forward is sent, and fwd_invack_cnt is incremented.
+                        // TODO: this is going to take MAX_N_L2 cycles - possible to optimize?
+                        if ((sharers_buf[evict_way_buf] & (1 << fwd_l2_cnt))) begin
+                            // Send forward to owner, if we have any unowned words.
+                            if (llc_fwd_out_ready_int) begin
+                                send_fwd_out (
+                                    /* coh_msg */ `FWD_INV,
+                                    /* addr */ (tags_buf[evict_way_buf] << `LLC_SET_BITS) | line_br.set,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* dest_id */ fwd_l2_cnt,
+                                    /* word_mask */ `WORD_MASK_ALL,
+                                    /* line */ 'h0 
+                                );
+
+                                incr_invack_cnt = 1'b1;
+                                incr_l2_cnt = 1'b1;
+                            end
                         end else begin
-                            fill_mshr_entry (
-                                /* msg */ `FWD_INV,
-                                /* req_id */ llc_req_in.req_id,
-                                /* tag */ tags_buf[evict_way_buf],
-                                /* way */ evict_way_buf,
-                                /* state */ `LLC_SI,
-                                /* hprot */ hprots_buf[evict_way_buf],
-                                /* invack_cnt */ 'h1,
-                                /* line */ 'h0,
-                                /* word_mask */ `WORD_MASK_ALL
-                            );
+                            skip_invack_cnt = 1'b1;
+                            incr_l2_cnt = 1'b1;
                         end
 
-                        // Set evict stall, so that when the incoming request is checked again, set conflict is asserted.
-                        set_evict_stall = 1'b1;
+                        // Once the last element in the sharer's list is processed,
+                        // we can add an entry into the MSHR and enter into evict_stall.
+                        if (fwd_l2_cnt == `MAX_N_L2-1) begin
+                            if (dirty_bits_buf[evict_way_buf]) begin
+                                fill_mshr_entry (
+                                    /* msg */ `FWD_INV,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* tag */ tags_buf[evict_way_buf],
+                                    /* way */ evict_way_buf,
+                                    /* state */ `LLC_SWB,
+                                    /* hprot */ hprots_buf[evict_way_buf],
+                                    /* invack_cnt */ fwd_invack_cnt + incr_invack_cnt,
+                                    /* line */ lines_buf[evict_way_buf],
+                                    /* word_mask */ `WORD_MASK_ALL
+                                );
+                            end else begin
+                                fill_mshr_entry (
+                                    /* msg */ `FWD_INV,
+                                    /* req_id */ llc_req_in.req_id,
+                                    /* tag */ tags_buf[evict_way_buf],
+                                    /* way */ evict_way_buf,
+                                    /* state */ `LLC_SI,
+                                    /* hprot */ hprots_buf[evict_way_buf],
+                                    /* invack_cnt */ fwd_invack_cnt + incr_invack_cnt,
+                                    /* line */ 'h0,
+                                    /* word_mask */ `WORD_MASK_ALL
+                                );
+                            end
+
+                            // Set evict stall, so that when the incoming request is checked again, set conflict is asserted.
+                            set_evict_stall = 1'b1;
+
+                            // Clear the forward inv registers.
+                            clr_invack_cnt = 1'b1;
+                            clr_l2_cnt = 1'b1;
+                        end
                     end
                 endcase
-            end
-            REQ_EVICT_FWD_RVK : begin
-                if (llc_fwd_out_ready_int) begin
-                    // If there are owners, send forwards to each one revoking the word they own, and adding an MSHR entry.
-                    // TODO: Assuming only single owner for the line!
-                    send_fwd_out (
-                        /* coh_msg */ `FWD_RVK_O,
-                        /* addr */ (tags_buf[evict_way_buf] << `LLC_SET_BITS) | line_br.set,
-                        /* req_id */ llc_req_in.req_id,
-                        /* word_mask */ owners_buf[evict_way_buf],
-                        /* line */ lines_buf[evict_way_buf]
-                    );
-                end
-            end
-            REQ_EVICT_FWD_INV : begin
-                if (llc_fwd_out_ready_int) begin
-                    // Send out invalidations to each sharer of the line and add an MSHR entry with invack set.
-                    // TODO: Assuming only single sharer for the line!
-                    send_fwd_out (
-                        /* coh_msg */ `FWD_INV,
-                        /* addr */ (tags_buf[evict_way_buf] << `LLC_SET_BITS) | line_br.set,
-                        /* req_id */ llc_req_in.req_id,
-                        /* word_mask */ `WORD_MASK_ALL,
-                        /* line */ 'h0
-                    );
-                end
             end
             default : begin
                 mshr_op_code = `LLC_MSHR_IDLE;
@@ -1078,12 +1320,14 @@ module llc_fsm (
         input mix_msg_t coh_msg;
         input line_addr_t addr;
         input cache_id_t req_id;
+        input cache_id_t dest_id;
         input word_mask_t word_mask;
         input line_t line;
 
         llc_fwd_out_o.coh_msg = coh_msg;
         llc_fwd_out_o.addr = addr;
         llc_fwd_out_o.req_id = req_id;
+        llc_fwd_out_o.dest_id = dest_id;
         llc_fwd_out_o.word_mask = word_mask;
         llc_fwd_out_o.line = line;
         llc_fwd_out_valid_int = 1'b1;

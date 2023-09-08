@@ -28,26 +28,27 @@ typedef logic[(`LLC_SET_BITS-1):0]		        llc_set_t;
 //`if (L2_WAY_BITS == 1)
 //typedef logic[(2-1):0] l2_way_t;
 //`else
-typedef logic[(`L2_WAY_BITS-1):0] l2_way_t;
+typedef logic[(`L2_WAY_BITS-1):0]               l2_way_t;
 //`endif
-typedef logic[(`LLC_WAY_BITS-1):0]		llc_way_t;
-typedef logic[(`OFFSET_BITS-1):0]		offset_t;
-typedef logic[(`WORD_BITS-1):0]		word_offset_t;
-typedef logic[(`BYTE_BITS-1):0]		byte_offset_t;
-typedef logic[(`STABLE_STATE_BITS-1):0]	state_t;
+typedef logic[(`LLC_WAY_BITS-1):0]		        llc_way_t;
+typedef logic[(`OFFSET_BITS-1):0]		        offset_t;
+typedef logic[(`WORD_BITS-1):0]		            word_offset_t;
+typedef logic[(`BYTE_BITS-1):0]		            byte_offset_t;
+typedef logic[(`STABLE_STATE_BITS-1):0]	        state_t;
 typedef logic[(`LLC_STATE_BITS-1):0]	        llc_state_t;
-typedef logic[(`UNSTABLE_STATE_BITS-1):0]	unstable_state_t;
+typedef logic[(`UNSTABLE_STATE_BITS-1):0]	    unstable_state_t;
 typedef logic[(`LLC_UNSTABLE_STATE_BITS-1):0]	llc_unstable_state_t;
-typedef logic[(`CACHE_ID_WIDTH-1):0]         cache_id_t;
-typedef logic[(`LLC_COH_DEV_ID_WIDTH-1):0]   llc_coh_dev_id_t;
-typedef logic[(`WORDS_PER_LINE-1):0]		owner_t;
-typedef logic[(`MAX_N_L2-1):0]		sharers_t;
-typedef logic[(`DMA_BURST_LENGTH_BITS-1):0]  dma_length_t;
-typedef logic[(`BRESP_WIDTH-1):0]   bresp_t;
-typedef logic[(`AMO_WIDTH-1):0] amo_t;
-typedef logic[(`DCS_WIDTH-1):0] dcs_t;
-typedef logic[(`WORDS_PER_LINE-1):0] word_mask_t;
-typedef logic[1:0] fence_t;
+typedef logic[(`CACHE_ID_WIDTH-1):0]            cache_id_t;
+typedef logic[(`LLC_COH_DEV_ID_WIDTH-1):0]      llc_coh_dev_id_t;
+typedef logic[(`WORDS_PER_LINE-1):0]		    owner_t;
+typedef logic[(`MAX_N_L2-1):0]		            sharers_t;
+typedef logic[(`DMA_BURST_LENGTH_BITS-1):0]     dma_length_t;
+typedef logic[(`BRESP_WIDTH-1):0]               bresp_t;
+typedef logic[(`AMO_WIDTH-1):0]                 amo_t;
+typedef logic[(`DCS_WIDTH-1):0]                 dcs_t;
+typedef logic[(`WORDS_PER_LINE-1):0]            word_mask_t;
+typedef logic[1:0]                              fence_t;
+typedef logic[(`MAX_N_L2_BITS-1):0]		        num_l2_t;
 
 // invalidate address
 typedef line_addr_t l2_inval_addr_t;

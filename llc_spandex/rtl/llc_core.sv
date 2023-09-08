@@ -141,7 +141,10 @@ module llc_core (
     llc_way_t way_hit_next;
     word_mask_t word_mask_owned;
     word_mask_t word_mask_owned_next;
+    word_mask_t word_mask_owned_evict;
+    word_mask_t word_mask_owned_evict_next;
     cache_id_t owners_cache_id[`WORDS_PER_LINE];
+    cache_id_t owners_evict_cache_id[`WORDS_PER_LINE];
 
     assign llc_rst_tb_ready_int = 1'b1;
     assign llc_dma_req_in_ready_int = 1'b1;
