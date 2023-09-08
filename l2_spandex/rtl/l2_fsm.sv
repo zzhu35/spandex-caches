@@ -597,12 +597,14 @@ module l2_fsm(
             end
             CPU_REQ_EVICT : begin
                 // TODO: Removed ready_bits check
-                if (word_mask_owned_evict) begin
-                    if (l2_req_out_ready_int) begin
+                if (l2_inval_ready_int) begin
+                    if (word_mask_owned_evict) begin
+                        if (l2_req_out_ready_int) begin
+                            next_state = CPU_REQ_MSHR_LOOKUP;
+                        end
+                    end else begin
                         next_state = CPU_REQ_MSHR_LOOKUP;
                     end
-                end else begin
-                    next_state = CPU_REQ_MSHR_LOOKUP;
                 end
             end
         endcase
@@ -927,14 +929,21 @@ module l2_fsm(
 
                 // send inv response back - we send this irrespective of  MSHR/tag hit
                 // else the system will deadlock, but ideally one of them should happen.
-                send_rsp_out (
-                    /* coh_msg */ `RSP_INV_ACK,
-                    /* req_id */ 'h0,
-                    /* to_req */ 1'b0,
-                    /* line_addr */ l2_fwd_in.addr,
-                    /* line */ 'h0,
-                    /* word_mask */ l2_fwd_in.word_mask
-                );
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_INV_ACK,
+                        /* req_id */ 'h0,
+                        /* to_req */ 1'b0,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ 'h0,
+                        /* word_mask */ l2_fwd_in.word_mask
+                    );
+
+                    send_inval(
+                        /* addr */ l2_fwd_in.addr,
+                        /* hprot */ `DATA
+                    );
+                end
             end
             FWD_RVK_O_HANDLER : begin
                 // TODO: Should we invalidate the line or downgrade to shared state?
@@ -960,14 +969,21 @@ module l2_fsm(
                 // else the system will deadlock, but ideally one of them should happen.
                 // TODO: Should we check the valid words in the line and forward word_mask
                 // to set the word_mask of the response?
-                send_rsp_out (
-                    /* coh_msg */ `RSP_RVK_O,
-                    /* req_id */ l2_fwd_in.req_id,
-                    /* to_req */ 1'b0,
-                    /* line_addr */ l2_fwd_in.addr,
-                    /* line */ lines_buf[way_hit],
-                    /* word_mask */ l2_fwd_in.word_mask
-                );
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_RVK_O,
+                        /* req_id */ l2_fwd_in.req_id,
+                        /* to_req */ 1'b0,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ lines_buf[way_hit],
+                        /* word_mask */ l2_fwd_in.word_mask
+                    );
+
+                    send_inval(
+                        /* addr */ l2_fwd_in.addr,
+                        /* hprot */ `DATA
+                    );
+                end
             end
             FWD_REQ_S_HANDLER : begin
                 // TODO: When inval is implemented, wait inval_ready
@@ -989,7 +1005,7 @@ module l2_fsm(
                 // else the system will deadlock, but ideally one of them should happen.
                 // Send RSP_S to requestor and revoke response to LLC for the fwd word_mask
                 // - assuming that LLC knows all the words the L2 owns, revoke in next state.
-                if (l2_rsp_out_ready_int) begin
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     send_rsp_out (
                         /* coh_msg */ `RSP_S,
                         /* req_id */ l2_fwd_in.req_id,
@@ -997,6 +1013,11 @@ module l2_fsm(
                         /* line_addr */ l2_fwd_in.addr,
                         /* line */ lines_buf[way_hit],
                         /* word_mask */ l2_fwd_in.word_mask
+                    );
+
+                    send_inval(
+                        /* addr */ l2_fwd_in.addr,
+                        /* hprot */ `DATA
                     );
                 end
             end
@@ -1026,7 +1047,7 @@ module l2_fsm(
 
                 // send RSP_Odata back - we send this irrespective of MSHR/tag hit
                 // else the system will deadlock, but ideally one of them should happen.
-                if (l2_rsp_out_ready_int) begin
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     send_rsp_out (
                         /* coh_msg */ `RSP_Odata,
                         /* req_id */ l2_fwd_in.req_id,
@@ -1034,6 +1055,11 @@ module l2_fsm(
                         /* line_addr */ l2_fwd_in.addr,
                         /* line */ lines_buf[way_hit],
                         /* word_mask */ l2_fwd_in.word_mask
+                    );
+
+                    send_inval(
+                        /* addr */ l2_fwd_in.addr,
+                        /* hprot */ `DATA
                     );
                 end
             end     
@@ -1232,51 +1258,54 @@ module l2_fsm(
                 // Store the evict_way in a different register.
                 evict_way_reg = evict_way_buf;
 
-                // Use word_mask_owned_evict from l2_lookup to know whether to evict or not.
-                if (word_mask_owned_evict) begin
-                    // If owned, add MSHR entry and write-back the data if req_out is ready,
-                    // and set evict_stall in l2_regs.
-                    if (l2_req_out_ready_int) begin
-                        fill_mshr_entry (
-                            /* cpu_msg */ 1'b0,
-                            /* hprot */ hprots_buf[evict_way_reg],
-                            /* hsize */ 'h0,
-                            /* tag */ tags_buf[evict_way_reg],
-                            /* way */ evict_way_reg,
-                            /* state */ `SPX_RI,
-                            /* word */ 'h0,
-                            /* line */ lines_buf[evict_way_reg],
-                            /* amo */ 'h0,
-                            /* word_mask */ word_mask_owned_evict
-                        );
+                // Only proceed if you know you can send back an inval to L1
+                if (l2_inval_ready_int) begin
+                    // Use word_mask_owned_evict from l2_lookup to know whether to evict or not.
+                    if (word_mask_owned_evict) begin
+                        // If owned, add MSHR entry and write-back the data if req_out is ready,
+                        // and set evict_stall in l2_regs.
+                        if (l2_req_out_ready_int) begin
+                            fill_mshr_entry (
+                                /* cpu_msg */ 1'b0,
+                                /* hprot */ hprots_buf[evict_way_reg],
+                                /* hsize */ 'h0,
+                                /* tag */ tags_buf[evict_way_reg],
+                                /* way */ evict_way_reg,
+                                /* state */ `SPX_RI,
+                                /* word */ 'h0,
+                                /* line */ lines_buf[evict_way_reg],
+                                /* amo */ 'h0,
+                                /* word_mask */ word_mask_owned_evict
+                            );
 
-                        send_req_out (
-                            /* coh_msg */ `REQ_WB,
-                            /* hprot */ hprots_buf[evict_way_reg],
-                            /* line_addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
-                            /* line */ lines_buf[evict_way_reg],
-                            /* word_mask */ word_mask_owned_evict
-                        );
+                            send_req_out (
+                                /* coh_msg */ `REQ_WB,
+                                /* hprot */ hprots_buf[evict_way_reg],
+                                /* line_addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
+                                /* line */ lines_buf[evict_way_reg],
+                                /* word_mask */ word_mask_owned_evict
+                            );
+                        end
+
+                        set_evict_stall = 1'b1;
+                    end else begin
+                        // update the evict way
+                        lmem_wr_en_evict_way = 1'b1;
+                        lmem_wr_data_evict_way = evict_way_reg + 1;
+
+                        lmem_set_in = addr_br.set;
+                        lmem_way_in = evict_way_reg;
+                        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                            lmem_wr_data_state[i] = `SPX_I;
+                        end
+                        lmem_wr_en_state = 1'b1;
                     end
 
-                    set_evict_stall = 1'b1;
-                end else begin
-                    // update the evict way
-                    lmem_wr_en_evict_way = 1'b1;
-                    lmem_wr_data_evict_way = evict_way_reg + 1;
-
-                    lmem_set_in = addr_br.set;
-                    lmem_way_in = evict_way_reg;
-                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
-                        lmem_wr_data_state[i] = `SPX_I;
-                    end
-                    lmem_wr_en_state = 1'b1;
+                    send_inval(
+                        /* addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
+                        /* hprot */ `DATA
+                    );
                 end
-
-                send_inval(
-                    /* addr */ (tags_buf[evict_way_reg] << `L2_SET_BITS) | addr_br.set,
-                    /* hprot */ hprots_buf[evict_way_reg]
-                );
             end
             default : begin
                 mshr_op_code = `L2_MSHR_IDLE;

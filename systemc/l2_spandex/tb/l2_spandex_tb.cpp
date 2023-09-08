@@ -686,6 +686,12 @@ void l2_spandex_tb::l2_test()
     get_rsp_out(RSP_INV_ACK_SPDX /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             0 /* line */, 0b0011 /* word_mask */);
 
+    wait();
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     // Read back
     put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
@@ -731,6 +737,10 @@ void l2_spandex_tb::l2_test()
 
     get_rsp_out(RSP_INV_ACK_SPDX /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -806,6 +816,10 @@ void l2_spandex_tb::l2_test()
 
     get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -992,6 +1006,10 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     word = 0x6;
 
     put_cpu_req(cpu_req /* &cpu_req */, WRITE_ATOMIC /* cpu_msg */, WORD /* hsize */,
@@ -1055,6 +1073,10 @@ void l2_spandex_tb::l2_test()
 
     get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -1279,6 +1301,10 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     // Send response for original request.
     base_addr = 0x82508E80;
     addr.breakdown(base_addr);
@@ -1460,6 +1486,11 @@ void l2_spandex_tb::l2_test()
         AMO_SWAP /* amo */, 1 /* aq */, 1 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
+    // Workaround - this is a line we unknowingly evict from a previous test.
+    get_inval(0x8250a280 /* addr */, DATA /* hprot */);
+
+    wait();
+
     get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
 
@@ -1488,6 +1519,10 @@ void l2_spandex_tb::l2_test()
 
     get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
             line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
@@ -1598,6 +1633,10 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     word = 0x3;
 
     // Write to same line again.
@@ -1636,10 +1675,14 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     ////////////////////////////////////////////////////////////////
     // TEST 2.0 - Write, FWD_REQ_Odata, Write, FWD_REQ_Odata (fwd_stall)
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 1.9!");
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.0!");
     base_addr = 0x83500200;
     addr.breakdown(base_addr);
 
@@ -1675,6 +1718,10 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
     word = 0x3;
 
     // Write to same line again.
@@ -1697,6 +1744,10 @@ void l2_spandex_tb::l2_test()
 
     put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
         0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
 
     wait();
 
