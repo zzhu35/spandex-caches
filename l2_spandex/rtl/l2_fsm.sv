@@ -553,7 +553,7 @@ module l2_fsm(
                 end
             end
             CPU_REQ_AMO_REQ : begin
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
@@ -563,7 +563,7 @@ module l2_fsm(
                 end
             end
             CPU_REQ_READ_ATOMIC_REQ : begin
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
@@ -573,7 +573,7 @@ module l2_fsm(
                 end
             end
             CPU_REQ_READ_REQ : begin
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
@@ -591,7 +591,7 @@ module l2_fsm(
                 next_state = DECODE;
             end
             CPU_REQ_WRITE_REQ : begin
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
@@ -951,7 +951,14 @@ module l2_fsm(
                 // If a revoke arrived when there is SPX_XR in the MSHR, that means
                 // the revoke was sent after the directory acknowledged the ReqOdata. This can only
                 // happen if there is reordering in the NoC.
-                if (tag_hit) begin
+                if (mshr_hit) begin
+                    // update MSHR entry - the earlier ReqWB already invalidated the words.
+                    // Here, we are just unstalling the response.
+                    if (mshr[mshr_i].state == `SPX_RI) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_II;
+                    end
+                end else if (tag_hit) begin
                     lmem_set_in = line_br.set;
                     lmem_way_in = way_hit;
                     for (int i = 0; i < `WORDS_PER_LINE; i++) begin
@@ -975,7 +982,7 @@ module l2_fsm(
                         /* req_id */ l2_fwd_in.req_id,
                         /* to_req */ 1'b0,
                         /* line_addr */ l2_fwd_in.addr,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
                         /* word_mask */ l2_fwd_in.word_mask
                     );
 
@@ -987,7 +994,14 @@ module l2_fsm(
             end
             FWD_REQ_S_HANDLER : begin
                 // TODO: When inval is implemented, wait inval_ready
-                if (tag_hit) begin
+                if (mshr_hit) begin
+                    // update MSHR entry - the earlier ReqWB already invalidated the words.
+                    // Here, we are just unstalling the response.
+                    if (mshr[mshr_i].state == `SPX_RI) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_II;
+                    end
+                end else if (tag_hit) begin
                     lmem_set_in = line_br.set;
                     lmem_way_in = way_hit;
                     for (int i = 0; i < `WORDS_PER_LINE; i++) begin
@@ -1011,7 +1025,7 @@ module l2_fsm(
                         /* req_id */ l2_fwd_in.req_id,
                         /* to_req */ 1'b1,
                         /* line_addr */ l2_fwd_in.addr,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
                         /* word_mask */ l2_fwd_in.word_mask
                     );
 
@@ -1028,14 +1042,21 @@ module l2_fsm(
                         /* req_id */ l2_fwd_in.req_id,
                         /* to_req */ 1'b0,
                         /* line_addr */ l2_fwd_in.addr,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
                         /* word_mask */ l2_fwd_in.word_mask
                     );
                 end
             end
             FWD_REQ_ODATA_HANDLER : begin
                 // TODO: When inval is implemented, wait inval_ready
-                if (tag_hit) begin
+                if (mshr_hit) begin
+                    // update MSHR entry - the earlier ReqWB already invalidated the words.
+                    // Here, we are just unstalling the response.
+                    if (mshr[mshr_i].state == `SPX_RI) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_II;
+                    end
+                end else if (tag_hit) begin
                     lmem_set_in = line_br.set;
                     lmem_way_in = way_hit;
                     for (int i = 0; i < `WORDS_PER_LINE; i++) begin
@@ -1053,7 +1074,7 @@ module l2_fsm(
                         /* req_id */ l2_fwd_in.req_id,
                         /* to_req */ 1'b1,
                         /* line_addr */ l2_fwd_in.addr,
-                        /* line */ lines_buf[way_hit],
+                        /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
                         /* word_mask */ l2_fwd_in.word_mask
                     );
 
@@ -1109,7 +1130,7 @@ module l2_fsm(
             CPU_REQ_AMO_REQ : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
@@ -1130,6 +1151,13 @@ module l2_fsm(
                         /* line */ 'h0,
                         /* word_mask */ ~word_mask_owned_next
                     );
+
+                    if (tag_hit) begin
+                        send_inval(
+                            /* addr */ addr_br.line_addr,
+                            /* hprot */ `DATA
+                        );
+                    end
                 end
             end
             CPU_REQ_READ_ATOMIC_NO_REQ : begin
@@ -1138,7 +1166,7 @@ module l2_fsm(
             CPU_REQ_READ_ATOMIC_REQ : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
@@ -1159,6 +1187,13 @@ module l2_fsm(
                         /* line */ 'h0,
                         /* word_mask */ ~word_mask_owned_next
                     );
+
+                    if (tag_hit) begin
+                        send_inval(
+                            /* addr */ addr_br.line_addr,
+                            /* hprot */ `DATA
+                        );
+                    end
                 end
             end            
             CPU_REQ_READ_NO_REQ : begin
@@ -1169,7 +1204,7 @@ module l2_fsm(
                 // if the req_out is accepted.
                 // Though we request for a word_mask of ~word_mask_shared_next,
                 // in an ideal situation this should always be WORD_MASK_ALL.
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
@@ -1190,6 +1225,13 @@ module l2_fsm(
                         /* line */ 'h0,
                         /* word_mask */ ~word_mask_shared_next
                     );
+
+                    if (tag_hit) begin
+                        send_inval(
+                            /* addr */ addr_br.line_addr,
+                            /* hprot */ `DATA
+                        );
+                    end
                 end
             end
             CPU_REQ_WRITE_ATOMIC_NO_REQ : begin
@@ -1229,7 +1271,7 @@ module l2_fsm(
             CPU_REQ_WRITE_REQ : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
@@ -1252,6 +1294,13 @@ module l2_fsm(
                         /* line */ 'h0,
                         /* word_mask */ ~word_mask_owned_next
                     );
+
+                    if (tag_hit) begin
+                        send_inval(
+                            /* addr */ addr_br.line_addr,
+                            /* hprot */ `DATA
+                        );
+                    end
                 end
             end
             CPU_REQ_EVICT: begin

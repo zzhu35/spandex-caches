@@ -189,8 +189,24 @@ module l2_mshr(
                         
                         // We do not always need to stall - in certain cases, we immediately de-assert fwd_stall
                         case (fwd_in_coh_msg)
+                            // For FWD_INV, we always respond (and do not stall the forward). In
+                            // case of SPX_IS, we change transient state to SPX_II.
+                            // In case of FWD_REQ_S, FWD_REQ_OData, and FWD_RVK_O, need to check SPX_RI.
                             `FWD_INV : begin
-                                if (mshr[i].state == `SPX_IS) begin
+                                fwd_stall_override = 1'b1;
+                            end
+                            `FWD_RVK_O : begin
+                                if (mshr[i].state == `SPX_RI) begin
+                                    fwd_stall_override = 1'b1;
+                                end
+                            end
+                            `FWD_REQ_S : begin
+                                if (mshr[i].state == `SPX_RI) begin
+                                    fwd_stall_override = 1'b1;
+                                end
+                            end
+                            `FWD_REQ_Odata : begin
+                                if (mshr[i].state == `SPX_RI) begin
                                     fwd_stall_override = 1'b1;
                                 end
                             end

@@ -267,7 +267,11 @@ module llc_fsm (
                 // IF LLC_SI, we don't need to write back the line and just overwrite the state RAM as invalid.
                 case(mshr[mshr_i].state)
                     `LLC_SO : begin
-                        if (llc_rsp_out_ready_int) begin
+                        if (!update_mshr_value_invack_cnt) begin
+                            if (llc_rsp_out_ready_int) begin
+                                next_state = DECODE;
+                            end
+                        end else begin
                             next_state = DECODE;
                         end
                     end                
@@ -543,7 +547,7 @@ module llc_fsm (
         update_mshr_invack_cnt = 1'b0;
         update_mshr_line = 1'b0;
         update_mshr_word_mask = 1'b0;
-        mshr_op_code = 'h0;
+        mshr_op_code = `LLC_MSHR_IDLE;
         incr_mshr_cnt = 1'b0;
         update_mshr_value_msg = 'h0;
         update_mshr_value_req_id = 'h0;
@@ -603,6 +607,7 @@ module llc_fsm (
             RSP_MSHR_LOOKUP : begin
                 // Check the MSHR for the entry corresponding to the response.
                 mshr_op_code = `LLC_MSHR_LOOKUP;
+                rd_set_into_bufs = 1'b1;
             end
             RSP_INV_HANDLER : begin
                 // Reduce number of invalidations to wait for by one.
@@ -621,13 +626,13 @@ module llc_fsm (
                             if (llc_rsp_out_ready_int) begin
                                 send_rsp_out (
                                     /* coh_msg */ `RSP_Odata,
-                                    /* line_addr */ llc_req_in.addr,
-                                    /* line */ lines_buf[req_in_way],
-                                    /* req_id */ llc_req_in.req_id,
-                                    /* dest_id */ llc_req_in.req_id,
+                                    /* line_addr */ llc_rsp_in.addr,
+                                    /* line */ mshr[mshr_i].line,
+                                    /* req_id */ mshr[mshr_i].req_id,
+                                    /* dest_id */ mshr[mshr_i].req_id,
                                     /* invack_cnt */ 'h0,
                                     /* word_offset */ 'h0,
-                                    /* word_mask */ llc_req_in.word_mask
+                                    /* word_mask */ mshr[mshr_i].word_mask
                                 );                                
 
                                 // Clear the MSHR entry
@@ -813,12 +818,12 @@ module llc_fsm (
                                 );
 
                                 incr_invack_cnt = 1'b1;
+                                incr_l2_cnt = 1'b1;
                             end
                         end else begin
                             skip_invack_cnt = 1'b1;
+                            incr_l2_cnt = 1'b1;
                         end
-
-                        incr_l2_cnt = 1'b1;
                     end
                 endcase                        
             end
@@ -869,7 +874,7 @@ module llc_fsm (
                                 /* hprot */ hprots_buf[req_in_way],
                                 /* invack_cnt */ fwd_invack_cnt,
                                 /* line */ lines_buf[req_in_way],
-                                /* word_mask */ `WORD_MASK_ALL
+                                /* word_mask */ llc_req_in.word_mask
                             );
                         end else begin
                             if (llc_rsp_out_ready_int) begin
