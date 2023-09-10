@@ -140,12 +140,9 @@ module l2_core(
     logic do_fence, do_fence_next, do_ongoing_fence, do_ongoing_fence_next;
 
     assign ongoing_flush = 1'b0;
-    assign ongoing_atomic = 1'b0;
     assign do_ongoing_flush = 1'b0;
     assign set_ongoing_flush = 1'b0;
     assign clr_ongoing_flush = 1'b0;
-    assign set_ongoing_atomic = 1'b0;
-    assign clr_ongoing_atomic = 1'b0;
     assign incr_flush_way = 1'b0;
     assign incr_flush_set = 1'b0;
     assign clr_flush_set = 1'b0;

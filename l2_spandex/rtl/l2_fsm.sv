@@ -49,8 +49,8 @@ module l2_fsm(
     `FPGA_DBG input word_mask_t word_mask_owned_evict,
     `FPGA_DBG input word_mask_t word_mask_owned_evict_next,
     // Inputs from write_word modules
-    `FPGA_DBG input line_t write_word_line_out,
-    `FPGA_DBG input line_t write_word_amo_line_out,
+    input line_t write_word_line_out,
+    input line_t write_word_amo_line_out,
     // Bufs populated from the current set in RAMs.
     `FPGA_DBG input state_t states_buf[`L2_WAYS][`WORDS_PER_LINE],
     `FPGA_DBG input hprot_t hprots_buf[`L2_WAYS],
@@ -62,6 +62,7 @@ module l2_fsm(
     `FPGA_DBG input logic set_conflict,
     `FPGA_DBG input logic fwd_stall,
     `FPGA_DBG input fence_t l2_fence,
+    `FPGA_DBG input logic ongoing_atomic,
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -145,6 +146,8 @@ module l2_fsm(
     `FPGA_DBG output logic clr_ongoing_fence,
     `FPGA_DBG output logic set_ongoing_drain,
     `FPGA_DBG output logic acc_flush_done,
+    `FPGA_DBG output logic set_ongoing_atomic,
+    `FPGA_DBG output logic clr_ongoing_atomic,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -224,6 +227,18 @@ module l2_fsm(
     // Wrapper variable to store the way for the ongoing cpu request.
     `FPGA_DBG l2_way_t cpu_req_way;
     assign cpu_req_way = tag_hit ? way_hit : (empty_way_found ? empty_way : 'h0);
+
+    // Helper register to track the line address of ongoing atomic.
+    logic update_atomic_line_addr;
+    line_addr_t update_atomic_line_addr_value;
+    line_addr_t atomic_line_addr;
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            atomic_line_addr <= 0;
+        end else if (update_atomic_line_addr) begin
+            atomic_line_addr <= update_atomic_line_addr_value;
+        end
+    end
 
     // FSM 1
     // Decide which state to go to next;
@@ -721,6 +736,11 @@ module l2_fsm(
 
         evict_way_reg = 'h0;
 
+        update_atomic_line_addr = 1'b0;
+        update_atomic_line_addr_value = 'h0;
+        set_ongoing_atomic = 1'b0;
+        clr_ongoing_atomic = 1'b0;
+
         case (state)
             RESET : begin
                 lmem_wr_rst = 1'b1;
@@ -770,6 +790,11 @@ module l2_fsm(
                     // In case of AMO and LR, we send a read response back.
                     if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
                         send_rd_rsp(/* line */ update_mshr_value_line);
+
+                        // Assert ongoing atomic register when the LR response is received only.
+                        set_ongoing_atomic = 1'b1;
+                        update_atomic_line_addr = 1'b1;
+                        update_atomic_line_addr_value = l2_rsp_in.addr;
                     end else begin
                         // Write the original value to be written from the input request.
                         if (mshr[mshr_i].state == `SPX_AMO) begin
@@ -898,6 +923,16 @@ module l2_fsm(
             FWD_TAG_LOOKUP : begin
                 lookup_en = 1'b1;
                 lookup_mode = `L2_LOOKUP_FWD;
+
+                // If a forward to the same address comes in between an LR
+                // and SC, that violates the atomic.
+                // TODO: If the incoming forward is a read to the same address
+                // (FWD_REQ_S), we technically have not violated atomicity. However,
+                // since we invalidate instead of downgrading to shared, we cannot
+                // allow it. However, this could cause livelocks.
+                if (tag_hit_next && ongoing_atomic && l2_fwd_in.coh_msg == atomic_line_addr) begin
+                    clr_ongoing_atomic = 1'b1;
+                end
             end
             FWD_STALL : begin
                 // Assign the incoming fwd request to fwd_in_stalled
@@ -1104,6 +1139,13 @@ module l2_fsm(
                 if (l2_cpu_req.rl) begin
                     set_ongoing_drain = 1'b1;
                 end
+
+                // Any non-instr CPU request that is not the SC for the previus LR,
+                // that is received between an LR/SC, violates atomicity. We check
+                // if it is to the same address to account for SC or another LR to the same address.
+                if (ongoing_atomic && l2_cpu_req.hprot == `DATA && addr_br.line_addr != atomic_line_addr) begin
+                    clr_ongoing_atomic = 1'b1;
+                end
             end
             CPU_REQ_AMO_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
@@ -1162,6 +1204,11 @@ module l2_fsm(
             end
             CPU_REQ_READ_ATOMIC_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
+
+                // Assert ongoing atomic register. This is will track a pending atomic.
+                set_ongoing_atomic = 1'b1;
+                update_atomic_line_addr = 1'b1;
+                update_atomic_line_addr_value = addr_br.line_addr;
             end
             CPU_REQ_READ_ATOMIC_REQ : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
@@ -1235,25 +1282,34 @@ module l2_fsm(
                 end
             end
             CPU_REQ_WRITE_ATOMIC_NO_REQ : begin
-                lmem_set_in = addr_br.set;
-                lmem_way_in = cpu_req_way;
-                write_word_helper (
-                    /* line_in */ lines_buf[cpu_req_way],
-                    /* word */ l2_cpu_req.word,
-                    /* w_off */ addr_br.w_off,
-                    /* b_off */ addr_br.b_off,
-                    /* hsize */ l2_cpu_req.hsize,
-                    /* line_out */ lmem_wr_data_line
-                );
-                lmem_wr_en_line = 1'b1;
+                if (ongoing_atomic && addr_br.line_addr == atomic_line_addr) begin
+                    lmem_set_in = addr_br.set;
+                    lmem_way_in = cpu_req_way;
+                    write_word_helper (
+                        /* line_in */ lines_buf[cpu_req_way],
+                        /* word */ l2_cpu_req.word,
+                        /* w_off */ addr_br.w_off,
+                        /* b_off */ addr_br.b_off,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* line_out */ lmem_wr_data_line
+                    );
+                    lmem_wr_en_line = 1'b1;
 
-                send_bresp(/* bresp */ `BRESP_EXOKAY);
+                    send_bresp(/* bresp */ `BRESP_EXOKAY);
+                end else begin
+                    send_bresp(/* bresp */ `BRESP_OKAY);
+                end
+
+                clr_ongoing_atomic = 1'b1;
             end
             CPU_REQ_WRITE_ATOMIC_REQ : begin
                 // If the write atomic (SC) missed in the cache,
                 // it means the LR was revoked before the SC is sent, or
                 // LR was never sent at all.
                 send_bresp(/* bresp */ `BRESP_OKAY);
+
+                // Clear ongoing atomic, if there was any.
+                clr_ongoing_atomic = 1'b1;
             end
             CPU_REQ_WRITE_NO_REQ : begin
                 lmem_set_in = addr_br.set;
