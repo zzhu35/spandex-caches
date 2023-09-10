@@ -615,6 +615,7 @@ module llc_fsm (
                 update_mshr_invack_cnt = 1'b1;
 
                 // Remove the sender from the sharers list.
+                lmem_set_in = line_br.set;
                 lmem_way_in = mshr[mshr_i].way;
                 lmem_wr_data_sharers = sharers_buf[mshr[mshr_i].way] & ~(1 << llc_rsp_in.req_id);
                 lmem_wr_en_sharers = 1'b1;
@@ -1174,7 +1175,7 @@ module llc_fsm (
                                     /* hprot */ hprots_buf[evict_way_buf],
                                     /* invack_cnt */ 'h0,
                                     /* line */ lines_buf[evict_way_buf],
-                                    /* word_mask */ owners_buf[evict_way_buf]
+                                    /* word_mask */ word_mask_owned_evict
                                 );
                             end
 

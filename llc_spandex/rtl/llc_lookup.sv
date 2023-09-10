@@ -108,7 +108,7 @@ module llc_lookup (
             always_comb begin
                 owners_evict_cache_id[i] = 'h0;
 
-                if ((!tag_hit_next && !empty_way_found_next) & word_mask_owned_evict_next[i]) begin
+                if ((!tag_hit && !empty_way_found) & word_mask_owned_evict[i]) begin
                     owners_evict_cache_id[i] = lines_buf[evict_way_buf][i * `BITS_PER_WORD +: `CACHE_ID_WIDTH];
                 end
             end            
