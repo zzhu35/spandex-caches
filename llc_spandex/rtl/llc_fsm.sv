@@ -150,9 +150,10 @@ module llc_fsm (
     localparam REQ_S_HANDLER_MISS_MEM_RSP = 6'b011011;
     localparam REQ_S_HANDLER_MISS_RSP = 6'b011100;
     localparam REQ_WB_HANDLER_HIT = 6'b011101;
-    localparam REQ_EVICT = 6'b011110;
-    localparam REQ_EVICT_FWD_RVK = 6'b011111;
-    localparam REQ_EVICT_FWD_INV = 6'b100000;
+    localparam REQ_WB_HANDLER_MISS = 6'b011110;
+    localparam REQ_EVICT = 6'b011111;
+    localparam REQ_EVICT_FWD_RVK = 6'b100000;
+    localparam REQ_EVICT_FWD_INV = 6'b100001;
 
     localparam SEND_FWD_WITH_OWNER_MASK = 6'b110000;
 
@@ -352,6 +353,9 @@ module llc_fsm (
                         `REQ_S : begin
                             next_state = REQ_S_HANDLER_MISS;
                         end
+                        `REQ_WB : begin
+                            next_state = REQ_WB_HANDLER_MISS;
+                        end
                         default : begin
                             next_state = DECODE;
                         end
@@ -445,6 +449,11 @@ module llc_fsm (
                 end
             end
             REQ_WB_HANDLER_HIT : begin
+                if (llc_rsp_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
+            REQ_WB_HANDLER_MISS : begin
                 if (llc_rsp_out_ready_int) begin
                     next_state = DECODE;
                 end
@@ -990,7 +999,7 @@ module llc_fsm (
                                 );
 
                                 fill_mshr_entry (
-                                    /* msg */ `FWD_RVK_O,
+                                    /* msg */ `FWD_REQ_S,
                                     /* req_id */ llc_req_in.req_id,
                                     /* tag */ tags_buf[req_in_way],
                                     /* way */ req_in_way,
@@ -1132,6 +1141,25 @@ module llc_fsm (
                 lmem_wr_en_line = 1'b1;
                 lmem_wr_en_owner = 1'b1;
                 lmem_wr_en_dirty_bit = 1'b1;
+            end
+            REQ_WB_HANDLER_MISS : begin
+                // This is a dummy state to just send the response to the L2 to avoid a
+                // deadlock. This might have happened because the L2 issued a WB
+                // of the same line as the LLC trying to evict at the same time. Hence,
+                // the L2 WB got stalled till the LLC evict is complete. However,
+                // once the LLC evict completes, the L2's original WB will miss.
+                if (llc_rsp_out_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_WB_ACK,
+                        /* line_addr */ llc_req_in.addr,
+                        /* line */ 'h0,
+                        /* req_id */ llc_req_in.req_id,
+                        /* dest_id */ llc_req_in.req_id,
+                        /* invack_cnt */ 'h0,
+                        /* word_offset */ 'h0,
+                        /* word_mask */ llc_req_in.word_mask
+                    );
+                end
             end
             REQ_EVICT : begin
                 case (states_buf[evict_way_buf])

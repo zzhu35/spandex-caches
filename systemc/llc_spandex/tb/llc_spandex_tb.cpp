@@ -710,7 +710,7 @@ void llc_spandex_tb::llc_test()
     addr.breakdown(base_addr);
 
     // Get revoke for cache 3
-    get_fwd_out(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 0 /* req_id */, 0 /* dest_id */, 0b11 /* word_mask*/);
+    get_fwd_out(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 0 /* req_id */, 3 /* dest_id */, 0b11 /* word_mask*/);
 
     wait();
 
@@ -718,7 +718,7 @@ void llc_spandex_tb::llc_test()
     line.range(BITS_PER_WORD - 1, 0) = word;
 
     // Put ack for cache 3
-    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word /* addr */, line /* line */, 2 /* req_id */, 0b11 /* word_mask */);
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word /* addr */, line /* line */, 3 /* req_id */, 0b11 /* word_mask */);
 
     get_mem_req(LLC_WRITE /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, line /* line */);
 
@@ -915,7 +915,7 @@ void llc_spandex_tb::llc_test()
     word = 0x1;
     line.range(BITS_PER_WORD - 1, 0) = word;
 
-    // Write from cache 0
+    // Write from cache 4
     put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 4 /* req_id */,
     DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
 
@@ -1091,6 +1091,159 @@ void llc_spandex_tb::llc_test()
     put_mem_rsp(line /* line */);
 
     get_rsp_out(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 1.2: ReqOdata(0) + ReqS(1) + ReqWB(0)
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.2!");
+    base_addr = 0x83500600;
+    addr.breakdown(base_addr);
+
+    // Write from cache 0
+    put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+    wait();
+
+    word = 0x1;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    // Read from cache 1
+    put_req_in(REQ_S /* coh_msg */, addr.word /* addr */, 0 /* line */, 1 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    get_fwd_out(FWD_REQ_S /* coh_msg */, addr.word /* addr */, 1 /* req_id */, 0 /* dest_id */, 0b11 /* word_mask*/);
+
+    wait();
+
+    // Simultaneously write back from cache 0
+    word = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    wait();
+
+    put_req_in(REQ_WB /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */, 0b11 /* word_mask */);
+
+    get_rsp_out(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 1.3: ReqOdata(0) x LLC_WAYS+1 + ReqWB(0)
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.3!");
+    base_addr = 0x83500700;
+    addr.breakdown(base_addr);
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+
+    for (int i = 0; i < LLC_WAYS; i++) {
+      word = i+0x1;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+
+      // Write from cache 0
+      put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+      DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+      get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+      wait();
+
+      put_mem_rsp(line /* line */);
+
+      get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();
+
+      addr.tag_incr(1);
+    }
+
+    // New Write from cache 0
+    put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    base_addr = 0x83500700;
+    addr.breakdown(base_addr);
+
+    get_fwd_out(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 0 /* req_id */, 0 /* dest_id */, 0b11 /* word_mask*/);
+
+    wait();
+
+    // Simultaneously write back from cache 0
+    word = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_req_in(REQ_WB /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */, 0b11 /* word_mask */);
+
+    get_mem_req(LLC_WRITE /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, line /* line */);
+
+    wait();
+
+    addr.tag_incr(LLC_WAYS);
+
+    word = LLC_WAYS+0x1;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+    wait();
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    // Our pending request will now evict another line.
+    base_addr = 0x83500700;
+    addr.breakdown(base_addr);
+
+    addr.tag_incr(1);
+
+    get_fwd_out(FWD_RVK_O /* coh_msg */, addr.word /* addr */, 0 /* req_id */, 0 /* dest_id */, 0b11 /* word_mask*/);
+
+    wait();
+
+    // Simultaneously write back from cache 0
+    word = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */, 0b11 /* word_mask */);
+
+    get_mem_req(LLC_WRITE /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, line /* line */);
+
+    wait();
+
+    // Finally get a response for the original write-back.
+    base_addr = 0x83500700;
+    addr.breakdown(base_addr);
+
+    get_rsp_out(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* invack_cnt */,
     0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
 
     wait();
