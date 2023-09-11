@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2022 Columbia University, System Level Design Group
 // SPDC-License-Identifier: Apache-2.0
 
-#include "spandex_system_wrap.h"
+#include "two_spandex_system_wrap.h"
 
 void l2_wrapper_conv::thread_l2_cpu_req_data_conv(){
     l2_cpu_req_t tmp = l2_cpu_req.data.read();

@@ -17,7 +17,7 @@ FLAGS += -ncvlog_args,"-define XILINX_FPGA"
 INCDIR ?=
 INCDIR += -I$(ACCEL)
 INCDIR += -I../systemc/common/caches
-INCDIR += -I../systemc/spandex_system_testbench/tb
+INCDIR += -I../systemc/two_spandex_system_testbench/tb
 INCDIR += -I../systemc/utils
 INCDIR += -I$(STRATUS_PATH)/share/stratus/include
 INCDIR += +incdir+../common/defs
@@ -25,11 +25,11 @@ INCDIR += +incdir+../utils/defs
 INCDIR += +incdir+.
 
 SYSTEM_TB ?=
-SYSTEM_TB += ../systemc/spandex_system_testbench/tb/spandex_system_tb.cpp
+SYSTEM_TB += ../systemc/two_spandex_system_testbench/tb/two_spandex_system_tb.cpp
 SYSTEM_TB += sim/sc_main.cpp
 
 SYSTEM_COSIM_SRC ?=
-SYSTEM_COSIM_SRC += sim/spandex_system_wrap.cpp
+SYSTEM_COSIM_SRC += sim/two_spandex_system_wrap.cpp
 
 L2_SRC ?=
 L2_SRC += ../l2_spandex/rtl/*.sv

@@ -71,7 +71,7 @@ define_hls_module llc_spandex ../../llc_spandex/src/llc_spandex.cpp
 #
 # Testbench or system level modules
 #
-define_system_module tb  ../tb/spandex_system_tb.cpp \
+define_system_module tb  ../tb/two_spandex_system_tb.cpp \
                          ../tb/system.cpp \
                          ../tb/sc_main.cpp
                          
