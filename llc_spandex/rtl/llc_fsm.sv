@@ -1128,19 +1128,25 @@ module llc_fsm (
                 end
 
                 // Update data in lines, remove owner and mark line as dirty.
-                lmem_set_in = line_br.set;
-                lmem_way_in = req_in_way;
-                write_line_helper (
-                    /* line_orig */ lines_buf[req_in_way],
-                    /* line_in */ llc_req_in.line,
-                    /* word_mask_i */ llc_req_in.word_mask,
-                    /* line_out */ lmem_wr_data_line
-                );
-                lmem_wr_data_owner = owners_buf[req_in_way] & ~llc_req_in.word_mask;
-                lmem_wr_data_dirty_bit = 1'b1;
-                lmem_wr_en_line = 1'b1;
-                lmem_wr_en_owner = 1'b1;
-                lmem_wr_en_dirty_bit = 1'b1;
+                // We send the WB response only if the cache sending the write-back
+                // is the owner, else ignore with just response.
+                // TODO: We're assuming all words have the same owner with owners_cache_id[0];
+                // need to fix once we move to supporting word granularity.
+                if (word_owner_mask && owners_cache_id[0] == llc_req_in.req_id) begin
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = req_in_way;
+                    write_line_helper (
+                        /* line_orig */ lines_buf[req_in_way],
+                        /* line_in */ llc_req_in.line,
+                        /* word_mask_i */ llc_req_in.word_mask,
+                        /* line_out */ lmem_wr_data_line
+                    );
+                    lmem_wr_data_owner = owners_buf[req_in_way] & ~llc_req_in.word_mask;
+                    lmem_wr_data_dirty_bit = 1'b1;
+                    lmem_wr_en_line = 1'b1;
+                    lmem_wr_en_owner = 1'b1;
+                    lmem_wr_en_dirty_bit = 1'b1;
+                end
             end
             REQ_WB_HANDLER_MISS : begin
                 // This is a dummy state to just send the response to the L2 to avoid a
