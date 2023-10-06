@@ -1140,10 +1140,9 @@ module l2_fsm(
                     set_ongoing_drain = 1'b1;
                 end
 
-                // Any non-instr CPU request that is not the SC for the previus LR,
-                // that is received between an LR/SC, violates atomicity. We check
-                // if it is to the same address to account for SC or another LR to the same address.
-                if (ongoing_atomic && l2_cpu_req.hprot == `DATA && addr_br.line_addr != atomic_line_addr) begin
+                // Any LR/SC request that is to a different address as the previus LR,
+                // that is received between an LR/SC, violates atomicity.
+                if (ongoing_atomic && (l2_cpu_req.cpu_msg[0] == 1'b1) && addr_br.line_addr != atomic_line_addr) begin
                     clr_ongoing_atomic = 1'b1;
                 end
             end
