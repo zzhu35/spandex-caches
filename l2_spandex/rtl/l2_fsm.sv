@@ -2,7 +2,7 @@
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// TODO: Removed flush, atomic, set_conflict, stall related signals.
+// TODO: Removed flush related signals.
 module l2_fsm(
     `FPGA_DBG input logic clk,
     `FPGA_DBG input logic rst,
@@ -83,7 +83,6 @@ module l2_fsm(
     // To bufs to read RAMs into bufs.
     `FPGA_DBG output logic rd_set_into_bufs,
     // To MSHR
-    // TODO: Removed atomic from MSHR inputs.
     `FPGA_DBG output logic add_mshr_entry,
     `FPGA_DBG output logic update_mshr_state,
     `FPGA_DBG output logic update_mshr_line,
@@ -108,7 +107,7 @@ module l2_fsm(
     `FPGA_DBG output logic l2_rsp_out_valid_int,
     `FPGA_DBG output logic l2_inval_valid_int,
     `FPGA_DBG output logic l2_bresp_valid_int,
-    // TODO: Removed set_conflict, stall, flush related signals.
+    // TODO: Removed flush related signals.
     `FPGA_DBG output logic lmem_wr_rst,
     `FPGA_DBG output logic lmem_wr_en_state,
     `FPGA_DBG output logic lmem_wr_en_line,
@@ -217,10 +216,6 @@ module l2_fsm(
         end
     end
 
-    // TODO: Removed atomic_line_addr and reqs_atomic_i registering.
-
-    // TODO: Removed ready_bits till it is clear that we need them too.
-
     // Store the way to be evicted till evict_stall is removed.
     l2_way_t evict_way_reg;
 
@@ -290,7 +285,7 @@ module l2_fsm(
             // If new response received, lookup the coherence message
             // of the response.
             RSP_MSHR_LOOKUP : begin
-                // TODO: Should we update the word_mask in reqs[reqs_i] here?
+                // TODO: Should we update the word_mask in mshr[mshr_i] here?
                 // Maybe, we should update word_mask here, and only transition to
                 // the handler that finally removes the MSHR entry and/or updates
                 // data into the RAMs.
@@ -360,12 +355,6 @@ module l2_fsm(
             // If new forward received, check if we're in fwd_stall or not
             // (L2_REQS_PEEK_FWD in FSM 2 will set fwd_stall). If not,
             // L2_REQS_PEEK_FWD in FSM 2 will set reqs_hit_next and reqs_i_next.
-            // TODO: Need to check how to handle if no hit - what does
-            // FWD_TAG_LOOKUP do here?
-            // TODO: FWD_NO_HIT and FWD_NO_HIT_2 seem specific to their protocol -
-            // need to adapt as necessary to Spandex forward handler.
-            // TODO: For Spandex, we may need to service forwards during fwd_stall
-            // as well, so the FWD_STALL state should not just go back to DECODE.
             FWD_MSHR_LOOKUP : begin
                 // FSM 2 will lookup MSHR to see if there's already a stall - if yes,
                 // go to FWD_STALL. Else, check if if the incoming entry is causing a
@@ -423,32 +412,27 @@ module l2_fsm(
                 endcase
             end
             FWD_INV_HANDLER : begin
-                // TODO: When inval is implemented, wait inval_ready
-                if (l2_rsp_out_ready_int) begin
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
             FWD_RVK_O_HANDLER : begin
-                // TODO: When inval is implemented, wait inval_ready
-                if (l2_rsp_out_ready_int) begin
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
             FWD_REQ_S_HANDLER : begin
-                // TODO: When inval is implemented, wait inval_ready
-                if (l2_rsp_out_ready_int) begin
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     next_state = FWD_REQ_S_HANDLER_RVK;
                 end
             end
             FWD_REQ_S_HANDLER_RVK : begin
-                // TODO: When inval is implemented, wait inval_ready
                 if (l2_rsp_out_ready_int) begin
                     next_state = DECODE;
                 end
             end
             FWD_REQ_ODATA_HANDLER : begin
-                // TODO: When inval is implemented, wait inval_ready
-                if (l2_rsp_out_ready_int) begin
+                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end            
@@ -467,7 +451,6 @@ module l2_fsm(
             // If write atomic, this FSM will also wait for BRESP to be accepted.
             // If none of the above, check tag RAMs to know if hit or not.
             CPU_REQ_MSHR_LOOKUP : begin
-                // TODO: All code related to ongoing atomic and set conflict removed. Add later.
                 if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
                     next_state = CPU_REQ_SET_CONFLICT;
                 end else begin
@@ -478,22 +461,11 @@ module l2_fsm(
                 next_state = DECODE;
             end
             CPU_REQ_TAG_LOOKUP : begin
-                // TODO: All code related to atomic read/write removed. Add later.
-                // TODO: Add eviction check for REQ_S where line is partially owned.
                 // If tag is hit, check:
                 // - if it is a non-FCS read (REQ_S) and all words in the line are at least shared.
                 // - if it is a non-FCS write (REQ_O) and all words in the line are at least owned.
                 // TODO: currently, REQ_O requires all words to be owned, but that should not be
                 // necessary for word-granularity writes.
-                // --- copied from CPU_REQ_EMPTY_WAY
-                // TODO: READ_ATOMIC temporarily removed.
-                // TODO: Fix line so that when the response is received,
-                // the correct value that's currently in L2 memory and
-                // the response that is received, and the new value to be
-                // written (if applicable) are all considered.
-                // TODO: set word_mask as necessary. We might need to add more
-                // cases here and set word_mask and other signals (for req_out or reqs)
-                // accordingly.
                 if (tag_hit_next) begin
                     if (l2_cpu_req.amo) begin
                         if (word_mask_owned_next == `WORD_MASK_ALL) begin
@@ -611,7 +583,6 @@ module l2_fsm(
                 end
             end
             CPU_REQ_EVICT : begin
-                // TODO: Removed ready_bits check
                 if (word_mask_owned_evict) begin
                     if (l2_req_out_ready_int && l2_inval_ready_int) begin
                         next_state = CPU_REQ_MSHR_LOOKUP;
@@ -926,7 +897,7 @@ module l2_fsm(
 
                 // If a forward to the same address comes in between an LR
                 // and SC, that violates the atomic.
-                // TODO: If the incoming forward is a read to the same address
+                // If the incoming forward is a read to the same address
                 // (FWD_REQ_S), we technically have not violated atomicity. However,
                 // since we invalidate instead of downgrading to shared, we cannot
                 // allow it. However, this could cause livelocks.
@@ -981,8 +952,9 @@ module l2_fsm(
                 end
             end
             FWD_RVK_O_HANDLER : begin
-                // TODO: Should we invalidate the line or downgrade to shared state?
-                // Invalidate state of words requested in forward
+                // Should we invalidate the line or downgrade to shared state?
+                // We choose to invalidate since revokes can be received for partial
+                // words, which could lead to partiall shared lines otherwise.
                 // If a revoke arrived when there is SPX_XR in the MSHR, that means
                 // the revoke was sent after the directory acknowledged the ReqOdata. This can only
                 // happen if there is reordering in the NoC.
@@ -1028,7 +1000,6 @@ module l2_fsm(
                 end
             end
             FWD_REQ_S_HANDLER : begin
-                // TODO: When inval is implemented, wait inval_ready
                 if (mshr_hit) begin
                     // update MSHR entry - the earlier ReqWB already invalidated the words.
                     // Here, we are just unstalling the response.
@@ -1043,7 +1014,7 @@ module l2_fsm(
                         // Update all words to invalid. Shared state if possible, if line granularity.
                         // For word granularity, you could have partially owned words. As a result,
                         // you will need to move to partially shared state for the words you own.
-                        // TODO: To optimize this, we could check if data is fully owned. If yes, move
+                        // Enhancement: We could check if data is fully owned. If yes, move
                         // to shared state and send the entire line to the requestor.
                         lmem_wr_data_state[i] = `SPX_I;
                     end
@@ -1083,7 +1054,6 @@ module l2_fsm(
                 end
             end
             FWD_REQ_ODATA_HANDLER : begin
-                // TODO: When inval is implemented, wait inval_ready
                 if (mshr_hit) begin
                     // update MSHR entry - the earlier ReqWB already invalidated the words.
                     // Here, we are just unstalling the response.
@@ -1123,13 +1093,11 @@ module l2_fsm(
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = addr_br.set;
-                // TODO: Removed code related to BRESP being sent back for atomic write.
             end
             CPU_REQ_SET_CONFLICT : begin
                 set_cpu_req_conflict = 1'b1;
             end
             CPU_REQ_TAG_LOOKUP : begin
-                // TODO: Removed code related to setting ongoing_atomic if atomic read.
                 lookup_en = 1'b1;
                 lookup_mode = `L2_LOOKUP;
 
@@ -1142,7 +1110,9 @@ module l2_fsm(
 
                 // Any LR/SC request that is to a different address as the previus LR,
                 // that is received between an LR/SC, violates atomicity.
-                if (ongoing_atomic && (l2_cpu_req.cpu_msg[0] == 1'b1) && addr_br.line_addr != atomic_line_addr) begin
+                // Should we also consider regular loads/stores to the same
+                // address as the previous LR? This could result in livelocks due to stack accesses.
+                if (ongoing_atomic && l2_cpu_req.cpu_msg[0] == 1'b1 && addr_br.line_addr != atomic_line_addr) begin
                     clr_ongoing_atomic = 1'b1;
                 end
             end
@@ -1340,8 +1310,8 @@ module l2_fsm(
                         /* word_mask */ ~word_mask_owned_next
                     );
 
-                    // TODO: REQ_O currently using WORD_MASK_ALL. Need to change to
-                    // word granularity at some point.
+                    // TODO: Assuming we want entire line in ownership. We might
+                    // change this once we enable word granularity.
                     send_req_out (
                         /* coh_msg */ `REQ_Odata,
                         /* hprot */ l2_cpu_req.hprot,
@@ -1812,7 +1782,6 @@ endmodule
 //             // - do_fwd_next: Forward received from other L2/LLC
 //             // - do_ongoing_flush_next: Continue next set of ongoing flush
 //             // - do_cpu_req_next: New input request received
-//             // TODO: add fences
 //             DECODE : begin
 //                 if (do_flush_next) begin
 //                     next_state = DECODE;
@@ -1829,11 +1798,11 @@ endmodule
 //             // If new response received, lookup the coherence message
 //             // of the response.
 //             RSP_MSHR_LOOKUP : begin
-//                 // TODO: Should we update the word_mask in reqs[reqs_i] here?
+//                 // Should we update the word_mask in reqs[reqs_i] here?
 //                 // Maybe, we should update word_mask here, and only transition to
 //                 // the handler that finally removes the MSHR entry and/or updates
 //                 // data into the RAMs.
-//                 // TODO: Don't we need to check if the response matches
+//                 // Don't we need to check if the response matches
 //                 // an entry in the MSHR? FSM 2 does do a L2_REQS_LOOKUP, but it does
 //                 // not test whether there was a hit or not. In the current design,
 //                 // if there is no hit, we still end up clearing whatever reqs_i_next
@@ -1870,7 +1839,7 @@ endmodule
 //                         next_state = DECODE;
 //                     end
 //                 end else begin
-//                     // TODO: Add new state to handle SPX_II
+//                     // Add new state to handle SPX_II
 //                     next_state = DECODE;
 //                 end
 //             end
@@ -1936,11 +1905,11 @@ endmodule
 //             // If new forward received, check if we're in fwd_stall or not
 //             // (L2_REQS_PEEK_FWD in FSM 2 will set fwd_stall). If not,
 //             // L2_REQS_PEEK_FWD in FSM 2 will set reqs_hit_next and reqs_i_next.
-//             // TODO: Need to check how to handle if no hit - what does
+//             // Need to check how to handle if no hit - what does
 //             // FWD_TAG_LOOKUP do here?
-//             // TODO: FWD_NO_HIT and FWD_NO_HIT_2 seem specific to their protocol -
+//             // FWD_NO_HIT and FWD_NO_HIT_2 seem specific to their protocol -
 //             // need to adapt as necessary to Spandex forward handler.
-//             // TODO: For Spandex, we may need to service forwards during fwd_stall
+//             // For Spandex, we may need to service forwards during fwd_stall
 //             // as well, so the FWD_STALL state should not just go back to DECODE.
 //             FWD_MSHR_LOOKUP : begin
 //                 if ((fwd_stall || set_fwd_stall) & !clr_fwd_stall) begin
@@ -1957,7 +1926,7 @@ endmodule
 //             FWD_STALL : begin
 //                 next_state = DECODE;
 //             end
-//             // TODO: Add a switch case here on reqs[reqs_i].state
+//             // Add a switch case here on reqs[reqs_i].state
 //             // for all the forwards in our no fwd_stall handler.
 //             // In FSM 2, we need to add the actual rsp_out updates.
 //             // I think this FSM will proceed back to DECODE
@@ -2020,7 +1989,7 @@ endmodule
 //             // and if it has data (instr don't need write-back). If yes,
 //             // go to next state ONGOING_FLUSH_PROCESS and wait
 //             // for write-back to complete.
-//             // TODO: update according to Spandex logic from SystemC.
+//             // update according to Spandex logic from SystemC.
 //             ONGOING_FLUSH_LOOKUP : begin
 //                 if ((rd_data_state[flush_way] != `INVALID) && (is_flush_all || rd_data_hprot[flush_way])) begin
 //                     next_state = ONGOING_FLUSH_PROCESS;
@@ -2039,16 +2008,16 @@ endmodule
 //             // If write atomic, this FSM will also wait for BRESP to be accepted.
 //             // If none of the above, check tag RAMs to know if hit or not.
 //             CPU_REQ_MSHR_LOOKUP : begin
-//                 // TODO: All code related to ongoing atomic and set conflict removed. Add later.
+//                 // All code related to ongoing atomic and set conflict removed. Add later.
 //                 next_state = CPU_REQ_TAG_LOOKUP;
 //             end
 //             CPU_REQ_TAG_LOOKUP : begin
-//                 // TODO: All code related to atomic read/write removed. Add later.
-//                 // TODO: Add eviction check for REQ_S where line is partially owned.
+//                 // All code related to atomic read/write removed. Add later.
+//                 // Add eviction check for REQ_S where line is partially owned.
 //                 // If tag is hit, check:
 //                 // - if it is a non-FCS read (REQ_S) and all words in the line are at least shared.
 //                 // - if it is a non-FCS write (REQ_O) and all words in the line are at least owned.
-//                 // TODO: currently, REQ_O requires all words to be owned, but that should not be
+//                 // currently, REQ_O requires all words to be owned, but that should not be
 //                 // necessary for word-granularity writes.
 //                 if (tag_hit_next) begin
 //                     if (l2_cpu_req.cpu_msg == `READ) begin
@@ -2319,7 +2288,7 @@ endmodule
 //             RSP_MSHR_LOOKUP : begin
 //                 reqs_op_code = `L2_REQS_LOOKUP;
 //             end
-//             // TODO: The current RSP_O implementation assumes word granularity REQ_O;
+//             // The current RSP_O implementation assumes word granularity REQ_O;
 //             // If we want to do line granularity REQ_O, we need to take care of read-modify-write
 //             // of the words that the CPU did not update.
 //             // The other option to implement line granularity with the current protocol, is to use REQ_Odata.
@@ -2336,7 +2305,7 @@ endmodule
 //                     incr_reqs_cnt = 1'b1;
 
 //                     // clear_mshr - Update the RAMs
-//                     // TODO: Is it possible to abstract the clear_mshr process into a function?
+//                     // Is it possible to abstract the clear_mshr process into a function?
 //                     set_in = line_br.set;
 //                     way = reqs[reqs_i].way;
 //                     wr_data_tag = line_br.tag;
@@ -2700,10 +2669,10 @@ endmodule
 //                 reqs_op_code = `L2_REQS_PEEK_REQ;
 //                 rd_mem_en = 1'b1;
 //                 set_in = addr_br.set;
-//                 // TODO: Removed code related to BRESP being sent back for atomic write.
+//                 // Removed code related to BRESP being sent back for atomic write.
 //             end
 //             CPU_REQ_TAG_LOOKUP : begin
-//                 // TODO: Removed code related to setting ongoing_atomic if atomic read.
+//                 // Removed code related to setting ongoing_atomic if atomic read.
 //                 lookup_en = 1'b1;
 //                 lookup_mode = `L2_LOOKUP;
 //             end
@@ -2764,7 +2733,7 @@ endmodule
 //                 line_wr_data_req = lines_buf[way_hit];
 //                 amo_wr_data_req = 0;
 
-//                 // TODO: REQ_O currently using WORD_MASK_ALL. Need to change to
+//                 // REQ_O currently using WORD_MASK_ALL. Need to change to
 //                 // word granularity at some point.
 //                 l2_req_out_valid_int = 1'b1;
 //                 l2_req_out_o.coh_msg = `REQ_O;
@@ -2778,11 +2747,11 @@ endmodule
 //                 l2_req_out_o.hprot = l2_cpu_req.hprot;
 //                 l2_req_out_o.addr = addr_br.line_addr;
 //                 l2_req_out_o.line = 0;
-//                 // TODO: set word_mask as necessary. We might need to add more
+//                 // set word_mask as necessary. We might need to add more
 //                 // cases here and set word_mask and other signals (for req_out or reqs)
 //                 // accordingly.
 //                 l2_req_out_o.word_mask = `WORD_MASK_ALL;
-//                 // TODO: READ_ATOMIC temporarily removed.
+//                 // READ_ATOMIC temporarily removed.
 //                 case (l2_cpu_req.cpu_msg)
 //                     `READ : begin
 //                         l2_req_out_o.coh_msg = `REQ_S;
@@ -2804,7 +2773,7 @@ endmodule
 //                 hprot_wr_data_req = l2_cpu_req.hprot;
 //                 word_wr_data_req = l2_cpu_req.word;
 //                 amo_wr_data_req = l2_cpu_req.amo;
-//                 // TODO: Fix this so that when the response is received,
+//                 // Fix this so that when the response is received,
 //                 // the correct value that's currently in L2 memory and
 //                 // the response that is received, and the new value to be
 //                 // written (if applicable) are all considered.
@@ -3109,7 +3078,7 @@ endmodule
 //         wr_data_tag = tag;
 //         wr_data_line = line;
 //         wr_data_hprot = hprot;
-//         // TODO: If we're doing state at word granularity, the state for a line
+//         // If we're doing state at word granularity, the state for a line
 //         // needs to be read-modify-written back.
 //         wr_data_state = state;
 //     endfunction

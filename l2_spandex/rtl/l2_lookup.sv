@@ -2,7 +2,6 @@
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// TODO: Removed evict_way_buf
 // TODO: add word_hit once we move to word granularity
 module l2_lookup (
     input logic clk,
@@ -190,7 +189,6 @@ endmodule
 //                         end
 //                     end
 //                     if (tag_hit_next) begin
-//                         // TODO: Assuming line granularity
 //                         if (states_buf[way_hit_next] == `SPX_R) begin
 //                             word_mask_owned = `WORD_MASK_ALL;
 //                             word_mask_shared = `WORD_MASK_ALL;

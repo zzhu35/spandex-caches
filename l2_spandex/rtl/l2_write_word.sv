@@ -2,7 +2,6 @@
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// TODO: Make function!
 module l2_write_word(
     input logic clk,
     input logic rst,

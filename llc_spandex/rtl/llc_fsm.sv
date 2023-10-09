@@ -814,7 +814,7 @@ module llc_fsm (
                         // We do this by checking each element of the sharer's list on by one.
                         // If a sharer is found, a forward is sent, and fwd_invack_cnt is incremented.
                         // We remove the requestor from the sharers list (if present) without FWD_INV.
-                        // TODO: this is going to take MAX_N_L2 cycles - possible to optimize?
+                        // Enhancement: this is going to take MAX_N_L2 cycles - possible to optimize?
                         if ((sharers_buf[req_in_way] & (1 << fwd_l2_cnt)) && fwd_l2_cnt != llc_req_in.req_id) begin
                             // Send forward to owner, if we have any unowned words.
                             if (llc_fwd_out_ready_int) begin
@@ -1057,7 +1057,8 @@ module llc_fsm (
                         // Update sharer, states RAM
                         lmem_set_in = line_br.set;
                         lmem_way_in = req_in_way;
-                        // TODO: We need to read sharers buf and modify it.
+                        // We can overwrite sharers buf here, since there are no
+                        // old sharers to worry about if line is LLC_V.
                         lmem_wr_data_sharers = 1 << llc_req_in.req_id;
                         lmem_wr_data_state = `LLC_S;
                         lmem_wr_en_sharers = 1'b1;

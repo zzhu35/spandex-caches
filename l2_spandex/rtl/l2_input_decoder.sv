@@ -132,7 +132,6 @@ module l2_input_decoder (
     end
 
     // Register all outputs (only breakdowns necessary) in always_comb
-    // TODO: minor: add other signals that might need to be registered till next decode.
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             do_fence <= 0;

@@ -5,8 +5,7 @@
 module l2_regs (
     input logic clk,
     input logic rst,
-    // TODO: signals related to set_conflict, fwd_stall,
-    // flush and ongoing_atomic removed temporarily.
+    // TODO: signals related to flush removed temporarily.
     input logic add_mshr_entry,
     input logic incr_mshr_cnt,
     input logic [`MSHR_BITS-1:0] mshr_i,
@@ -131,8 +130,7 @@ module l2_regs (
         end
     end
 
-    // TODO: add global register for set_conflict, fwd_stall,
-    // flush and ongoing_atomic.
+    // TODO: add global register flush.
 
 endmodule
 

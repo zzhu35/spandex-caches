@@ -1,7 +1,6 @@
 `timescale 1ps / 1ps
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
-// TODO: Removed evict_way related code.
 module l2_bufs (
     input logic clk,
     input logic rst,

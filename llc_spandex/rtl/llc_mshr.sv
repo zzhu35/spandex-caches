@@ -3,7 +3,7 @@
 `include "spandex_types.svh"
 
 module llc_mshr(
-    // TODO: Removed flush and atomic related signals.
+    // TODO: Removed flush related signals.
     input logic clk,
     input logic rst,
     input logic add_mshr_entry,

@@ -3,7 +3,7 @@
 `include "spandex_types.svh"
 
 module l2_mshr(
-    // TODO: Removed flush and atomic related signals.
+    // TODO: Removed flush related signals.
     input logic clk,
     input logic rst,
     input logic add_mshr_entry,
@@ -32,7 +32,6 @@ module l2_mshr(
     addr_breakdown_t.in addr_br,
     // TODO: Add addr_br_reqs when adding fill_reqs_flush
     line_breakdown_l2_t.in line_br,
-    // TODO: Removed set conflict, fwd_stall related signals
     output logic set_set_conflict_mshr,
     output logic clr_set_conflict_mshr,
     output logic set_fwd_stall,
@@ -90,7 +89,6 @@ module l2_mshr(
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].state <= 0;
-                // TODO: Removed check of wr_req_state_atomic with reqs_atomic_i
                 // TODO: Removed check of fill_reqs_flush with reqs_i
                 end else if (update_mshr_state || add_mshr_entry) begin
                     if (mshr_i == i) begin
@@ -137,7 +135,6 @@ module l2_mshr(
     endgenerate
 
     always_comb begin
-        // TODO: removed set_conflict and fwd_stall signals
         mshr_i_next = 0;
         mshr_hit_next = 1'b0;
         clr_set_conflict_mshr = 1'b0;
@@ -177,7 +174,6 @@ module l2_mshr(
                 end
             end
             // TODO: Removed peek_flush to find next free entry
-            // TODO: Removed peek_fwd for checking conflict and setting fwd_stall
             // Check if there is a conflicting entry to incoming forward. If yes, stall.
             `L2_MSHR_PEEK_FWD : begin
                 clr_fwd_stall = 1'b1;
