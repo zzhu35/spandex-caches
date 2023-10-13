@@ -1774,7 +1774,7 @@ void l2_spandex_tb::l2_test()
     //              LR (hit) + FWD_INV to different address + SC; (EXOKAY)
     //              LR (hit) + FWD_RVK + SC (OKAY)
     ////////////////////////////////////////////////////////////////
-    CACHE_REPORT_INFO("[SPANDEX] Test 2.0!");
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.1!");
     base_addr = 0x83500300;
     addr.breakdown(base_addr);
 
@@ -1962,7 +1962,7 @@ void l2_spandex_tb::l2_test()
         0 /* amo */, 0 /* aq */, 1 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
-    get_bresp(BRESP_OKAY /* bresp */);
+    get_bresp(BRESP_EXOKAY /* bresp */);
 
     wait();
 
@@ -1972,7 +1972,7 @@ void l2_spandex_tb::l2_test()
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x1;
-    line.range(BITS_PER_WORD - 1, 0) = 0x3;
+    line.range(BITS_PER_WORD - 1, 0) = 0x5;
 
     get_rd_rsp(line /* line */);
 
@@ -2087,6 +2087,175 @@ void l2_spandex_tb::l2_test()
         0b0011 /* word_mask */, 0 /* invack_cnt */);
 
     get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 2.2 - {AMO x L2_WAYS} + REQWB + FWD_REQODATA
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.2!");
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+    
+    for (int i = 0; i < L2_WAYS; i++) {
+        word = i+1;
+
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+        wait();
+
+        line = 0;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+        put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+        addr.tag_incr(1);
+    }
+
+    wait();
+
+    // Write to same set and cause an eviction.
+    word = L2_WAYS+1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = 0x1;
+
+    // Evict first line
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();            
+
+    // Get request for the pending new write
+    addr.tag_incr(L2_WAYS);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+2;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    // Read unrelated line
+    base_addr = 0x83500420;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    // Write to same set again and cause an eviction.
+    word = L2_WAYS+2;
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+    addr.tag_incr(L2_WAYS);
+    addr.tag_incr(1);
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    // Evict second line
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+    addr.tag_incr(1);
+
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x3;
+    line.range(BITS_PER_WORD - 1, 0) = 0x2;
+
+    get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
+    word = 0x1;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    // Put response for read first
+    base_addr = 0x83500420;
+    addr.breakdown(base_addr);
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    // Add a forward from other core at the same time
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+    addr.tag_incr(1);
+
+    put_fwd_in(FWD_REQ_Odata /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
+            0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+         0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    get_rd_rsp(line /* line */);
+    
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x3;
+    line.range(BITS_PER_WORD - 1, 0) = 0x2;
+
+    get_rsp_out(RSP_Odata /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0011 /* word_mask */); 
+
+    wait();
+
+    // Get request for the pending new write
+    addr.tag_incr(L2_WAYS);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+3;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 

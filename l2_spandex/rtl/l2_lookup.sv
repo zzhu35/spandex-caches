@@ -95,6 +95,8 @@ module l2_lookup (
                 // Check if incoming forward hits or misses in cache
                 `L2_LOOKUP_FWD : begin
                     for (int i = `L2_WAYS-1; i >= 0; i--) begin
+                        line_present = 1'b0;
+
                         for (int j = 0; j < `WORDS_PER_LINE; j++) begin
                             if (states_buf[i][j] > `SPX_I) begin
                                 line_present = 1'b1;

@@ -316,8 +316,8 @@ module l2_fsm(
             RSP_ODATA_HANDLER : begin
                 // In the case of AMO, we need to wait for the read response to be sent
                 // back, but in case of regular writes, there is no read response to wait for.
-                if (mshr[mshr_i].state == `SPX_AMO) begin
-                    if (~mshr[mshr_i].word_mask) begin
+                if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
+                    if (!update_mshr_value_word_mask) begin
                         if (l2_rd_rsp_ready_int) begin
                             next_state = DECODE;
                         end
@@ -325,7 +325,17 @@ module l2_fsm(
                         next_state = DECODE;
                     end
                 end else begin
-                    next_state = DECODE;
+                    if (mshr[mshr_i].state == `SPX_AMO) begin
+                        if (!update_mshr_value_word_mask) begin
+                            if (l2_rd_rsp_ready_int) begin
+                                next_state = DECODE;
+                            end
+                        end else begin
+                            next_state = DECODE;
+                        end
+                    end else begin
+                        next_state = DECODE;
+                    end
                 end
             end
             RSP_S_HANDLER : begin
@@ -334,8 +344,8 @@ module l2_fsm(
                 // to the core, and FSM 1 will wait for the response to be accepted.
                 // If all words are not received, FSM 2 will update word_mask in the reqs entry
                 // and FSM 1 will go back to decode.
-                if (mshr[mshr_i].state == `SPX_IS) begin
-                    if (~mshr[mshr_i].word_mask) begin
+                if (mshr[mshr_i].state == `SPX_IS || mshr[mshr_i].state == `SPX_II) begin
+                    if (!update_mshr_value_word_mask) begin
                         if (l2_rd_rsp_ready_int) begin
                             next_state = DECODE;
                         end
@@ -757,7 +767,7 @@ module l2_fsm(
 
                 // If all words requested have been received,
                 // update the reqs entry state and increment the reqs_cnt.
-                if (~update_mshr_value_word_mask) begin
+                if (!update_mshr_value_word_mask) begin
                     // In case of AMO and LR, we send a read response back.
                     if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
                         send_rd_rsp(/* line */ update_mshr_value_line);
@@ -827,7 +837,7 @@ module l2_fsm(
 
                 // If all words requested have been received, send the response,
                 // update the reqs entry and increment the reqs_cnt
-                if (~update_mshr_value_word_mask) begin
+                if (!update_mshr_value_word_mask) begin
                     send_rd_rsp(/* line */ update_mshr_value_line);
 
                     // Update the RAMs and clear entry
