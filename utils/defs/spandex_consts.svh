@@ -46,18 +46,22 @@
 
 // Ongoing transaction buffers
 `define LLC_N_REQS          4 // affects LLC_REQS_BITS
-`define LLC_REQS_BITS       (ilog2(`LLC_N_REQS)) // depends on LLC_N_REQS
+`define LLC_REQS_BITS       ($clog2(`LLC_N_REQS)) // depends on LLC_N_REQS
 `define LLC_REQS_BITS_P1    (`LLC_REQS_BITS + 1) // depends on LLC_N_REQS + 1
 
 // TODO: This is to reuse the same state width
 // as ESP caches; add current_valid_state later.
 `define SPX_NUM_STATE               4
-`define SPX_STABLE_STATE_BITS       ilog2(`SPX_NUM_STATE)
+`define SPX_STABLE_STATE_BITS       $clog2(`SPX_NUM_STATE)
 `define LLC_STABLE_STATE_BITS       2
 `define LLC_UNSTABLE_STATE_BITS     4 // depends on # of unstable states
 
 `define LLC_OWNER_BITS          `WORDS_PER_LINE
 `define LLC_OWNER_BRAM_WIDTH    4
+
+// LLC WB delay fix parameters
+`define LLC_WB_DELAY            16
+`define LLC_WB_DELAY_BITS       $clog2(`LLC_WB_DELAY)
 
 // DeNovo states
 `define SPX_R       (`SPX_NUM_STATE - 1)
@@ -94,7 +98,7 @@
 `define LLC_WB      11
 
 `define MAX_RETRY           4
-`define MAX_RETRY_BITS      ilog2(`MAX_RETRY)
+`define MAX_RETRY_BITS      $clog2(`MAX_RETRY)
 
 // CPU DCS
 `define DCS_ReqWTfwd    1

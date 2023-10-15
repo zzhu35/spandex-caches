@@ -163,7 +163,7 @@ module l2_core(
     assign lmem_rd_en = 1'b1;
 
     assign flush_done = 1'b0;
-    assign l2_fwd_out_valid = 1'b0;
+    assign l2_fwd_out_valid_int = 1'b0;
     assign l2_fwd_out_o.coh_msg = 'h0;
     assign l2_fwd_out_o.req_id = 'h0;
     assign l2_fwd_out_o.to_req = 1'b0;

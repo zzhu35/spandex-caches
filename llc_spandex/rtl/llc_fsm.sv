@@ -223,6 +223,20 @@ module llc_fsm (
         end
     end
 
+    // Temporary fix to delay WB responses to avoid RSP-FWD races.
+    logic [(`LLC_WB_DELAY_BITS-1):0] wb_ack_cnt;
+    logic incr_wb_ack_cnt, clr_wb_ack_cnt;
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            wb_ack_cnt <= 0;
+        end else if (clr_wb_ack_cnt) begin
+            wb_ack_cnt <= 'h0;
+        end else if (incr_wb_ack_cnt) begin
+            wb_ack_cnt <= wb_ack_cnt + 1;
+        end
+    end
+
     always_comb begin
         next_state = state;
         case (state)
@@ -449,12 +463,23 @@ module llc_fsm (
                 end
             end
             REQ_WB_HANDLER_HIT : begin
-                if (llc_rsp_out_ready_int) begin
-                    next_state = DECODE;
+                // If the data being written back is not owned by the requestor,
+                // we treat this as a miss, and just send a dummy response,
+                // without updating the data.
+                // TODO: We're assuming all words have the same owner with owners_cache_id[0];
+                // need to fix once we move to supporting word granularity.
+                if (word_owner_mask && owners_cache_id[0] == llc_req_in.req_id) begin
+                    if (llc_rsp_out_ready_int) begin
+                        next_state = DECODE;
+                    end
+                end else begin
+                    next_state = REQ_WB_HANDLER_MISS;
                 end
             end
             REQ_WB_HANDLER_MISS : begin
-                if (llc_rsp_out_ready_int) begin
+                // If either the line being written back by the requestor is missing in the LLC,
+                // or owned by a different cache, wait for `LLC_WB_DELAY and send a response.
+                if (llc_rsp_out_ready_int && (wb_ack_cnt == `LLC_WB_DELAY - 1)) begin
                     next_state = DECODE;
                 end
             end
@@ -597,6 +622,8 @@ module llc_fsm (
         skip_invack_cnt = 1'b0;
         incr_l2_cnt = 1'b0;
         clr_l2_cnt = 1'b0;
+        incr_wb_ack_cnt = 1'b0;
+        clr_wb_ack_cnt = 1'b0;
 
         case (state)
             RESET : begin
@@ -1114,26 +1141,26 @@ module llc_fsm (
                 end
             end
             REQ_WB_HANDLER_HIT : begin
-                // Send response for the write-back
-                if (llc_rsp_out_ready_int) begin
-                    send_rsp_out (
-                        /* coh_msg */ `RSP_WB_ACK,
-                        /* line_addr */ llc_req_in.addr,
-                        /* line */ 'h0,
-                        /* req_id */ llc_req_in.req_id,
-                        /* dest_id */ llc_req_in.req_id,
-                        /* invack_cnt */ 'h0,
-                        /* word_offset */ 'h0,
-                        /* word_mask */ llc_req_in.word_mask
-                    );
-                end
-
-                // Update data in lines, remove owner and mark line as dirty.
-                // We send the WB response only if the cache sending the write-back
+                // We update the WB data only if the cache sending the write-back
                 // is the owner, else ignore with just response.
                 // TODO: We're assuming all words have the same owner with owners_cache_id[0];
                 // need to fix once we move to supporting word granularity.
                 if (word_owner_mask && owners_cache_id[0] == llc_req_in.req_id) begin
+                    // Send response for the write-back
+                    if (llc_rsp_out_ready_int) begin
+                        send_rsp_out (
+                            /* coh_msg */ `RSP_WB_ACK,
+                            /* line_addr */ llc_req_in.addr,
+                            /* line */ 'h0,
+                            /* req_id */ llc_req_in.req_id,
+                            /* dest_id */ llc_req_in.req_id,
+                            /* invack_cnt */ 'h0,
+                            /* word_offset */ 'h0,
+                            /* word_mask */ llc_req_in.word_mask
+                        );
+                    end
+
+                    // Update data in lines, remove owner and mark line as dirty.
                     lmem_set_in = line_br.set;
                     lmem_way_in = req_in_way;
                     write_line_helper (
@@ -1155,7 +1182,7 @@ module llc_fsm (
                 // of the same line as the LLC trying to evict at the same time. Hence,
                 // the L2 WB got stalled till the LLC evict is complete. However,
                 // once the LLC evict completes, the L2's original WB will miss.
-                if (llc_rsp_out_ready_int) begin
+                if (llc_rsp_out_ready_int && (wb_ack_cnt == `LLC_WB_DELAY - 1)) begin
                     send_rsp_out (
                         /* coh_msg */ `RSP_WB_ACK,
                         /* line_addr */ llc_req_in.addr,
@@ -1166,6 +1193,10 @@ module llc_fsm (
                         /* word_offset */ 'h0,
                         /* word_mask */ llc_req_in.word_mask
                     );
+
+                    clr_wb_ack_cnt = 1'b1;
+                end else if (wb_ack_cnt < `LLC_WB_DELAY - 1) begin
+                    incr_wb_ack_cnt = 1'b1;
                 end
             end
             REQ_EVICT : begin

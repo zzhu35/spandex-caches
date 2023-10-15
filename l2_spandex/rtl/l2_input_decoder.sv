@@ -82,11 +82,18 @@ module l2_input_decoder (
         set_cpu_req_from_conflict = 1'b0;
         set_fwd_in_from_stalled = 1'b0;
 
+        // Priority:
+        // - do_fence_next; unless there is an ongoing fence or drain already.
+        // - do_rsp_next; unless the MSHR empty (what is the response for?),
+        // - do_fwd_next; either a new forward or a pending forward whose stall just ended.
+        // - do_ongoing_fence_next; to service the self-invalidation after drain is complete.
+        // - do_cpu_req_next; unless there are no free MSHR entries, an evict stall, an ongoing
+        // fence or drain. Either service a new request or the set conflicted request (priority to latter).
         if (decode_en) begin
             if (l2_fence_valid_int && !ongoing_fence && !drain_in_progress) begin
                 l2_fence_ready_int = 1'b1;            
                 do_fence_next = 1'b1;
-            end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR && !(l2_fwd_in_valid_int && !fwd_stall && rsp_in_addr == fwd_in_addr)) begin
+            end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
                 do_rsp_next = 1'b1;
                 l2_rsp_in_ready_int = 1'b1;
             end else if ((l2_fwd_in_valid_int && !fwd_stall) || fwd_stall_ended) begin

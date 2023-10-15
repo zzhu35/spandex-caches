@@ -155,6 +155,8 @@ module llc_core (
     assign update_req_in_from_stalled = 1'b0;
     assign set_req_in_stalled = 1'b0;
     assign llc_rst_tb_done = 1'b0;
+    assign llc_rst_tb_ready = 1'b1;
+    assign llc_rst_tb_done_valid = 1'b0;
     assign lmem_wr_rst_flush = 'h0;
 
     //interfaces
