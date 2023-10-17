@@ -70,6 +70,7 @@ module l2_interfaces(
     output bresp_t l2_bresp,
     output line_addr_t rsp_in_addr,
     output line_addr_t fwd_in_addr,
+    output line_addr_t fwd_in_tmp_addr,
     output addr_t cpu_req_addr,
     output fence_t l2_fence,
 
@@ -605,6 +606,7 @@ module l2_interfaces(
     assign rsp_in_addr = l2_rsp_in_valid_tmp ? l2_rsp_in_tmp.addr : l2_rsp_in_i.addr;
     assign fwd_in_addr = set_fwd_in_from_stalled ? l2_fwd_in_stalled.addr :
                             (l2_fwd_in_valid_tmp ? l2_fwd_in_tmp.addr : l2_fwd_in_i.addr);
+    assign fwd_in_tmp_addr = l2_fwd_in_valid_tmp ? l2_fwd_in_tmp.addr : l2_fwd_in_i.addr;
     assign cpu_req_addr = set_cpu_req_from_conflict ? l2_cpu_req_conflict.addr :
                             (l2_cpu_req_valid_tmp ? l2_cpu_req_tmp.addr : l2_cpu_req_i.addr);
 endmodule

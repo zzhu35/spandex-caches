@@ -60,7 +60,7 @@
 `define LLC_OWNER_BRAM_WIDTH    4
 
 // LLC WB delay fix parameters
-`define LLC_WB_DELAY            16
+`define LLC_WB_DELAY            32
 `define LLC_WB_DELAY_BITS       $clog2(`LLC_WB_DELAY)
 
 // DeNovo states

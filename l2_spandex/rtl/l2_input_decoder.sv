@@ -13,6 +13,7 @@ module l2_input_decoder (
     input logic l2_cpu_req_valid_int,
     `FPGA_DBG input line_addr_t rsp_in_addr,
     `FPGA_DBG input line_addr_t fwd_in_addr,
+    `FPGA_DBG input line_addr_t fwd_in_tmp_addr,
     `FPGA_DBG input addr_t cpu_req_addr,
     // To check if new request can be tracked
     input logic [`REQS_BITS_P1-1:0] mshr_cnt,
@@ -93,7 +94,7 @@ module l2_input_decoder (
             if (l2_fence_valid_int && !ongoing_fence && !drain_in_progress) begin
                 l2_fence_ready_int = 1'b1;            
                 do_fence_next = 1'b1;
-            end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
+            end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR && !(l2_fwd_in_valid_int && (!fwd_stall || fwd_stall_ended) && rsp_in_addr == fwd_in_tmp_addr)) begin
                 do_rsp_next = 1'b1;
                 l2_rsp_in_ready_int = 1'b1;
             end else if ((l2_fwd_in_valid_int && !fwd_stall) || fwd_stall_ended) begin

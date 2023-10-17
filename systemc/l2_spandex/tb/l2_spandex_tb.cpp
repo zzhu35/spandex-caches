@@ -2091,7 +2091,7 @@ void l2_spandex_tb::l2_test()
     wait();
 
     ////////////////////////////////////////////////////////////////
-    // TEST 2.2 - {AMO x L2_WAYS} + REQWB + FWD_REQODATA
+    // TEST 2.2 - {WRITE x L2_WAYS} + FWD_STALL + REQWB + FWD_REQODATA
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 2.2!");
     base_addr = 0x83500400;
@@ -2164,17 +2164,25 @@ void l2_spandex_tb::l2_test()
 
     wait();
 
-    // Read unrelated line
+    // Write unrelated line
     base_addr = 0x83500420;
     addr.breakdown(base_addr);
 
-    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
-        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+    word = L2_WAYS+4;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
         0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
         0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
 
-    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
-        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+   
+    // Add a forward from other core at the same time - FWD_STALL
+    put_fwd_in(FWD_REQ_Odata /* coh_msg */, addr.word /* addr */, 2 /* req_id */,
+            0 /* line */, 0b0011 /* word_mask */);
 
     wait();
 
@@ -2209,16 +2217,7 @@ void l2_spandex_tb::l2_test()
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
     line.range(BITS_PER_WORD - 1, 0) = word;
 
-    // Put response for read first
-    base_addr = 0x83500420;
-    addr.breakdown(base_addr);
-
-    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
-        0b0011 /* word_mask */, 0 /* invack_cnt */);
-
-    wait();
-
-    // Add a forward from other core at the same time
+    // Add a forward from other core at the same time - should be stalled
     base_addr = 0x83500400;
     addr.breakdown(base_addr);
     addr.tag_incr(1);
@@ -2226,15 +2225,53 @@ void l2_spandex_tb::l2_test()
     put_fwd_in(FWD_REQ_Odata /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
             0 /* line */, 0b0011 /* word_mask */);
 
+    for (int i = 0; i < 32; i++) {
+        wait();
+    }
+
     wait();
+
+    // Put response for the pending write to unrelated line
+    base_addr = 0x83500420;
+    addr.breakdown(base_addr);
+
+    line = 0;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = L2_WAYS+3;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    // Put response for write-back
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+    addr.tag_incr(1);
 
     put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
          0b0011 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
 
-    get_rd_rsp(line /* line */);
-    
+    // Get response for pending forward to unrelated line
+    base_addr = 0x83500420;
+    addr.breakdown(base_addr);
+
+    word = L2_WAYS+4;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_rsp_out(RSP_Odata /* coh_msg */, 2 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0011 /* word_mask */); 
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
+    // Get response for pending forward
+    base_addr = 0x83500400;
+    addr.breakdown(base_addr);
+    addr.tag_incr(1);
+
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x3;
     line.range(BITS_PER_WORD - 1, 0) = 0x2;
 

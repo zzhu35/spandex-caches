@@ -94,7 +94,7 @@ module l2_core(
     l2_set_t lmem_set_in;
     l2_way_t empty_way, empty_way_next, way_hit, way_hit_next, lmem_way_in;
     l2_way_t lmem_wr_data_evict_way, lmem_rd_data_evict_way, evict_way_buf;
-    line_addr_t rsp_in_addr, fwd_in_addr;
+    line_addr_t rsp_in_addr, fwd_in_addr, fwd_in_tmp_addr;
     mshr_buf_t mshr[`N_MSHR];
     word_mask_t word_mask_shared, word_mask_owned, word_mask_shared_next, word_mask_owned_next;
     word_mask_t word_mask_owned_evict, word_mask_owned_evict_next;

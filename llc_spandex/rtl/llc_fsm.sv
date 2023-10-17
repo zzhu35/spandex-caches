@@ -199,9 +199,9 @@ module llc_fsm (
     assign word_no_owner_mask = llc_req_in.word_mask & ~word_mask_owned;
 
     // Helper signals and registers to track FWD_INV destinations.
-    invack_cnt_calc_t fwd_l2_cnt, fwd_invack_cnt;
-    logic incr_l2_cnt, clr_l2_cnt;
-    logic incr_invack_cnt, clr_invack_cnt, skip_invack_cnt;
+    `FPGA_DBG invack_cnt_calc_t fwd_l2_cnt, fwd_invack_cnt;
+    `FPGA_DBG logic incr_l2_cnt, clr_l2_cnt;
+    `FPGA_DBG logic incr_invack_cnt, clr_invack_cnt, skip_invack_cnt;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -224,8 +224,8 @@ module llc_fsm (
     end
 
     // Temporary fix to delay WB responses to avoid RSP-FWD races.
-    logic [(`LLC_WB_DELAY_BITS-1):0] wb_ack_cnt;
-    logic incr_wb_ack_cnt, clr_wb_ack_cnt;
+    `FPGA_DBG logic [(`LLC_WB_DELAY_BITS-1):0] wb_ack_cnt;
+    `FPGA_DBG logic incr_wb_ack_cnt, clr_wb_ack_cnt;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
