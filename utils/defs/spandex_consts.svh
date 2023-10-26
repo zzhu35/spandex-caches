@@ -59,10 +59,6 @@
 `define LLC_OWNER_BITS          `WORDS_PER_LINE
 `define LLC_OWNER_BRAM_WIDTH    4
 
-// LLC WB delay fix parameters
-`define LLC_WB_DELAY            32
-`define LLC_WB_DELAY_BITS       $clog2(`LLC_WB_DELAY)
-
 // DeNovo states
 `define SPX_R       (`SPX_NUM_STATE - 1)
 `define SPX_S       (`SPX_NUM_STATE - 2)

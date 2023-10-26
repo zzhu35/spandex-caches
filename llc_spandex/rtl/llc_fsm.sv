@@ -223,20 +223,6 @@ module llc_fsm (
         end
     end
 
-    // Temporary fix to delay WB responses to avoid RSP-FWD races.
-    `FPGA_DBG logic [(`LLC_WB_DELAY_BITS-1):0] wb_ack_cnt;
-    `FPGA_DBG logic incr_wb_ack_cnt, clr_wb_ack_cnt;
-
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            wb_ack_cnt <= 0;
-        end else if (clr_wb_ack_cnt) begin
-            wb_ack_cnt <= 'h0;
-        end else if (incr_wb_ack_cnt) begin
-            wb_ack_cnt <= wb_ack_cnt + 1;
-        end
-    end
-
     always_comb begin
         next_state = state;
         case (state)
@@ -479,7 +465,7 @@ module llc_fsm (
             REQ_WB_HANDLER_MISS : begin
                 // If either the line being written back by the requestor is missing in the LLC,
                 // or owned by a different cache, wait for `LLC_WB_DELAY and send a response.
-                if (llc_rsp_out_ready_int && (wb_ack_cnt == `LLC_WB_DELAY - 1)) begin
+                if (llc_rsp_out_ready_int) begin
                     next_state = DECODE;
                 end
             end
@@ -622,8 +608,6 @@ module llc_fsm (
         skip_invack_cnt = 1'b0;
         incr_l2_cnt = 1'b0;
         clr_l2_cnt = 1'b0;
-        incr_wb_ack_cnt = 1'b0;
-        clr_wb_ack_cnt = 1'b0;
 
         case (state)
             RESET : begin
@@ -1186,7 +1170,7 @@ module llc_fsm (
                 // of the same line as the LLC trying to evict at the same time. Hence,
                 // the L2 WB got stalled till the LLC evict is complete. However,
                 // once the LLC evict completes, the L2's original WB will miss.
-                if (llc_rsp_out_ready_int && (wb_ack_cnt == `LLC_WB_DELAY - 1)) begin
+                if (llc_rsp_out_ready_int) begin
                     send_rsp_out (
                         /* coh_msg */ `RSP_WB_ACK,
                         /* line_addr */ llc_req_in.addr,
@@ -1197,10 +1181,6 @@ module llc_fsm (
                         /* word_offset */ 'h0,
                         /* word_mask */ llc_req_in.word_mask
                     );
-
-                    clr_wb_ack_cnt = 1'b1;
-                end else if (wb_ack_cnt < `LLC_WB_DELAY - 1) begin
-                    incr_wb_ack_cnt = 1'b1;
                 end
             end
             REQ_EVICT : begin
