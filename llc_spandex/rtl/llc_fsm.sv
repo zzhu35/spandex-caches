@@ -647,8 +647,9 @@ module llc_fsm (
             end
             RSP_INV_HANDLER : begin
                 // Reduce number of invalidations to wait for by one.
+                // We do not update the MSHR entry immediately to ensure idempotence since
+                // llc_rsp_out_ready_int might not be high.
                 update_mshr_value_invack_cnt = mshr[mshr_i].invack_cnt - 1;
-                update_mshr_invack_cnt = 1'b1;
 
                 // Remove the sender from the sharers list.
                 lmem_set_in = line_br.set;
@@ -694,7 +695,7 @@ module llc_fsm (
                             // In FSM 1, we transition to DECODE state, where input_decoder checks if set_conflict is asserted
                             // and there is no evict stall. This triggers the interface to update the input request with
                             // original pending request that caused the eviction.
-                            lmem_wr_data_evict_way = evict_way_buf + 1;
+                            lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
                             lmem_wr_en_evict_way = 1'b1;
                             clr_evict_stall = 1'b1;
                         end
@@ -714,11 +715,14 @@ module llc_fsm (
                             // In FSM 1, we transition to DECODE state, where input_decoder checks if set_conflict is asserted
                             // and there is no evict stall. This triggers the interface to update the input request with
                             // original pending request that caused the eviction.
-                            lmem_wr_data_evict_way = evict_way_buf + 1;
+                            lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
                             lmem_wr_en_evict_way = 1'b1;
                             clr_evict_stall = 1'b1;
                         end
                     endcase
+                end else begin
+                    // Update MSHR immediately only in cases where we're yet to receive more responses.
+                    update_mshr_invack_cnt = 1'b1;
                 end
             end
             RSP_INV_HANDLER_MEM_REQ : begin
@@ -784,8 +788,8 @@ module llc_fsm (
                         // and there is no evict stall. This triggers the interface to update the input request with
                         // original pending request that caused the eviction.
                         // It is okay to update evict_way multiple times here since
-                        // evict_way_buf is never updated till mem req is accepted.
-                        lmem_wr_data_evict_way = evict_way_buf + 1;
+                        // mshr[mshr_i].way (which is same as evict_way_buf) is never updated till entry is freed.
+                        lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
                         lmem_wr_en_evict_way = 1'b1;
                         clr_evict_stall = 1'b1;
                     end
@@ -1214,10 +1218,12 @@ module llc_fsm (
                                 );
                             end
 
-                            // Update the states RAM
+                            // Update the states and evict_way RAM
                             lmem_set_in = line_br.set;
                             lmem_way_in = evict_way_buf;
+                            lmem_wr_data_evict_way = evict_way_buf + 1;
                             lmem_wr_data_state = `LLC_I;
+                            lmem_wr_en_evict_way = 1'b1;
                             lmem_wr_en_state = 1'b1;
                         end else begin
                             // For words that are owned elsewhere, we need to first revoke them. 
