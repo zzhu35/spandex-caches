@@ -95,7 +95,7 @@ module l2_regs (
             fwd_stall_ended <= 1'b0;
         end else if (clr_fwd_stall_ended) begin
             fwd_stall_ended <= 1'b0;
-        end else if (lmem_wr_en_clear_mshr && fwd_stall && (fwd_stall_entry == mshr_i)) begin
+        end else if (incr_mshr_cnt && fwd_stall && (fwd_stall_entry == mshr_i)) begin
             fwd_stall_ended <= 1'b1;
         end
     end
