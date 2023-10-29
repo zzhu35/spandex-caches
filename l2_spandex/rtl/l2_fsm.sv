@@ -48,6 +48,10 @@ module l2_fsm(
     `FPGA_DBG input word_mask_t word_mask_owned_next,
     `FPGA_DBG input word_mask_t word_mask_owned_evict,
     `FPGA_DBG input word_mask_t word_mask_owned_evict_next,
+    `FPGA_DBG input logic word_hit,
+    `FPGA_DBG input logic word_hit_next,
+    `FPGA_DBG input state_t word_hit_state,
+    `FPGA_DBG input state_t word_hit_state_next,
     // Inputs from write_word modules
     input line_t write_word_line_out,
     input line_t write_word_amo_line_out,
@@ -164,6 +168,8 @@ module l2_fsm(
     localparam RSP_ODATA_HANDLER = 6'b000011;
     localparam RSP_S_HANDLER = 6'b000100;
     localparam RSP_WB_ACK_HANDLER = 6'b000101;
+    localparam RSP_O_HANDLER = 6'b000110;
+    localparam RSP_NACK_HANDLER = 6'b000111;
 
     localparam FWD_MSHR_LOOKUP = 6'b001000;
     localparam FWD_STALL = 6'b001001;
@@ -175,6 +181,8 @@ module l2_fsm(
     localparam FWD_REQ_S_HANDLER = 6'b001111;
     localparam FWD_REQ_S_HANDLER_RVK = 6'b010000;
     localparam FWD_REQ_ODATA_HANDLER = 6'b010001;
+    localparam FWD_WTFWD_HANDLER = 6'b010010;
+    localparam FWD_WTFWD_HANDLER_NACK = 6'b010011;
 
     localparam NEW_FENCE_HANDLER = 6'b100000;
     localparam ONGOING_FENCE_HANDLER = 6'b100001;
@@ -193,6 +201,7 @@ module l2_fsm(
     localparam CPU_REQ_WRITE_ATOMIC_NO_REQ = 6'b101101;
     localparam CPU_REQ_WRITE_ATOMIC_REQ = 6'b101110;
     localparam CPU_REQ_EVICT = 6'b101111;
+    localparam CPU_REQ_WRITE_ADD_WB = 6'b110000;
 
     `FPGA_DBG logic [5:0] state, next_state;
     always_ff @(posedge clk or negedge rst) begin
@@ -234,6 +243,18 @@ module l2_fsm(
             atomic_line_addr <= update_atomic_line_addr_value;
         end
     end
+
+    // Temporary line to hold the line value with just the WTFwd word non-zero.
+    line_t wtfwd_temp_line;
+
+    // Temporary word mask to hold the words that we will send positive and
+    // negative acknowledgements. Here, if we are servicing a forward and there is 
+    // a tag hit, we assign ack_mask to the common words in the forward and owned words.
+    // Similarly, we assign nack_mask to words in the forward that are not owned, or all
+    // words in the forward if not a tag hit.
+    word_mask_t ack_mask, nack_mask;
+    assign ack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & word_mask_owned) : 'h0) : 'h0;
+    assign nack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & ~word_mask_owned) : l2_fwd_in.word_mask) : 'h0;
 
     // FSM 1
     // Decide which state to go to next;
@@ -305,6 +326,12 @@ module l2_fsm(
                         `RSP_WB_ACK : begin
                             next_state = RSP_WB_ACK_HANDLER;
                         end
+                        `RSP_O : begin
+                            next_state = RSP_O_HANDLER;
+                        end
+                        `RSP_NACK : begin
+                            next_state = RSP_NACK_HANDLER;
+                        end
                         default : begin
                             next_state = DECODE;
                         end
@@ -316,7 +343,15 @@ module l2_fsm(
             RSP_ODATA_HANDLER : begin
                 // In the case of AMO, we need to wait for the read response to be sent
                 // back, but in case of regular writes, there is no read response to wait for.
-                if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
+                if (mshr[mshr_i].cpu_msg == `READ) begin
+                    if (!update_mshr_value_word_mask) begin
+                        if (l2_rd_rsp_ready_int) begin
+                            next_state = DECODE;
+                        end
+                    end else begin
+                        next_state = DECODE;
+                    end
+                end else if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
                     if (!update_mshr_value_word_mask) begin
                         if (l2_rd_rsp_ready_int) begin
                             next_state = DECODE;
@@ -358,6 +393,14 @@ module l2_fsm(
             end
             RSP_WB_ACK_HANDLER : begin
                 next_state = DECODE;
+            end
+            RSP_O_HANDLER : begin
+                next_state = DECODE;
+            end
+            RSP_NACK_HANDLER : begin
+                if (l2_req_out_ready_int) begin
+                    next_state = DECODE;
+                end
             end
             // -------------------
             // Forward handler
@@ -416,6 +459,9 @@ module l2_fsm(
                     `FWD_REQ_Odata : begin
                         next_state = FWD_REQ_ODATA_HANDLER;
                     end
+                    `FWD_WTfwd : begin
+                        next_state = FWD_WTFWD_HANDLER;
+                    end
                     default : begin
                         next_state = DECODE;
                     end
@@ -446,6 +492,24 @@ module l2_fsm(
                     next_state = DECODE;
                 end
             end            
+            FWD_WTFWD_HANDLER : begin
+                if (ack_mask) begin
+                    if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                        next_state = FWD_WTFWD_HANDLER_NACK;
+                    end
+                end else begin
+                    next_state = FWD_WTFWD_HANDLER_NACK;
+                end
+            end              
+            FWD_WTFWD_HANDLER_NACK : begin
+                if (nack_mask) begin
+                    if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                        next_state = DECODE;
+                    end
+                end else begin
+                    next_state = DECODE;
+                end
+            end            
             // Check if the flush_way (from l2_regs) has valid data,
             // and if it has data (instr don't need write-back). If yes,
             // go to next state ONGOING_FLUSH_PROCESS and wait
@@ -472,10 +536,25 @@ module l2_fsm(
             end
             CPU_REQ_TAG_LOOKUP : begin
                 // If tag is hit, check:
-                // - if it is a non-FCS read (REQ_S) and all words in the line are at least shared.
-                // - if it is a non-FCS write (REQ_O) and all words in the line are at least owned.
-                // TODO: currently, REQ_O requires all words to be owned, but that should not be
-                // necessary for word-granularity writes.
+                // - if it is an AMO request:
+                // - - then check if all words are owned or not (if not, we request for all words).
+                // - if it is not an AMO request:
+                // - - check the type of CPU request from cpu_msg
+                // - - - In case of read, we could have FCS requests (dcs_en) or non-FCS requests.
+                // - - - - In case of an FCS request:
+                // - - - - If it is ReqOdata, we need to ensure the line is owned, else request for all.
+                // - - - - In case of an non-FCS request, we need to ensure the line is at least shared.
+                // - - - In case of read atomic (LR), we need to ensure the line is owned, else request for all.
+                // - - - In case of write, we could have FCS requests (dcs_en) or non-FCS requests.
+                // - - - - In case of an FCS request:
+                // - - - - If it is ReqWTFwd, if the word being written to is owned, update it directly,
+                // - - - - else, we will add the entry to the WB but not allocate.
+                // - - - - In case of an non-FCS request, we need to ensure the line is owned.
+                // - - - In case of write atomic (LR), we need to ensure the line is owned, else fail the SC (in FSM 2).
+                // If no tag hit, but empty way is found, treat as if necessary words are not in correct state from
+                // above, except for ReqWTFwd. Here, we will add the entry to the WB but not allocate.
+                // If no tag hit or empty way is found, we need to evict a line, except for ReqWTFwd.
+                // Here, we will add the entry to the WB but not allocate.
                 if (tag_hit_next) begin
                     if (l2_cpu_req.amo) begin
                         if (word_mask_owned_next == `WORD_MASK_ALL) begin
@@ -486,10 +565,25 @@ module l2_fsm(
                     end else begin
                         case(l2_cpu_req.cpu_msg)
                             `READ : begin
-                                if (word_mask_shared_next == `WORD_MASK_ALL) begin
-                                    next_state = CPU_REQ_READ_NO_REQ;
+                                if (l2_cpu_req.dcs_en) begin
+                                    case(l2_cpu_req.dcs)
+                                        `DCS_ReqOdata : begin
+                                            if (word_mask_owned_next == `WORD_MASK_ALL) begin
+                                                next_state = CPU_REQ_READ_NO_REQ;
+                                            end else begin
+                                                next_state = CPU_REQ_READ_REQ;
+                                            end
+                                        end
+                                        default : begin
+                                            next_state = DECODE;
+                                        end
+                                    endcase
                                 end else begin
-                                    next_state = CPU_REQ_READ_REQ;
+                                    if (word_mask_shared_next == `WORD_MASK_ALL) begin
+                                        next_state = CPU_REQ_READ_NO_REQ;
+                                    end else begin
+                                        next_state = CPU_REQ_READ_REQ;
+                                    end
                                 end
                             end
                             `READ_ATOMIC : begin
@@ -500,10 +594,25 @@ module l2_fsm(
                                 end
                             end
                             `WRITE : begin
-                                if (word_mask_owned_next == `WORD_MASK_ALL) begin
-                                    next_state = CPU_REQ_WRITE_NO_REQ;
+                                if (l2_cpu_req.dcs_en) begin
+                                    case(l2_cpu_req.dcs)
+                                        `DCS_ReqWTfwd : begin
+                                            if (word_hit_next && word_hit_state_next == `SPX_R) begin
+                                                next_state = CPU_REQ_WRITE_NO_REQ;
+                                            end else begin
+                                                next_state = CPU_REQ_WRITE_ADD_WB;
+                                            end
+                                        end
+                                        default : begin
+                                            next_state = DECODE;
+                                        end
+                                    endcase
                                 end else begin
-                                    next_state = CPU_REQ_WRITE_REQ;
+                                    if (word_mask_owned_next == `WORD_MASK_ALL) begin
+                                        next_state = CPU_REQ_WRITE_NO_REQ;
+                                    end else begin
+                                        next_state = CPU_REQ_WRITE_REQ;
+                                    end
                                 end
                             end
                             `WRITE_ATOMIC : begin
@@ -530,7 +639,18 @@ module l2_fsm(
                                 next_state = CPU_REQ_READ_ATOMIC_REQ;
                             end
                             `WRITE : begin
-                                next_state = CPU_REQ_WRITE_REQ;
+                                if (l2_cpu_req.dcs_en) begin
+                                    case(l2_cpu_req.dcs)
+                                        `DCS_ReqWTfwd : begin
+                                            next_state = CPU_REQ_WRITE_ADD_WB;
+                                        end
+                                        default : begin
+                                            next_state = DECODE;
+                                        end
+                                    endcase
+                                end else begin                                
+                                    next_state = CPU_REQ_WRITE_REQ;
+                                end
                             end
                             `WRITE_ATOMIC : begin
                                 next_state = CPU_REQ_WRITE_ATOMIC_REQ;
@@ -541,7 +661,18 @@ module l2_fsm(
                         endcase
                     end
                 end else begin
-                    next_state = CPU_REQ_EVICT;
+                    if (l2_cpu_req.dcs_en) begin
+                        case(l2_cpu_req.dcs)
+                            `DCS_ReqWTfwd : begin
+                                next_state = CPU_REQ_WRITE_ADD_WB;
+                            end
+                            default : begin
+                                next_state = DECODE;
+                            end
+                        endcase
+                    end else begin                                
+                        next_state = CPU_REQ_EVICT;
+                    end
                 end
             end
             CPU_REQ_AMO_NO_REQ : begin
@@ -601,6 +732,13 @@ module l2_fsm(
                     if (l2_inval_ready_int) begin
                         next_state = CPU_REQ_MSHR_LOOKUP;
                     end
+                end
+            end
+            // TODO: This must wait till entry is added to write-buffer. However,
+            // before implementing WB, we will just forward with word mask.
+            CPU_REQ_WRITE_ADD_WB : begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
+                    next_state = DECODE;
                 end
             end
         endcase
@@ -722,6 +860,8 @@ module l2_fsm(
         set_ongoing_atomic = 1'b0;
         clr_ongoing_atomic = 1'b0;
 
+        wtfwd_temp_line = 'h0;
+
         case (state)
             RESET : begin
                 lmem_wr_rst = 1'b1;
@@ -768,8 +908,10 @@ module l2_fsm(
                 // If all words requested have been received,
                 // update the reqs entry state and increment the reqs_cnt.
                 if (!update_mshr_value_word_mask) begin
-                    // In case of AMO and LR, we send a read response back.
-                    if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
+                    // In case of FCS-read, AMO and LR, we send a read response back.
+                    if (mshr[mshr_i].cpu_msg == `READ) begin
+                        send_rd_rsp(/* line */ update_mshr_value_line);
+                    end else if (mshr[mshr_i].cpu_msg == `READ_ATOMIC) begin
                         send_rd_rsp(/* line */ update_mshr_value_line);
 
                         // Assert ongoing atomic register when the LR response is received only.
@@ -820,7 +962,7 @@ module l2_fsm(
                     );
 
                     // Clear the MSHR entry only if response is accepted or if it is a write.
-                    if ((mshr[mshr_i].cpu_msg != `READ_ATOMIC && mshr[mshr_i].state != `SPX_AMO) || l2_rd_rsp_ready_int) begin
+                    if ((mshr[mshr_i].cpu_msg != `READ && mshr[mshr_i].cpu_msg != `READ_ATOMIC && mshr[mshr_i].state != `SPX_AMO) || l2_rd_rsp_ready_int) begin
                         update_mshr_state = 1'b1;
                         update_mshr_value_state = `SPX_I;
                         incr_mshr_cnt = 1'b1;
@@ -895,6 +1037,38 @@ module l2_fsm(
                 update_mshr_value_state = `SPX_I;
                 incr_mshr_cnt = 1'b1;
             end
+            RSP_O_HANDLER : begin
+                // Clear words in response from the pending MSHR word_mask.
+                update_mshr_value_word_mask = mshr[mshr_i].word_mask & ~l2_rsp_in.word_mask;
+                update_mshr_word_mask = 1'b1;
+
+                // If all words requested have been received,
+                // update the MSHR entry state and increment the reqs_cnt.
+                // We do not update the RAMs here because in REQ_O, we already would have
+                // and in Req/FWD_WTfwd, we do not allocate on misses.
+                if (!update_mshr_value_word_mask) begin
+                    update_mshr_state = 1'b1;
+                    update_mshr_value_state = `SPX_I;
+                    incr_mshr_cnt = 1'b1;
+                end                
+            end            
+            RSP_NACK_HANDLER : begin
+                // We can receive NACKs if the forward we sent was not serviced by the destination.
+                // Therefore, we re-attempt the request either to the same cache or LLC (preferably).
+                case (mshr[mshr_i].state)
+                    `SPX_XRV: begin                
+                        if (l2_req_out_ready_int) begin
+                            send_req_out (
+                                /* coh_msg */ `REQ_WTfwd,
+                                /* hprot */ mshr[mshr_i].hprot,
+                                /* line_addr */ l2_rsp_in.addr,
+                                /* line */ mshr[mshr_i].line,
+                                /* word_mask */ mshr[mshr_i].word_mask
+                            );
+                        end
+                    end
+                endcase         
+            end                   
             FWD_MSHR_LOOKUP : begin
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = line_br.set;
@@ -1099,6 +1273,58 @@ module l2_fsm(
                     );
                 end
             end     
+            FWD_WTFWD_HANDLER : begin
+                // If there is a tag match and the words sent in the forward
+                // are owned in this cache, ack_mask will be non-zero and we will
+                // send a RSP_O to the sender.
+                // Here, we not consider MSHR hits and simply stall the forward.
+                // An MSHR hit could happen if the MSHR entry is in `SPX_XR where it's
+                // waiting for ownership but the forward arrived before the response.
+                // Here, it is better to stall before updating the data from the forward.
+                // Another case is if the ownership is being downgraded, in which case, the
+                // forward can be stalled till the downgrade is complete and then NACK'ed.
+                if (ack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                    // We will update the words with ack_mask in memory.
+                    lmem_set_in = addr_br.set;
+                    lmem_way_in = way_hit;
+                    write_line_helper (
+                        /* line_orig */ lines_buf[way_hit],
+                        /* line_in */ l2_fwd_in.line,
+                        /* word_mask_i */ ack_mask,
+                        /* line_out */ lmem_wr_data_line
+                    );
+                    lmem_wr_en_line = 1'b1;
+
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_O,
+                        /* req_id */ l2_fwd_in.req_id,
+                        /* to_req */ 1'b1,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ 'h0,
+                        /* word_mask */ ack_mask
+                    );
+
+                    send_inval(
+                        /* addr */ l2_fwd_in.addr,
+                        /* hprot */ `DATA
+                    );
+                end                
+            end
+            FWD_WTFWD_HANDLER_NACK : begin
+                // If there is a tag match and but the words sent in the forward
+                // are not owned in this cache or if the tag did not match, we simply send a nack
+                // for all the words not owned (or all the words in case of a miss).
+                if (nack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                    send_rsp_out (
+                        /* coh_msg */ `RSP_NACK,
+                        /* req_id */ l2_fwd_in.req_id,
+                        /* to_req */ 1'b1,
+                        /* line_addr */ l2_fwd_in.addr,
+                        /* line */ 'h0,
+                        /* word_mask */ l2_fwd_in.word_mask
+                    );
+                end
+            end                 
             CPU_REQ_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
@@ -1228,8 +1454,12 @@ module l2_fsm(
             CPU_REQ_READ_REQ : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                // Though we request for a word_mask of ~word_mask_shared_next,
-                // in an ideal situation this should always be WORD_MASK_ALL.
+                // In case of non-FCS read, though we request for a word_mask
+                // of ~word_mask_shared_next, in an ideal situation,
+                // this should always be WORD_MASK_ALL. However, this is not true
+                // for FCS requests. Say, for read with ReqOData, it is possible
+                // that the line being read has partially owned words. Hence,
+                // using word_mask_owned_next is important.
                 if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -1237,19 +1467,19 @@ module l2_fsm(
                         /* hsize */ l2_cpu_req.hsize,
                         /* tag */ addr_br.tag,
                         /* way */ cpu_req_way,
-                        /* state */ `SPX_IS,
+                        /* state */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? `SPX_XR : `SPX_IS,
                         /* word */ l2_cpu_req.word,
                         /* line */ lines_buf[cpu_req_way],
                         /* amo */ 'h0,
-                        /* word_mask */ ~word_mask_shared_next
+                        /* word_mask */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? ~word_mask_owned_next : ~word_mask_shared_next
                     );
 
                     send_req_out (
-                        /* coh_msg */ `REQ_S,
+                        /* coh_msg */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? `REQ_Odata : `REQ_S,
                         /* hprot */ l2_cpu_req.hprot,
                         /* line_addr */ addr_br.line_addr,
                         /* line */ 'h0,
-                        /* word_mask */ ~word_mask_shared_next
+                        /* word_mask */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? ~word_mask_owned_next : ~word_mask_shared_next
                     );
 
                     if (tag_hit) begin
@@ -1395,6 +1625,70 @@ module l2_fsm(
                             /* hprot */ `DATA
                         );
                     end
+                end
+            end
+            CPU_REQ_WRITE_ADD_WB : begin
+                // We add the MSHR entry (and decrement the MSHR count) only
+                // if the req_out is accepted.
+                // TODO: Currently, we're only considering the word offset in the
+                // CPU request for the MSHR entry and req_out. When we introduce the
+                // write-buffer, the word_mask should be the coalesced word mask.
+                // TODO: Currently, we're assuming ReqWTFwd is the only non-FCS write
+                // request. Later, we will also need to add REQ_O as an option.
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
+                    write_word_helper (
+                        /* line_in */ 'h0,
+                        /* word */ l2_cpu_req.word,
+                        /* w_off */ addr_br.w_off,
+                        /* b_off */ addr_br.b_off,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* line_out */ wtfwd_temp_line
+                    );                    
+
+                    fill_mshr_entry (
+                        /* cpu_msg */ l2_cpu_req.cpu_msg,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* hsize */ l2_cpu_req.hsize,
+                        /* tag */ addr_br.tag,
+                        /* way */ 'h0,
+                        /* state */ `SPX_XRV,
+                        /* word */ l2_cpu_req.word,
+                        /* line */ wtfwd_temp_line,
+                        /* amo */ 'h0,
+                        /* word_mask */ 1 << addr_br.w_off
+                    );
+                    
+                    send_req_out (
+                        /* coh_msg */ `REQ_WTfwd,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ wtfwd_temp_line,
+                        /* word_mask */ 1 << addr_br.w_off
+                    );
+
+                    // If there was a tag hit but we found the state of the word
+                    // to be not in SPX_R, we write-through the data without
+                    // allocation. Therefore, we must also invalidate the (now) stale
+                    // data was in non-SPX_R state in this L2 and in the L1. However,
+                    // we must be careful not to invalidate any SPX_R words in the line
+                    // that the write-through was not sent for. Therefore, we only do
+                    // this if the line is in shared state. If the line were invalid,
+                    // it would not be a tag hit. If one of the other words were not invalid,
+                    // the only option is if they are in SPX_R, in which case, we must not 
+                    // invalidate them.
+                    if (tag_hit && word_mask_shared) begin
+                        lmem_set_in = addr_br.set;
+                        lmem_way_in = cpu_req_way;
+                        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                            lmem_wr_data_state[i] = `SPX_I;
+                        end
+                        lmem_wr_en_state = 1'b1;
+                    end                    
+
+                    send_inval (
+                        /* addr */ addr_br.line_addr,
+                        /* hprot */ `DATA
+                    );
                 end
             end
             default : begin

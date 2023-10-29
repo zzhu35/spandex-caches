@@ -98,6 +98,8 @@ module l2_core(
     mshr_buf_t mshr[`N_MSHR];
     word_mask_t word_mask_shared, word_mask_owned, word_mask_shared_next, word_mask_owned_next;
     word_mask_t word_mask_owned_evict, word_mask_owned_evict_next;
+    logic word_hit, word_hit_next;
+    state_t word_hit_state, word_hit_state_next;
 
     byte_offset_t write_word_b_off_in;
     hsize_t write_word_hsize_in;

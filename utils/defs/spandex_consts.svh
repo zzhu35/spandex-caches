@@ -98,11 +98,11 @@
 
 // CPU DCS
 `define DCS_ReqWTfwd    1
+`define DCS_ReqO        2
 `define DCS_ReqV        1
 `define DCS_ReqOdata    2
 
 `define ARIANE_AMO_BITS 6
-
 
 // requests (L2/TU to L3)
 `define REQ_S           0 // same as gets

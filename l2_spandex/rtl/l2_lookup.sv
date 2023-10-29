@@ -31,7 +31,11 @@ module l2_lookup (
     output word_mask_t word_mask_owned,
     output word_mask_t word_mask_owned_next,
     output word_mask_t word_mask_owned_evict,
-    output word_mask_t word_mask_owned_evict_next
+    output word_mask_t word_mask_owned_evict_next,
+    output logic word_hit,
+    output logic word_hit_next,
+    output state_t word_hit_state,
+    output state_t word_hit_state_next
     );
 
     logic line_present;
@@ -45,6 +49,8 @@ module l2_lookup (
         word_mask_owned_next = 'h0;
         word_mask_owned_evict_next = 'h0;
         line_present = 1'b0;
+        word_hit_state_next = 'h0;
+        word_hit_next = 1'b0;
 
         if (lookup_en) begin
             case(lookup_mode)
@@ -53,20 +59,33 @@ module l2_lookup (
                     for (int i = `L2_WAYS-1; i >= 0; i--) begin
                         line_present = 1'b0;
 
+                        // Is any word in the line in a valid state?
                         for (int j = 0; j < `WORDS_PER_LINE; j++) begin
                             if (states_buf[i][j] > `SPX_I) begin
                                 line_present = 1'b1;
                             end
                         end
 
+                        // Given the line is present, does the tag match?
                         if (tags_buf[i] == addr_br.tag && line_present) begin
                             tag_hit_next = 1'b1;
                             way_hit_next = i;
                         end
 
+                        // If none of the words are valid, then the way is empty.
                         if (!line_present) begin
                             empty_way_found_next = 1'b1;
                             empty_way_next = i;
+                        end
+
+                        // TODO: When adding valid state, we should check whether it is 
+                        // greater than current_valid_state.
+                        // Given that the tag is hit and the line is present, we check
+                        // whether word being requested is in valid state as well.
+                        // (it is possible that the word we requested for is not in valid state.
+                        if (tag_hit_next && states_buf[i][addr_br.w_off] > `SPX_I) begin
+                            word_hit_next = 1'b1;
+                            word_hit_state_next = states_buf[i][addr_br.w_off];
                         end
                     end
 
@@ -97,15 +116,25 @@ module l2_lookup (
                     for (int i = `L2_WAYS-1; i >= 0; i--) begin
                         line_present = 1'b0;
 
+                        // Is any word in the line in a valid state?
                         for (int j = 0; j < `WORDS_PER_LINE; j++) begin
                             if (states_buf[i][j] > `SPX_I) begin
                                 line_present = 1'b1;
                             end
                         end
 
+                        // Given the line is present, does the tag match?
                         if (tags_buf[i] == line_br.tag && line_present) begin
                             tag_hit_next = 1'b1;
                             way_hit_next = i;
+                        end
+                        
+                        // Given that the tag is hit and the line is present, we check
+                        // whether word being requested is in valid state as well.
+                        // (it is possible that the word we requested for is not in valid state.
+                        if (tag_hit_next && states_buf[i][addr_br.w_off] > `SPX_I) begin
+                            word_hit_next = 1'b1;
+                            word_hit_state_next = states_buf[i][addr_br.w_off];
                         end
                     end
 
@@ -134,6 +163,8 @@ module l2_lookup (
             word_mask_shared <= 0;
             word_mask_owned <= 0;
             word_mask_owned_evict <= 0;
+            word_hit <= 0;
+            word_hit_state <= 1'b0;
         end else if (lookup_en) begin
             way_hit <= way_hit_next;
             tag_hit <= tag_hit_next;
@@ -142,6 +173,8 @@ module l2_lookup (
             word_mask_shared <= word_mask_shared_next;
             word_mask_owned <= word_mask_owned_next;
             word_mask_owned_evict <= word_mask_owned_evict_next;
+            word_hit <= word_hit_next;
+            word_hit_state <= word_hit_state_next;
         end
     end
 
