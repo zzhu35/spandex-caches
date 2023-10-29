@@ -82,10 +82,10 @@ module l2_lookup (
                         // greater than current_valid_state.
                         // Given that the tag is hit and the line is present, we check
                         // whether word being requested is in valid state as well.
-                        // (it is possible that the word we requested for is not in valid state.
-                        if (tag_hit_next && states_buf[i][addr_br.w_off] > `SPX_I) begin
+                        // (it is possible that the word we requested for is not in valid state).
+                        if (tag_hit_next && states_buf[way_hit_next][addr_br.w_off] > `SPX_I) begin
                             word_hit_next = 1'b1;
-                            word_hit_state_next = states_buf[i][addr_br.w_off];
+                            word_hit_state_next = states_buf[way_hit_next][addr_br.w_off];
                         end
                     end
 
@@ -132,9 +132,9 @@ module l2_lookup (
                         // Given that the tag is hit and the line is present, we check
                         // whether word being requested is in valid state as well.
                         // (it is possible that the word we requested for is not in valid state.
-                        if (tag_hit_next && states_buf[i][addr_br.w_off] > `SPX_I) begin
+                        if (tag_hit_next && states_buf[way_hit_next][addr_br.w_off] > `SPX_I) begin
                             word_hit_next = 1'b1;
-                            word_hit_state_next = states_buf[i][addr_br.w_off];
+                            word_hit_state_next = states_buf[way_hit_next][addr_br.w_off];
                         end
                     end
 

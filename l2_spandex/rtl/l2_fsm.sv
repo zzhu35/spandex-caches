@@ -661,7 +661,7 @@ module l2_fsm(
                         endcase
                     end
                 end else begin
-                    if (l2_cpu_req.dcs_en) begin
+                    if (l2_cpu_req.cpu_msg == `WRITE && l2_cpu_req.dcs_en) begin
                         case(l2_cpu_req.dcs)
                             `DCS_ReqWTfwd : begin
                                 next_state = CPU_REQ_WRITE_ADD_WB;
@@ -1285,7 +1285,7 @@ module l2_fsm(
                 // forward can be stalled till the downgrade is complete and then NACK'ed.
                 if (ack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     // We will update the words with ack_mask in memory.
-                    lmem_set_in = addr_br.set;
+                    lmem_set_in = line_br.set;
                     lmem_way_in = way_hit;
                     write_line_helper (
                         /* line_orig */ lines_buf[way_hit],
