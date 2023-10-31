@@ -7,6 +7,7 @@ module l2_input_decoder (
     input logic rst,
     input logic decode_en,
     // Valid inputs from interfaces
+    input logic l2_flush_valid_int,
     input logic l2_fence_valid_int,
     input logic l2_rsp_in_valid_int,
     input logic l2_fwd_in_valid_int,
@@ -22,6 +23,9 @@ module l2_input_decoder (
     input logic set_conflict,
     input logic fwd_stall,
     input logic fwd_stall_ended,
+    input logic ongoing_flush,
+    input logic [`L2_SET_BITS:0] flush_set,
+    input logic [`L2_WAY_BITS:0] flush_way,
     `FPGA_DBG input logic ongoing_fence,
     `FPGA_DBG input logic ongoing_drain,
     `FPGA_DBG input logic drain_in_progress,
@@ -31,6 +35,8 @@ module l2_input_decoder (
     // Assign fwd_in from conflict registers
     `FPGA_DBG output logic set_fwd_in_from_stalled,
     // Accept the new input now
+    output logic do_flush,
+    output logic do_flush_next,
     output logic do_fence,
     output logic do_fence_next,
     output logic do_ongoing_fence,
@@ -42,10 +48,17 @@ module l2_input_decoder (
     output logic do_cpu_req,
     output logic do_cpu_req_next,
     // Ready signals sent to interfaces
+    output logic l2_flush_ready_int,
     output logic l2_fence_ready_int,
     output logic l2_rsp_in_ready_int,
     output logic l2_fwd_in_ready_int,
     output logic l2_cpu_req_ready_int,
+    // Flush helper signals
+    output logic set_ongoing_flush,
+    output logic clr_ongoing_flush,
+    output logic clr_flush_set,
+    output logic clr_flush_way,
+    output logic flush_done,
     // Clear ongoing drain if drain is complete
     `FPGA_DBG output logic clr_ongoing_drain,
     // Line and address breakdowns
@@ -61,11 +74,13 @@ module l2_input_decoder (
         do_cpu_req_next = 1'b0;
         do_fence_next = 1'b0;
         do_ongoing_fence_next = 1'b0;
+        do_flush_next = 1'b0;
 
         l2_rsp_in_ready_int = 1'b0;
         l2_fwd_in_ready_int = 1'b0;
         l2_cpu_req_ready_int = 1'b0;
         l2_fence_ready_int = 1'b0;
+        l2_flush_ready_int = 1'b0;
 
         line_br_next.tag = 0;
         line_br_next.set = 0;
@@ -83,8 +98,15 @@ module l2_input_decoder (
         set_cpu_req_from_conflict = 1'b0;
         set_fwd_in_from_stalled = 1'b0;
 
+        set_ongoing_flush = 1'b0;
+        clr_ongoing_flush = 1'b0;
+        clr_flush_set = 1'b0;
+        clr_flush_way = 1'b0;
+        flush_done = 1'b0;
+
         // Priority:
         // - do_fence_next; unless there is an ongoing fence or drain already.
+        // - do_flush_next; unless there is an entry in the MSHR.
         // - do_rsp_next; unless the MSHR empty (what is the response for?),
         // - do_fwd_next; either a new forward or a pending forward whose stall just ended.
         // - do_ongoing_fence_next; to service the self-invalidation after drain is complete.
@@ -94,6 +116,9 @@ module l2_input_decoder (
             if (l2_fence_valid_int && !ongoing_fence && !drain_in_progress) begin
                 l2_fence_ready_int = 1'b1;            
                 do_fence_next = 1'b1;
+            end else if (l2_flush_valid_int && mshr_cnt == `N_MSHR) begin
+                l2_flush_ready_int = 1'b1;            
+                set_ongoing_flush = 1'b1;
             end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR && !(l2_fwd_in_valid_int && (!fwd_stall || fwd_stall_ended) && rsp_in_addr == fwd_in_tmp_addr)) begin
                 do_rsp_next = 1'b1;
                 l2_rsp_in_ready_int = 1'b1;
@@ -106,6 +131,21 @@ module l2_input_decoder (
                 end
             end else if (ongoing_fence && !drain_in_progress) begin
                 do_ongoing_fence_next = 1'b1;
+            end else if (ongoing_flush) begin
+                if (flush_set < `L2_SETS) begin
+                    if (!l2_fwd_in_valid_int && mshr_cnt != 0) begin
+                        do_flush_next = 1'b1;
+                    end
+
+                    if (flush_way == `L2_WAYS) begin
+                        clr_flush_way = 1'b1;
+                    end
+                end else begin
+                    clr_flush_set = 1'b1;
+                    clr_flush_way = 1'b1;
+                    clr_ongoing_flush = 1'b1;
+                    flush_done = 1'b1;
+                end                
             end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !drain_in_progress) begin
                 do_cpu_req_next = 1'b1;
                 if (!set_conflict) begin
@@ -131,11 +171,20 @@ module l2_input_decoder (
             addr_br_next.line_addr = cpu_req_addr[`TAG_RANGE_HI :`SET_RANGE_LO];
             addr_br_next.word = cpu_req_addr;
             addr_br_next.tag = cpu_req_addr[ `TAG_RANGE_HI :`L2_TAG_RANGE_LO];
-            addr_br_next.set = cpu_req_addr[`L2_SET_RANGE_HI : `SET_RANGE_LO];
             addr_br_next.w_off = cpu_req_addr[`W_OFF_RANGE_HI : `W_OFF_RANGE_LO];
             addr_br_next.b_off = cpu_req_addr[`B_OFF_RANGE_HI : `B_OFF_RANGE_LO];
             addr_br_next.line[`OFF_RANGE_HI : `OFF_RANGE_LO] = 0;
             addr_br_next.word[`B_OFF_RANGE_HI : `B_OFF_RANGE_LO] = 0;
+
+            // We assign the set of addr_br_next (eventually used by fill_entry_mshr) to
+            // the flush set or the set of the CPU address, depending on do_flush_next.
+            // We do not do this for w_off and b_off currently, because all flushes are
+            // at line granularity.
+            if (do_flush_next) begin
+                addr_br_next.set = flush_set;
+            end else begin
+                addr_br_next.set = cpu_req_addr[`L2_SET_RANGE_HI : `SET_RANGE_LO];
+            end
         end
     end
 
@@ -143,6 +192,7 @@ module l2_input_decoder (
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             do_fence <= 0;
+            do_flush <= 1'b0;
             do_ongoing_fence <= 0;
             do_rsp <= 0;
             do_fwd <= 0;
@@ -158,6 +208,7 @@ module l2_input_decoder (
             addr_br.b_off <= 0;
         end else if (decode_en) begin
             do_fence <= do_fence_next;
+            do_flush <= do_flush_next;
             do_ongoing_fence <= do_ongoing_fence_next;
             do_rsp <= do_rsp_next;
             do_fwd <= do_fwd_next;

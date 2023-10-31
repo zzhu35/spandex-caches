@@ -141,16 +141,6 @@ module l2_core(
     logic ongoing_drain, clr_ongoing_drain, set_ongoing_drain;
     logic do_fence, do_fence_next, do_ongoing_fence, do_ongoing_fence_next;
 
-    assign ongoing_flush = 1'b0;
-    assign do_ongoing_flush = 1'b0;
-    assign set_ongoing_flush = 1'b0;
-    assign clr_ongoing_flush = 1'b0;
-    assign incr_flush_way = 1'b0;
-    assign incr_flush_set = 1'b0;
-    assign clr_flush_set = 1'b0;
-    assign clr_flush_way = 1'b0;
-    assign do_flush_next = 1'b0;
-    assign do_ongoing_flush_next = 1'b0;
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
     assign flush_stall_ended = 1'b0;
@@ -164,7 +154,6 @@ module l2_core(
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
     assign lmem_rd_en = 1'b1;
 
-    assign flush_done = 1'b0;
     assign l2_fwd_out_valid_int = 1'b0;
     assign l2_fwd_out_o.coh_msg = 'h0;
     assign l2_fwd_out_o.req_id = 'h0;

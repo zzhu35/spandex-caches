@@ -13,6 +13,9 @@ module llc_interfaces (
     input logic llc_rsp_in_ready_int,
     input logic llc_mem_rsp_valid,
     input logic llc_mem_rsp_ready_int,
+    input logic llc_rst_tb_valid, 
+    input logic llc_rst_tb_ready_int,
+    input logic llc_rst_tb_i,
     input logic llc_rsp_out_ready,
     input logic llc_rsp_out_valid_int,
     input logic llc_dma_rsp_out_ready,
@@ -21,6 +24,9 @@ module llc_interfaces (
     input logic llc_fwd_out_valid_int,
     input logic llc_mem_req_ready,
     input logic llc_mem_req_valid_int,
+    input logic llc_rst_tb_done_ready, 
+    input logic llc_rst_tb_done_valid_int,
+    input logic llc_rst_tb_done_o,
 
     input logic set_req_from_conflict,
     input logic set_req_conflict,
@@ -42,6 +48,8 @@ module llc_interfaces (
     output logic llc_rsp_in_valid_int,
     output logic llc_mem_rsp_ready,
     output logic llc_mem_rsp_valid_int,
+    output logic llc_rst_tb_ready, 
+    output logic llc_rst_tb_valid_int,
     output logic llc_rsp_out_valid,
     output logic llc_rsp_out_ready_int,
     output logic llc_dma_rsp_out_valid,
@@ -50,6 +58,10 @@ module llc_interfaces (
     output logic llc_fwd_out_ready_int,
     output logic llc_mem_req_valid,
     output logic llc_mem_req_ready_int,
+    output logic llc_rst_tb_done_valid, 
+    output logic llc_rst_tb_done_ready_int,
+    output logic llc_rst_tb_done,
+    output logic llc_rst_tb, 
     output line_addr_t req_in_addr,
     output line_addr_t rsp_in_addr,
 
@@ -214,6 +226,31 @@ module llc_interfaces (
 
     assign llc_mem_rsp_next.line = (!llc_mem_rsp_valid_tmp) ? llc_mem_rsp_i.line : llc_mem_rsp_tmp.line;
 
+    //RST TB IN 
+    logic llc_rst_tb_tmp; 
+    logic llc_rst_tb_next; 
+    logic llc_rst_tb_valid_tmp; 
+
+    interface_controller llc_rst_tb_intf(
+        .clk(clk), 
+        .rst(rst), 
+        .ready_in(llc_rst_tb_ready_int), 
+        .valid_in(llc_rst_tb_valid), 
+        .ready_out(llc_rst_tb_ready), 
+        .valid_out(llc_rst_tb_valid_int), 
+        .valid_tmp(llc_rst_tb_valid_tmp)
+    ); 
+   
+    always_ff @(posedge clk or negedge rst) begin 
+        if(!rst) begin 
+            llc_rst_tb_tmp <= 0; 
+        end else if (llc_rst_tb_valid && llc_rst_tb_ready && !llc_rst_tb_ready_int) begin
+            llc_rst_tb_tmp <= llc_rst_tb_i; 
+        end
+    end
+
+    assign llc_rst_tb_next = (!llc_rst_tb_valid_tmp) ? llc_rst_tb_i : llc_rst_tb_tmp; 
+
     //LLC RSP OUT
     llc_rsp_out_t llc_rsp_out_tmp();
 
@@ -372,6 +409,29 @@ module llc_interfaces (
     assign llc_mem_req.addr = (!llc_mem_req_valid_tmp) ? llc_mem_req_o.addr : llc_mem_req_tmp.addr;
     assign llc_mem_req.line = (!llc_mem_req_valid_tmp) ? llc_mem_req_o.line : llc_mem_req_tmp.line;
 
+    //LLC RST TB DONE
+    logic llc_rst_tb_done_tmp; 
+    
+    interface_controller llc_rst_tb_done_intf(
+        .clk(clk), 
+        .rst(rst), 
+        .ready_in(llc_rst_tb_done_ready), 
+        .valid_in(llc_rst_tb_done_valid_int), 
+        .ready_out(llc_rst_tb_done_ready_int), 
+        .valid_out(llc_rst_tb_done_valid), 
+        .valid_tmp(llc_rst_tb_done_valid_tmp)
+    ); 
+
+    always_ff @(posedge clk or negedge rst) begin 
+        if (!rst) begin 
+            llc_rst_tb_done_tmp <= 0; 
+        end else if (llc_rst_tb_done_valid_int && llc_rst_tb_done_ready_int && !llc_rst_tb_done_ready) begin 
+            llc_rst_tb_done_tmp <= llc_rst_tb_done_o; 
+        end 
+    end
+
+    assign llc_rst_tb_done = (!llc_rst_tb_done_valid_tmp) ? llc_rst_tb_done_o : llc_rst_tb_done_tmp; 
+
     //read from interfaces
 
    //llc req in
@@ -480,4 +540,13 @@ module llc_interfaces (
     assign req_in_addr = set_req_from_conflict ? llc_req_conflict.addr : (llc_req_in_valid_tmp ? llc_req_in_tmp.addr : llc_req_in_i.addr);
     assign rsp_in_addr = (llc_rsp_in_valid_tmp) ? llc_rsp_in_tmp.addr : llc_rsp_in_i.addr;
 
+    //rst tb 
+    always_ff @(posedge clk or negedge rst) begin 
+        if(!rst) begin 
+            llc_rst_tb <= 0; 
+        end else if (llc_rst_tb_valid_int && llc_rst_tb_ready_int) begin
+            llc_rst_tb <= llc_rst_tb_next; 
+        end
+    end
+    
 endmodule

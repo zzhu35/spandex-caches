@@ -70,7 +70,7 @@ void llc_spandex_tb::llc_test()
     const unsigned int MIN_WAYS = 4;
 
     addr_t base_addr = 0x82508250;
-    addr_t base_addr1 = 0x82518250;
+    addr_t base_addr1 = 0x80000000;
 
     /*
      * Reset
@@ -81,6 +81,115 @@ void llc_spandex_tb::llc_test()
     CACHE_REPORT_INFO("[SPANDEX] Reset done!");
 
     error_count = 0;
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 0 - Flush
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 0!");
+    addr.breakdown(base_addr1);
+
+    // Write and read to multiple sets and ways - 8 sets and all ways
+    for (int j = 0; j < 8; j++) {
+        for (int i = 0; i < LLC_WAYS; i++) {
+            if (i % 2 == 0) {
+                put_req_in(REQ_S /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+                DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+                get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+                wait();
+
+                word = i+1;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_mem_rsp(line /* line */);
+
+                get_rsp_out(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+                0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+                wait();
+            } else {
+                word = i+2;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_req_in(REQ_Odata /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* req_id */,
+                DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+                get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, 0 /* line */);
+
+                wait();
+
+                word = i+1;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_mem_rsp(line /* line */);
+
+                get_rsp_out(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
+                0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);            
+
+                wait();
+            }
+
+            addr.tag_incr(1);
+        }
+
+        addr.set_incr(1);
+    }
+
+    addr.breakdown(base_addr1);
+
+    // Write and read to multiple sets and ways - 8 sets and all ways
+    for (int j = 0; j < 8; j++) {
+        for (int i = 0; i < LLC_WAYS; i++) {
+            if (i % 2 == 0) {
+                wait();
+            } else {
+                word = i+2;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+                line.range(BITS_PER_WORD - 1, 0) = word;
+
+                put_req_in(REQ_WB /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* req_id */,
+                DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+                get_rsp_out(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */, 0 /* invack_cnt */,
+                0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);     
+
+                wait();
+            }
+
+            addr.tag_incr(1);
+        }
+
+        addr.set_incr(1);
+    }
+
+    llc_rst_tb_tb.put(0x1);
+    wait();
+    llc_rst_tb_tb.put(0x0);
+
+    addr.breakdown(base_addr1);
+
+    for (int j = 0; j < 8; j++) {
+        for (int i = 0; i < LLC_WAYS; i++) {
+            if (i % 2 == 0) {
+                wait();
+            } else {
+                line.range(BITS_PER_WORD - 1, 0) = i+2;
+                line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0;
+
+                get_mem_req(LLC_WRITE /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word /* addr */, line /* line */);
+
+                wait();
+            }
+
+            addr.tag_incr(1);
+        }
+
+        addr.set_incr(1);
+    }    
 
     ////////////////////////////////////////////////////////////////
     // TEST 0.1: ReqOdata

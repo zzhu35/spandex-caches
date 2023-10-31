@@ -6,6 +6,8 @@ module llc_fsm (
     `FPGA_DBG input logic clk,
     `FPGA_DBG input logic rst,
     // From input decoder
+    `FPGA_DBG input logic do_flush,
+    `FPGA_DBG input logic do_flush_next,
     `FPGA_DBG input logic do_get_rsp,
     `FPGA_DBG input logic do_get_rsp_next,
     `FPGA_DBG input logic do_get_req,
@@ -50,6 +52,9 @@ module llc_fsm (
     // State registers from regs/others
     `FPGA_DBG input logic evict_stall,
     `FPGA_DBG input logic set_conflict,
+    `FPGA_DBG input logic ongoing_flush,
+    `FPGA_DBG input logic [`LLC_SET_BITS:0] flush_set,
+    `FPGA_DBG input logic [`LLC_WAY_BITS:0] flush_way,
 
     // Interface buses
     llc_req_in_t.in llc_req_in,
@@ -120,6 +125,8 @@ module llc_fsm (
     `FPGA_DBG output logic set_set_conflict_fsm,
     `FPGA_DBG output logic clr_set_conflict_fsm,
     `FPGA_DBG output logic set_req_conflict,
+    `FPGA_DBG output logic incr_flush_way,
+    `FPGA_DBG output logic incr_flush_set,
 
     llc_mem_req_t.out llc_mem_req_o,
     llc_fwd_out_t.out llc_fwd_out_o,
@@ -135,6 +142,10 @@ module llc_fsm (
     localparam RSP_INV_HANDLER = 6'b000011;
     localparam RSP_INV_HANDLER_MEM_REQ = 6'b000100;
     localparam RSP_RVK_O_HANDLER = 6'b000101;
+
+    localparam ONGOING_FLUSH_LOOKUP = 6'b000110;
+    localparam ONGOING_FLUSH_PROCESS = 6'b000111;
+    localparam ONGOING_FLUSH_EVICT = 6'b001000;
 
     localparam REQ_MSHR_LOOKUP = 6'b010000;
     localparam REQ_SET_CONFLICT = 6'b010001;
@@ -236,7 +247,9 @@ module llc_fsm (
                 // In FSM 2, we decode the possible inputs, and if any of *_next
                 // cycles are asserted, we sample that in the same cycle here, and move to
                 // the appropriate state for responses (to old forwards) or new requests.
-                if (do_get_rsp_next) begin
+                if (do_flush_next) begin
+                    next_state = ONGOING_FLUSH_LOOKUP;
+                end else if (do_get_rsp_next) begin
                     next_state = RSP_MSHR_LOOKUP;
                 end else if (do_get_req_next) begin
                     next_state = REQ_MSHR_LOOKUP;
@@ -314,6 +327,29 @@ module llc_fsm (
                     end
                 endcase
             end
+            // Read flush_set from the RAMs into bufs in ONGOING_FLUSH_LOOKUP.
+            // In ONGOING_FLUSH_PROCESS, we will check whether the flush_way is
+            // dirty or not. Note: If an L2 flush was performed before this, the
+            // L2 should have written back all owned line and silent invalidated
+            // all other lines. Therefore, all we need to check is if the line
+            // is dirty - if yes, we must write it back. If not dirty, we
+            // set the state as invalid directly, else, we move to ONGOING_FLUSH_EVICT
+            // to write back the line to memory.       
+            ONGOING_FLUSH_LOOKUP : begin
+                next_state = ONGOING_FLUSH_PROCESS;
+            end
+            ONGOING_FLUSH_PROCESS : begin
+                if (dirty_bits_buf[flush_way]) begin
+                    next_state = ONGOING_FLUSH_EVICT;
+                end else begin
+                    next_state = DECODE;
+                end
+            end      
+            ONGOING_FLUSH_EVICT : begin
+                if (llc_mem_req_ready_int) begin
+                    next_state = ONGOING_FLUSH_PROCESS;
+                end
+            end                        
             REQ_MSHR_LOOKUP : begin
                 // On a new request, we check if a set conflict is ongoing, or the MSHR lookup just found a 
                 // set conflict. If yes, we go into set conflict and copy the new request to a set of registers
@@ -608,6 +644,8 @@ module llc_fsm (
         skip_invack_cnt = 1'b0;
         incr_l2_cnt = 1'b0;
         clr_l2_cnt = 1'b0;
+        incr_flush_way = 1'b0;
+        incr_flush_set = 1'b0;
 
         case (state)
             RESET : begin
@@ -618,7 +656,9 @@ module llc_fsm (
             DECODE : begin
                 // The lmem_set_in here is because read_mem is enabled always for the localmem.
                 // Therfore, this ensures the correct set is read into the bufs.
-                if (do_get_rsp_next) begin
+                if (do_flush_next) begin
+                    lmem_set_in = flush_set;
+                end else if (do_get_rsp_next) begin
                     lmem_set_in = line_br_next.set;
                 end else if (do_get_req_next) begin
                     lmem_set_in = line_br_next.set;
@@ -791,6 +831,51 @@ module llc_fsm (
                     end                    
                 endcase
             end
+            ONGOING_FLUSH_LOOKUP : begin
+                rd_set_into_bufs = 1'b1;
+                lmem_set_in = flush_set;
+            end
+            ONGOING_FLUSH_PROCESS : begin
+                // If the line in flush_way is not dirty, we can safely invalidate it,
+                // similar to how we do in evictions.            
+                if (!dirty_bits_buf[flush_way]) begin
+                    lmem_set_in = flush_set;
+                    lmem_way_in = flush_way;
+                    lmem_wr_data_state = `LLC_I;
+                    lmem_wr_en_state = 1'b1;
+
+                    // Increment the flush way and increment flush set
+                    // if we are at the last way.
+                    incr_flush_way = 1'b1;
+                    if (flush_way + incr_flush_way == `LLC_WAYS) begin
+                        incr_flush_set = 1'b1;
+                    end
+                end
+            end
+            ONGOING_FLUSH_EVICT : begin
+                // If dirty and mem_req interface is ready, we will write-back the line.
+                if (llc_mem_req_ready_int) begin
+                    send_mem_req (
+                        /* coh_msg */ `LLC_WRITE,
+                        /* line_addr */ (tags_buf[flush_way] << `LLC_SET_BITS) | flush_set,
+                        /* hprot */ hprots_buf[flush_way],
+                        /* line */ lines_buf[flush_way]
+                    );
+
+                    // Update the states and evict_way RAM
+                    lmem_set_in = flush_set;
+                    lmem_way_in = flush_way;
+                    lmem_wr_data_state = `LLC_I;
+                    lmem_wr_en_state = 1'b1;
+
+                    // Increment the flush way and increment flush set
+                    // if we are at the last way.
+                    incr_flush_way = 1'b1;
+                    if (flush_way + incr_flush_way == `LLC_WAYS) begin
+                        incr_flush_set = 1'b1;
+                    end
+                end
+            end                        
             REQ_MSHR_LOOKUP : begin
                 // Check for conflicts in MSHR. Also, read set from RAMs to buffers for the tag lookup in next cycle.
                 mshr_op_code = `LLC_MSHR_PEEK_REQ;

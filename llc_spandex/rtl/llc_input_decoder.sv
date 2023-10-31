@@ -7,6 +7,7 @@ module llc_input_decoder (
     input logic rst,
     input logic decode_en,
     // Valid inputs from interfaces
+    input logic llc_rst_tb_valid_int,
     input logic llc_rsp_in_valid_int,
     input logic llc_req_in_valid_int,
     `FPGA_DBG input line_addr_t rsp_in_addr,
@@ -16,13 +17,25 @@ module llc_input_decoder (
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,
+    input logic ongoing_flush,
+    input logic [`LLC_SET_BITS:0] flush_set,
+    input logic [`LLC_WAY_BITS:0] flush_way,
 
     // Accept the new input now
     output logic do_get_req,
     output logic do_get_req_next,
     output logic do_get_rsp,
     output logic do_get_rsp_next,
+    output logic do_flush,
+    output logic do_flush_next,
+    output logic set_ongoing_flush,
+    output logic clr_ongoing_flush,
+    output logic clr_flush_set,
+    output logic clr_flush_way,
+    output logic llc_rst_tb_done_valid_int,
+    output logic llc_rst_tb_done_o,
     // Ready signals sent to interfaces
+    output logic llc_rst_tb_ready_int,
     output logic llc_rsp_in_ready_int,
     output logic llc_req_in_ready_int,
     `FPGA_DBG output logic set_req_from_conflict,
@@ -32,14 +45,24 @@ module llc_input_decoder (
     );
 
     always_comb begin
+        do_flush_next = 1'b0;
         do_get_req_next = 1'b0;
         do_get_rsp_next = 1'b0;
+        llc_rst_tb_ready_int = 1'b0;
         llc_rsp_in_ready_int = 1'b0;
         llc_req_in_ready_int = 1'b0;
         set_req_from_conflict = 1'b0;
+        set_ongoing_flush = 1'b0;
+        llc_rst_tb_done_o = 1'b0;
+        clr_flush_set = 1'b0;
+        clr_flush_way = 1'b0;
+        clr_ongoing_flush = 1'b0;
+        llc_rst_tb_done_valid_int = 1'b0;
+        llc_rst_tb_done_o = 1'b0;
 
         line_br_next.tag = 0;
         line_br_next.set = 0;
+
 
         if (decode_en) begin
             // If a response is ready and there is at least one MSHR entry (you should have at least one),
@@ -47,7 +70,24 @@ module llc_input_decoder (
             // Else if a new request is ready or if there is an ongoing set conflict, check if there are
             // free entires in the MSHR and that we are not in an eviction stall, then accept one of them -
             // with priority to the set conflicted pending request (backed up in interfaces).
-            if (llc_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
+            if (llc_rst_tb_valid_int) begin
+                llc_rst_tb_ready_int = 1'b1;
+                set_ongoing_flush = 1'b1;
+            end else if (ongoing_flush) begin
+                if (flush_set < `LLC_SETS) begin
+                    do_flush_next = 1'b1;
+
+                    if (flush_way == `LLC_WAYS) begin
+                        clr_flush_way = 1'b1;
+                    end
+                end else begin
+                    clr_flush_set = 1'b1;
+                    clr_flush_way = 1'b1;
+                    clr_ongoing_flush = 1'b1;
+                    llc_rst_tb_done_valid_int = 1'b1;
+                    llc_rst_tb_done_o = 1'b1;
+                end                       
+            end else if (llc_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
                 do_get_rsp_next =  1'b1;
                 llc_rsp_in_ready_int = 1'b1;
             end else if ((llc_req_in_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall) begin

@@ -146,7 +146,13 @@ module llc_core (
     cache_id_t owners_cache_id[`WORDS_PER_LINE];
     cache_id_t owners_evict_cache_id[`WORDS_PER_LINE];
 
-    assign llc_rst_tb_ready_int = 1'b1;
+    logic ongoing_flush, set_ongoing_flush, clr_ongoing_flush;
+    logic incr_flush_way, incr_flush_set, clr_flush_set, clr_flush_way;
+    logic do_flush, do_flush_next;
+    logic [`LLC_SET_BITS:0] flush_set;
+    logic [`LLC_WAY_BITS:0] flush_way;
+    logic llc_rst_tb_done_o;
+
     assign llc_dma_req_in_ready_int = 1'b1;
     assign lmem_rd_en = 1'b1;
     assign set_set_conflict = set_set_conflict_fsm | set_set_conflict_mshr;
@@ -154,9 +160,6 @@ module llc_core (
     assign update_req_in_stalled = 1'b0;
     assign update_req_in_from_stalled = 1'b0;
     assign set_req_in_stalled = 1'b0;
-    assign llc_rst_tb_done = 1'b0;
-    assign llc_rst_tb_ready = 1'b1;
-    assign llc_rst_tb_done_valid = 1'b0;
     assign lmem_wr_rst_flush = 'h0;
 
     //interfaces
