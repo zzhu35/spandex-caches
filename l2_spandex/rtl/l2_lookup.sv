@@ -2,7 +2,6 @@
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// TODO: add word_hit once we move to word granularity
 module l2_lookup (
     input logic clk,
     input logic rst,

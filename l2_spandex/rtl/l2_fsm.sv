@@ -2,13 +2,14 @@
 `include "spandex_consts.svh"
 `include "spandex_types.svh"
 
-// TODO: Removed flush related signals.
 module l2_fsm(
     `FPGA_DBG input logic clk,
     `FPGA_DBG input logic rst,
     // From input_decoder - what to service next.
     `FPGA_DBG input logic do_fence,
     `FPGA_DBG input logic do_fence_next,
+    `FPGA_DBG input logic do_flush,
+    `FPGA_DBG input logic do_flush_next,
     `FPGA_DBG input logic do_ongoing_fence,
     `FPGA_DBG input logic do_ongoing_fence_next,
     `FPGA_DBG input logic do_rsp,
@@ -67,6 +68,9 @@ module l2_fsm(
     `FPGA_DBG input logic fwd_stall,
     `FPGA_DBG input fence_t l2_fence,
     `FPGA_DBG input logic ongoing_atomic,
+    `FPGA_DBG input logic ongoing_flush,
+    `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
+    `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -111,7 +115,6 @@ module l2_fsm(
     `FPGA_DBG output logic l2_rsp_out_valid_int,
     `FPGA_DBG output logic l2_inval_valid_int,
     `FPGA_DBG output logic l2_bresp_valid_int,
-    // TODO: Removed flush related signals.
     `FPGA_DBG output logic lmem_wr_rst,
     `FPGA_DBG output logic lmem_wr_en_state,
     `FPGA_DBG output logic lmem_wr_en_line,
@@ -151,6 +154,8 @@ module l2_fsm(
     `FPGA_DBG output logic acc_flush_done,
     `FPGA_DBG output logic set_ongoing_atomic,
     `FPGA_DBG output logic clr_ongoing_atomic,
+    `FPGA_DBG output logic incr_flush_way,
+    `FPGA_DBG output logic incr_flush_set,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -184,6 +189,9 @@ module l2_fsm(
     localparam FWD_WTFWD_HANDLER = 6'b010010;
     localparam FWD_WTFWD_HANDLER_NACK = 6'b010011;
 
+    localparam ONGOING_FLUSH_LOOKUP = 6'b011101;
+    localparam ONGOING_FLUSH_PROCESS = 6'b011110;
+    localparam ONGOING_FLUSH_EVICT = 6'b011111;
     localparam NEW_FENCE_HANDLER = 6'b100000;
     localparam ONGOING_FENCE_HANDLER = 6'b100001;
 
@@ -256,6 +264,22 @@ module l2_fsm(
     assign ack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & word_mask_owned) : 'h0) : 'h0;
     assign nack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & ~word_mask_owned) : l2_fwd_in.word_mask) : 'h0;
 
+    // Helper logic to test word mask owned of the current flush way.
+    word_mask_t word_mask_owned_flush;
+    word_mask_t word_mask_valid_flush;
+    always_comb begin
+        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+            word_mask_owned_flush[i] = 1'b0;
+            word_mask_valid_flush[i] = 1'b0;
+
+            if (do_flush && (states_buf[flush_way][i] == `SPX_R)) begin
+                word_mask_owned_flush[i] = 1'b1;
+            end else if (do_flush && (states_buf[flush_way][i] != `SPX_I)) begin
+                word_mask_valid_flush[i] = 1'b1;
+            end
+        end
+    end    
+
     // FSM 1
     // Decide which state to go to next;
     // no outputs updated.
@@ -281,9 +305,10 @@ module l2_fsm(
                     next_state = RSP_MSHR_LOOKUP;
                 end else if (do_fwd_next) begin
                     next_state = FWD_MSHR_LOOKUP;
-                    // TODO: Removed do_ongoing_flush_next temporarily
                 end else if (do_ongoing_fence_next) begin
                     next_state = ONGOING_FENCE_HANDLER;
+                end else if (do_flush_next) begin
+                    next_state = ONGOING_FLUSH_LOOKUP;
                 end else if (do_cpu_req_next) begin
                     next_state = CPU_REQ_MSHR_LOOKUP;
                 end
@@ -306,15 +331,6 @@ module l2_fsm(
             // If new response received, lookup the coherence message
             // of the response.
             RSP_MSHR_LOOKUP : begin
-                // TODO: Should we update the word_mask in mshr[mshr_i] here?
-                // Maybe, we should update word_mask here, and only transition to
-                // the handler that finally removes the MSHR entry and/or updates
-                // data into the RAMs.
-                // TODO: Don't we need to check if the response matches
-                // an entry in the MSHR? FSM 2 does do a L2_REQS_LOOKUP, but it does
-                // not test whether there was a hit or not. In the current design,
-                // if there is no hit, we still end up clearing whatever reqs_i_next
-                // was earlier.
                 if (mshr_hit_next) begin
                     case(l2_rsp_in.coh_msg)
                         `RSP_Odata : begin
@@ -510,15 +526,31 @@ module l2_fsm(
                     next_state = DECODE;
                 end
             end            
-            // Check if the flush_way (from l2_regs) has valid data,
-            // and if it has data (instr don't need write-back). If yes,
-            // go to next state ONGOING_FLUSH_PROCESS and wait
-            // for write-back to complete.
-            // TODO: update according to Spandex logic from SystemC.
-            // TODO: Removed flush handling; add later
             // -------------------
             // Flush handler
             // -------------------
+            // Read flush_set from the RAMs into bufs in ONGOING_FLUSH_LOOKUP.
+            // In ONGOING_FLUSH_PROCESS, we will check the state of flush_way.
+            // If line is in SPX_R, we will transition to ONGOING_FLUSH_EVICT,
+            // else we will invalidate that way. Once the invalidation/eviction
+            // of the way is complete, we go back to DECODE and input_decoder
+            // which check whether we're at the end of the way. If yes, it will
+            // increment the flush_set and also check whether flush is complete.
+            ONGOING_FLUSH_LOOKUP : begin
+                next_state = ONGOING_FLUSH_PROCESS;
+            end
+            ONGOING_FLUSH_PROCESS : begin
+                if (!word_mask_owned_flush && l2_inval_ready_int) begin
+                    next_state = DECODE;
+                end else begin
+                    next_state = ONGOING_FLUSH_EVICT;
+                end
+            end      
+            ONGOING_FLUSH_EVICT : begin
+                if (l2_req_out_ready_int && l2_inval_ready_int) begin
+                    next_state = DECODE;
+                end
+            end            
             // If new input request is received, check if there is an ongoing atomic
             // or set conflict. CPU_REQ_MSHR_LOOKUP in FSM 2 will also check reqs to
             // see if new set_conflict needs to be set.
@@ -861,6 +893,8 @@ module l2_fsm(
         clr_ongoing_atomic = 1'b0;
 
         wtfwd_temp_line = 'h0;
+        incr_flush_way = 1'b0;
+        incr_flush_set = 1'b0;
 
         case (state)
             RESET : begin
@@ -871,9 +905,10 @@ module l2_fsm(
                 lmem_set_in = rst_set;
             end
             DECODE : begin
-                // TODO: Removed do_ongoing_flush_next check
                 if (do_fwd_next) begin
                     lmem_set_in = line_br_next.set;
+                end else if (do_flush_next) begin
+                    lmem_set_in = flush_set;
                 end else if (do_cpu_req_next) begin
                     lmem_set_in = addr_br_next.set;
                 end
@@ -1325,6 +1360,86 @@ module l2_fsm(
                     );
                 end
             end                 
+            ONGOING_FLUSH_LOOKUP : begin
+                mshr_op_code = `L2_MSHR_PEEK_FLUSH;
+                rd_set_into_bufs = 1'b1;
+                lmem_set_in = flush_set;
+            end
+            ONGOING_FLUSH_PROCESS : begin
+                // If the line in flush_way is not owned, we can safely invalidate it,
+                // similar to how we do in evictions.            
+                if (!word_mask_owned_flush && l2_inval_ready_int) begin
+                    lmem_set_in = flush_set;
+                    lmem_way_in = flush_way;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end
+                    lmem_wr_en_state = 1'b1;
+
+                    // Increment the flush way and increment flush set
+                    // if we are at the last way.
+                    incr_flush_way = 1'b1;
+                    if (flush_way + incr_flush_way == `L2_WAYS) begin
+                        incr_flush_set = 1'b1;
+                    end
+
+                    // We must invalidate the entry (if present) from the MSHR.
+                    if (word_mask_valid_flush) begin
+                        send_inval(
+                            /* addr */ (tags_buf[flush_way] << `L2_SET_BITS) | flush_set,
+                            /* hprot */ `DATA
+                        );
+                    end
+                end
+            end
+            ONGOING_FLUSH_EVICT : begin
+                // If owned, add MSHR entry and write-back the data if req_out is ready,
+                // Only proceed if you know you can send response and inval to L1.
+                if (word_mask_owned_flush && l2_req_out_ready_int && l2_inval_ready_int) begin
+                    // Here, we are immediately invalidating the RAM, partly because
+                    // we're following what ESP did and partly because the line is
+                    // stored in the MSHR, if needed.
+                    lmem_set_in = flush_set;
+                    lmem_way_in = flush_way;
+                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                        lmem_wr_data_state[i] = `SPX_I;
+                    end
+                    lmem_wr_en_state = 1'b1;
+
+                    // Increment the flush way and increment flush set
+                    // if we are at the last way.
+                    incr_flush_way = 1'b1;
+                    if (flush_way + incr_flush_way == `L2_WAYS) begin
+                        incr_flush_set = 1'b1;
+                    end
+
+                    fill_mshr_entry (
+                        /* cpu_msg */ 1'b0,
+                        /* hprot */ hprots_buf[flush_way],
+                        /* hsize */ 'h0,
+                        /* tag */ tags_buf[flush_way],
+                        /* way */ flush_way,
+                        /* state */ `SPX_RI,
+                        /* word */ 'h0,
+                        /* line */ lines_buf[flush_way],
+                        /* amo */ 'h0,
+                        /* word_mask */ word_mask_owned_flush
+                    );
+
+                    send_req_out (
+                        /* coh_msg */ `REQ_WB,
+                        /* hprot */ hprots_buf[flush_way],
+                        /* line_addr */ (tags_buf[flush_way] << `L2_SET_BITS) | flush_set,
+                        /* line */ lines_buf[flush_way],
+                        /* word_mask */ word_mask_owned_flush
+                    );
+
+                    send_inval(
+                        /* addr */ (tags_buf[flush_way] << `L2_SET_BITS) | flush_set,
+                        /* hprot */ `DATA
+                    );
+                end
+            end            
             CPU_REQ_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
@@ -1888,7 +2003,6 @@ endmodule
 //     input logic tag_hit_next,
 //     input logic empty_way_found_next,
 //     input logic tag_hit,
-//     input logic incr_flush_set,
 //     input var logic [`REQS_BITS-1:0] reqs_i,
 //     input var logic [`REQS_BITS-1:0] reqs_i_next,
 //     input var logic [`L2_SET_BITS:0] flush_set,

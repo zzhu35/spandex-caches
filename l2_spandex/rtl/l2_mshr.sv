@@ -3,7 +3,6 @@
 `include "spandex_types.svh"
 
 module l2_mshr(
-    // TODO: Removed flush related signals.
     input logic clk,
     input logic rst,
     input logic add_mshr_entry,
@@ -30,7 +29,6 @@ module l2_mshr(
     input word_mask_t update_mshr_value_word_mask_reg,
 
     addr_breakdown_t.in addr_br,
-    // TODO: Add addr_br_reqs when adding fill_reqs_flush
     line_breakdown_l2_t.in line_br,
     output logic set_set_conflict_mshr,
     output logic clr_set_conflict_mshr,
@@ -82,14 +80,12 @@ module l2_mshr(
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end
                 end
-                // TODO: Add update for fill_reqs_flush
             end
 
             // Update only state of MSHR entry mshr_i
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].state <= 0;
-                // TODO: Removed check of fill_reqs_flush with reqs_i
                 end else if (update_mshr_state || add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].state <= update_mshr_value_state;
@@ -101,7 +97,6 @@ module l2_mshr(
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].line <= 0;
-                // TODO: Removed check of fill_reqs_flush with reqs_i
                 end else if (update_mshr_line || add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].line <= update_mshr_value_line;
@@ -118,7 +113,6 @@ module l2_mshr(
                         mshr[i].tag <= update_mshr_value_tag;
                     end
                 end
-                // TODO: Removed check of fill_reqs_flush with reqs_i
             end
 
             // Update only word_mask of MSHR entry mshr_i
@@ -173,7 +167,13 @@ module l2_mshr(
                     end
                 end
             end
-            // TODO: Removed peek_flush to find next free entry
+            `L2_MSHR_PEEK_FLUSH : begin
+                for (int i = 0; i <`N_MSHR; i++) begin
+                    if (mshr[i].state == `SPX_I) begin
+                        mshr_i_next = i;
+                    end
+                end
+            end   
             // Check if there is a conflicting entry to incoming forward. If yes, stall.
             `L2_MSHR_PEEK_FWD : begin
                 clr_fwd_stall = 1'b1;
