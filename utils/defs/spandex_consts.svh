@@ -59,10 +59,6 @@
 `define LLC_OWNER_BITS          `WORDS_PER_LINE
 `define LLC_OWNER_BRAM_WIDTH    4
 
-// LLC WB delay fix parameters
-`define LLC_WB_DELAY            32
-`define LLC_WB_DELAY_BITS       $clog2(`LLC_WB_DELAY)
-
 // DeNovo states
 `define SPX_R       (`SPX_NUM_STATE - 1)
 `define SPX_S       (`SPX_NUM_STATE - 2)
@@ -102,11 +98,11 @@
 
 // CPU DCS
 `define DCS_ReqWTfwd    1
+`define DCS_ReqO        2
 `define DCS_ReqV        1
 `define DCS_ReqOdata    2
 
 `define ARIANE_AMO_BITS 6
-
 
 // requests (L2/TU to L3)
 `define REQ_S           0 // same as gets
@@ -116,17 +112,17 @@
 `define REQ_O           4
 `define REQ_V           5
 `define REQ_WTdata      6
+`define REQ_WTfwd       7 
 
-`define REQ_AMO_SWAP    6
-`define REQ_AMO_ADD     7 // ADD
-`define REQ_AMO_AND     8 // CLR
-`define REQ_AMO_OR      9 // SET
-`define REQ_AMO_XOR     10 // EOR
-`define REQ_AMO_MAX     11 // SMAX
-`define REQ_AMO_MAXU    12 // UMAX
-`define REQ_AMO_MIN     13 // SMIN
-`define REQ_AMO_MINU    14 // UMIN
-`define REQ_WTfwd       15
+// `define REQ_AMO_SWAP    6
+// `define REQ_AMO_ADD     7 // ADD
+// `define REQ_AMO_AND     8 // CLR
+// `define REQ_AMO_OR      9 // SET
+// `define REQ_AMO_XOR     10 // EOR
+// `define REQ_AMO_MAX     11 // SMAX
+// `define REQ_AMO_MAXU    12 // UMAX
+// `define REQ_AMO_MIN     13 // SMIN
+// `define REQ_AMO_MINU    14 // UMIN
 
 /* Legacy DMA support */
 `ifdef  REQ_DMA_READ_BURST
