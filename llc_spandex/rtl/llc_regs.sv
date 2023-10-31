@@ -16,8 +16,17 @@ module llc_regs (
     input logic set_set_conflict,
     input logic clr_req_in_stalled_valid,
     input logic set_req_in_stalled_valid,
+    input logic set_ongoing_flush,
+    input logic clr_ongoing_flush,
+    input logic incr_flush_set,
+    input logic clr_flush_set,
+    input logic incr_flush_way,
+    input logic clr_flush_way,
 
     // Registers
+    output logic ongoing_flush,
+    output logic [`LLC_SET_BITS:0] flush_set,
+    output logic [`LLC_WAY_BITS:0] flush_way,
     output logic evict_stall,
     output logic set_conflict,
     output logic req_in_stalled_valid,
@@ -64,6 +73,37 @@ module llc_regs (
             req_in_stalled_valid <= 1'b1;
         end
     end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            ongoing_flush <= 1'b0;
+        end else if (clr_ongoing_flush) begin
+            ongoing_flush <= 1'b0;
+        end else if (set_ongoing_flush) begin
+            ongoing_flush <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            flush_set <= 0;
+        end else if (clr_flush_set) begin
+            flush_set <= 0;
+        end else if (incr_flush_set) begin
+            flush_set <= flush_set + 1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            flush_way <= 0;
+        end else if (clr_flush_way) begin
+            flush_way <= 0;
+        end else if (incr_flush_way) begin
+            flush_way <= flush_way + 1;
+        end
+    end
+
 
 endmodule
 

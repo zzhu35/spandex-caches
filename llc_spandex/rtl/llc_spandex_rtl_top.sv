@@ -162,7 +162,6 @@ module llc_spandex_rtl_top (
       assign llc_rst_tb_done_data = llc_rst_tb_done;
 
       //llc  stats
-      logic llc_stats;
       assign llc_stats_data = 1'b0;
       assign llc_stats_valid = 1'b0;
 
