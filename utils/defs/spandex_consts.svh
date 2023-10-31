@@ -112,17 +112,17 @@
 `define REQ_O           4
 `define REQ_V           5
 `define REQ_WTdata      6
+`define REQ_WTfwd       7 
 
-`define REQ_AMO_SWAP    6
-`define REQ_AMO_ADD     7 // ADD
-`define REQ_AMO_AND     8 // CLR
-`define REQ_AMO_OR      9 // SET
-`define REQ_AMO_XOR     10 // EOR
-`define REQ_AMO_MAX     11 // SMAX
-`define REQ_AMO_MAXU    12 // UMAX
-`define REQ_AMO_MIN     13 // SMIN
-`define REQ_AMO_MINU    14 // UMIN
-`define REQ_WTfwd       15
+// `define REQ_AMO_SWAP    6
+// `define REQ_AMO_ADD     7 // ADD
+// `define REQ_AMO_AND     8 // CLR
+// `define REQ_AMO_OR      9 // SET
+// `define REQ_AMO_XOR     10 // EOR
+// `define REQ_AMO_MAX     11 // SMAX
+// `define REQ_AMO_MAXU    12 // UMAX
+// `define REQ_AMO_MIN     13 // SMIN
+// `define REQ_AMO_MINU    14 // UMIN
 
 /* Legacy DMA support */
 `ifdef  REQ_DMA_READ_BURST
