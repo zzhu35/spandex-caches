@@ -103,7 +103,7 @@ public:
 		     cache_id_t req_id, cache_id_t dest_id, word_offset_t woff, word_mask_t word_mask);
     void get_dma_rsp_out(coh_msg_t coh_msg, addr_t addr, line_t line, invack_cnt_t invack_cnt,
                          llc_coh_dev_id_t req_id, cache_id_t dest_id, word_offset_t woff);
-    void get_fwd_out(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, cache_id_t dest_id, word_mask_t word_mask);
+    void get_fwd_out(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, cache_id_t dest_id, line_t line, word_mask_t word_mask);
 	void get_mem_req(bool hwrite, hsize_t hsize, hprot_t hprot, addr_t addr, line_t line);
     void put_mem_rsp(line_t line);
     void put_req_in(mix_msg_t coh_msg, addr_t addr, line_t line, cache_id_t cache_id, hprot_t hprot,
