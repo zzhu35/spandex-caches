@@ -173,7 +173,7 @@ module l2_mshr(
                         mshr_i_next = i;
                     end
                 end
-            end   
+            end
             // Check if there is a conflicting entry to incoming forward. If yes, stall.
             `L2_MSHR_PEEK_FWD : begin
                 clr_fwd_stall = 1'b1;
@@ -182,7 +182,7 @@ module l2_mshr(
                     if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
                         mshr_hit_next = 1'b1;
                         mshr_i_next = i;
-                        
+
                         // We do not always need to stall - in certain cases, we immediately de-assert fwd_stall
                         case (fwd_in_coh_msg)
                             // For FWD_INV, we always respond (and do not stall the forward). In

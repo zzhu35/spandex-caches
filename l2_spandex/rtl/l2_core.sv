@@ -84,8 +84,8 @@ module l2_core(
     logic [2:0] mshr_op_code;
     logic [`L2_SET_BITS:0] flush_set;
     logic [`L2_WAY_BITS:0] flush_way;
-    logic [`REQS_BITS-1:0] mshr_i, set_fwd_stall_entry_data, fwd_stall_entry, mshr_i_next, reqs_atomic_i;
-    logic [`REQS_BITS_P1-1:0] mshr_cnt;
+    logic [`MSHR_BITS-1:0] mshr_i, set_fwd_stall_entry_data, fwd_stall_entry, mshr_i_next, reqs_atomic_i;
+    logic [`MSHR_BITS_P1-1:0] mshr_cnt;
     logic update_mshr_word_mask;
 
     addr_t cpu_req_addr;
@@ -144,7 +144,6 @@ module l2_core(
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
     assign flush_stall_ended = 1'b0;
-    assign is_flush_all = 1'b0;
     assign ongoing_atomic_set_conflict_instr = 1'b0;
     assign set_ongoing_atomic_set_conflict_instr = 1'b0;
     assign clr_ongoing_atomic_set_conflict_instr = 1'b0;

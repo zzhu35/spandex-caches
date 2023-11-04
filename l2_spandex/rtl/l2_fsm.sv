@@ -18,6 +18,7 @@ module l2_fsm(
     `FPGA_DBG input logic do_fwd_next,
     `FPGA_DBG input logic do_cpu_req,
     `FPGA_DBG input logic do_cpu_req_next,
+    `FPGA_DBG input logic is_flush_all,
     // Whether external interfaces are ready for new data.
     `FPGA_DBG input logic l2_rd_rsp_ready_int,
     `FPGA_DBG input logic l2_req_out_ready_int,
@@ -256,7 +257,7 @@ module l2_fsm(
     line_t wtfwd_temp_line;
 
     // Temporary word mask to hold the words that we will send positive and
-    // negative acknowledgements. Here, if we are servicing a forward and there is 
+    // negative acknowledgements. Here, if we are servicing a forward and there is
     // a tag hit, we assign ack_mask to the common words in the forward and owned words.
     // Similarly, we assign nack_mask to words in the forward that are not owned, or all
     // words in the forward if not a tag hit.
@@ -266,19 +267,15 @@ module l2_fsm(
 
     // Helper logic to test word mask owned of the current flush way.
     word_mask_t word_mask_owned_flush;
-    word_mask_t word_mask_valid_flush;
     always_comb begin
         for (int i = 0; i < `WORDS_PER_LINE; i++) begin
             word_mask_owned_flush[i] = 1'b0;
-            word_mask_valid_flush[i] = 1'b0;
 
             if (do_flush && (states_buf[flush_way][i] == `SPX_R)) begin
                 word_mask_owned_flush[i] = 1'b1;
-            end else if (do_flush && (states_buf[flush_way][i] != `SPX_I)) begin
-                word_mask_valid_flush[i] = 1'b1;
             end
         end
-    end    
+    end
 
     // FSM 1
     // Decide which state to go to next;
@@ -430,7 +427,7 @@ module l2_fsm(
                 // stall. Else, lookup the RAMs to see if the forward is a hit.
                 // It is okay to check set_fwd_stall and clr_fwd_stall every time,
                 // because the l2_fwd_in will be registered till the fwd_stall ends,
-                // i.e., input_decoder will not accept a new forward till it ends. 
+                // i.e., input_decoder will not accept a new forward till it ends.
                 if ((fwd_stall || set_fwd_stall) & !clr_fwd_stall) begin
                     next_state = FWD_STALL;
                 end else if (mshr_hit_next) begin
@@ -507,7 +504,7 @@ module l2_fsm(
                 if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
-            end            
+            end
             FWD_WTFWD_HANDLER : begin
                 if (ack_mask) begin
                     if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
@@ -516,7 +513,7 @@ module l2_fsm(
                 end else begin
                     next_state = FWD_WTFWD_HANDLER_NACK;
                 end
-            end              
+            end
             FWD_WTFWD_HANDLER_NACK : begin
                 if (nack_mask) begin
                     if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
@@ -525,7 +522,7 @@ module l2_fsm(
                 end else begin
                     next_state = DECODE;
                 end
-            end            
+            end
             // -------------------
             // Flush handler
             // -------------------
@@ -540,17 +537,17 @@ module l2_fsm(
                 next_state = ONGOING_FLUSH_PROCESS;
             end
             ONGOING_FLUSH_PROCESS : begin
-                if (!word_mask_owned_flush && l2_inval_ready_int) begin
+                if (!word_mask_owned_flush) begin
                     next_state = DECODE;
                 end else begin
                     next_state = ONGOING_FLUSH_EVICT;
                 end
-            end      
+            end
             ONGOING_FLUSH_EVICT : begin
-                if (l2_req_out_ready_int && l2_inval_ready_int) begin
+                if (l2_req_out_ready_int) begin
                     next_state = DECODE;
                 end
-            end            
+            end
             // If new input request is received, check if there is an ongoing atomic
             // or set conflict. CPU_REQ_MSHR_LOOKUP in FSM 2 will also check reqs to
             // see if new set_conflict needs to be set.
@@ -593,7 +590,7 @@ module l2_fsm(
                             next_state = CPU_REQ_AMO_NO_REQ;
                         end else begin
                             next_state = CPU_REQ_AMO_REQ;
-                        end                        
+                        end
                     end else begin
                         case(l2_cpu_req.cpu_msg)
                             `READ : begin
@@ -653,7 +650,7 @@ module l2_fsm(
                                 end else begin
                                     next_state = CPU_REQ_WRITE_ATOMIC_REQ;
                                 end
-                            end                        
+                            end
                             default : begin
                                 next_state = DECODE;
                             end
@@ -680,13 +677,13 @@ module l2_fsm(
                                             next_state = DECODE;
                                         end
                                     endcase
-                                end else begin                                
+                                end else begin
                                     next_state = CPU_REQ_WRITE_REQ;
                                 end
                             end
                             `WRITE_ATOMIC : begin
                                 next_state = CPU_REQ_WRITE_ATOMIC_REQ;
-                            end                        
+                            end
                             default : begin
                                 next_state = DECODE;
                             end
@@ -702,7 +699,7 @@ module l2_fsm(
                                 next_state = DECODE;
                             end
                         endcase
-                    end else begin                                
+                    end else begin
                         next_state = CPU_REQ_EVICT;
                     end
                 end
@@ -924,7 +921,7 @@ module l2_fsm(
                 // TODO: Once we add valid states, self-invalidate will come here.
                 clr_ongoing_fence = 1'b1;
                 acc_flush_done = 1'b1;
-            end                 
+            end
             RSP_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_LOOKUP;
             end
@@ -1085,13 +1082,13 @@ module l2_fsm(
                     update_mshr_state = 1'b1;
                     update_mshr_value_state = `SPX_I;
                     incr_mshr_cnt = 1'b1;
-                end                
-            end            
+                end
+            end
             RSP_NACK_HANDLER : begin
                 // We can receive NACKs if the forward we sent was not serviced by the destination.
                 // Therefore, we re-attempt the request either to the same cache or LLC (preferably).
                 case (mshr[mshr_i].state)
-                    `SPX_XRV: begin                
+                    `SPX_XRV: begin
                         if (l2_req_out_ready_int) begin
                             send_req_out (
                                 /* coh_msg */ `REQ_WTfwd,
@@ -1102,8 +1099,8 @@ module l2_fsm(
                             );
                         end
                     end
-                endcase         
-            end                   
+                endcase
+            end
             FWD_MSHR_LOOKUP : begin
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = line_br.set;
@@ -1307,7 +1304,7 @@ module l2_fsm(
                         /* hprot */ `DATA
                     );
                 end
-            end     
+            end
             FWD_WTFWD_HANDLER : begin
                 // If there is a tag match and the words sent in the forward
                 // are owned in this cache, ack_mask will be non-zero and we will
@@ -1343,7 +1340,7 @@ module l2_fsm(
                         /* addr */ l2_fwd_in.addr,
                         /* hprot */ `DATA
                     );
-                end                
+                end
             end
             FWD_WTFWD_HANDLER_NACK : begin
                 // If there is a tag match and but the words sent in the forward
@@ -1359,7 +1356,7 @@ module l2_fsm(
                         /* word_mask */ l2_fwd_in.word_mask
                     );
                 end
-            end                 
+            end
             ONGOING_FLUSH_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_FLUSH;
                 rd_set_into_bufs = 1'b1;
@@ -1367,14 +1364,16 @@ module l2_fsm(
             end
             ONGOING_FLUSH_PROCESS : begin
                 // If the line in flush_way is not owned, we can safely invalidate it,
-                // similar to how we do in evictions.            
-                if (!word_mask_owned_flush && l2_inval_ready_int) begin
-                    lmem_set_in = flush_set;
-                    lmem_way_in = flush_way;
-                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
-                        lmem_wr_data_state[i] = `SPX_I;
+                // similar to how we do in evictions.
+                if (!word_mask_owned_flush) begin
+                    if (is_flush_all || hprots_buf[flush_way]) begin
+                        lmem_set_in = flush_set;
+                        lmem_way_in = flush_way;
+                        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                            lmem_wr_data_state[i] = `SPX_I;
+                        end
+                        lmem_wr_en_state = 1'b1;
                     end
-                    lmem_wr_en_state = 1'b1;
 
                     // Increment the flush way and increment flush set
                     // if we are at the last way.
@@ -1382,20 +1381,12 @@ module l2_fsm(
                     if (flush_way + incr_flush_way == `L2_WAYS) begin
                         incr_flush_set = 1'b1;
                     end
-
-                    // We must invalidate the entry (if present) from the MSHR.
-                    if (word_mask_valid_flush) begin
-                        send_inval(
-                            /* addr */ (tags_buf[flush_way] << `L2_SET_BITS) | flush_set,
-                            /* hprot */ `DATA
-                        );
-                    end
                 end
             end
             ONGOING_FLUSH_EVICT : begin
                 // If owned, add MSHR entry and write-back the data if req_out is ready,
                 // Only proceed if you know you can send response and inval to L1.
-                if (word_mask_owned_flush && l2_req_out_ready_int && l2_inval_ready_int) begin
+                if (l2_req_out_ready_int) begin
                     // Here, we are immediately invalidating the RAM, partly because
                     // we're following what ESP did and partly because the line is
                     // stored in the MSHR, if needed.
@@ -1433,13 +1424,8 @@ module l2_fsm(
                         /* line */ lines_buf[flush_way],
                         /* word_mask */ word_mask_owned_flush
                     );
-
-                    send_inval(
-                        /* addr */ (tags_buf[flush_way] << `L2_SET_BITS) | flush_set,
-                        /* hprot */ `DATA
-                    );
                 end
-            end            
+            end
             CPU_REQ_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
@@ -1562,7 +1548,7 @@ module l2_fsm(
                         );
                     end
                 end
-            end            
+            end
             CPU_REQ_READ_NO_REQ : begin
                 send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
             end
@@ -1758,7 +1744,7 @@ module l2_fsm(
                         /* b_off */ addr_br.b_off,
                         /* hsize */ l2_cpu_req.hsize,
                         /* line_out */ wtfwd_temp_line
-                    );                    
+                    );
 
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -1772,7 +1758,7 @@ module l2_fsm(
                         /* amo */ 'h0,
                         /* word_mask */ 1 << addr_br.w_off
                     );
-                    
+
                     send_req_out (
                         /* coh_msg */ `REQ_WTfwd,
                         /* hprot */ l2_cpu_req.hprot,
@@ -1789,7 +1775,7 @@ module l2_fsm(
                     // that the write-through was not sent for. Therefore, we only do
                     // this if the line is in shared state. If the line were invalid,
                     // it would not be a tag hit. If one of the other words were not invalid,
-                    // the only option is if they are in SPX_R, in which case, we must not 
+                    // the only option is if they are in SPX_R, in which case, we must not
                     // invalidate them.
                     if (tag_hit && word_mask_shared) begin
                         lmem_set_in = addr_br.set;
@@ -1798,7 +1784,7 @@ module l2_fsm(
                             lmem_wr_data_state[i] = `SPX_I;
                         end
                         lmem_wr_en_state = 1'b1;
-                    end                    
+                    end
 
                     send_inval (
                         /* addr */ addr_br.line_addr,

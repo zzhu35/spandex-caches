@@ -77,7 +77,7 @@ module l2_lookup (
                             empty_way_next = i;
                         end
 
-                        // TODO: When adding valid state, we should check whether it is 
+                        // TODO: When adding valid state, we should check whether it is
                         // greater than current_valid_state.
                         // Given that the tag is hit and the line is present, we check
                         // whether word being requested is in valid state as well.
@@ -127,7 +127,7 @@ module l2_lookup (
                             tag_hit_next = 1'b1;
                             way_hit_next = i;
                         end
-                        
+
                         // Given that the tag is hit and the line is present, we check
                         // whether word being requested is in valid state as well.
                         // (it is possible that the word we requested for is not in valid state.

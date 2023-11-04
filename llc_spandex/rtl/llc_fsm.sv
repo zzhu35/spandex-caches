@@ -293,7 +293,7 @@ module llc_fsm (
                         end else begin
                             next_state = DECODE;
                         end
-                    end                
+                    end
                     `LLC_SWB : begin
                         if (!update_mshr_value_invack_cnt) begin
                             next_state = RSP_INV_HANDLER_MEM_REQ;
@@ -339,24 +339,24 @@ module llc_fsm (
             // all other lines. Therefore, all we need to check is if the line
             // is dirty - if yes, we must write it back. If not dirty, we
             // set the state as invalid directly, else, we move to ONGOING_FLUSH_EVICT
-            // to write back the line to memory.       
+            // to write back the line to memory.
             ONGOING_FLUSH_LOOKUP : begin
                 next_state = ONGOING_FLUSH_PROCESS;
             end
             ONGOING_FLUSH_PROCESS : begin
-                if (dirty_bits_buf[flush_way]) begin
+                if (dirty_bits_buf[flush_way] && states_buf[flush_way] != `LLC_I) begin
                     next_state = ONGOING_FLUSH_EVICT;
                 end else begin
                     next_state = DECODE;
                 end
-            end      
+            end
             ONGOING_FLUSH_EVICT : begin
                 if (llc_mem_req_ready_int) begin
-                    next_state = ONGOING_FLUSH_PROCESS;
+                    next_state = DECODE;
                 end
-            end                        
+            end
             REQ_MSHR_LOOKUP : begin
-                // On a new request, we check if a set conflict is ongoing, or the MSHR lookup just found a 
+                // On a new request, we check if a set conflict is ongoing, or the MSHR lookup just found a
                 // set conflict. If yes, we go into set conflict and copy the new request to a set of registers
                 // till the set conflicts are resolved. If not, we check the tag buffers to know hit/miss.
                 if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
@@ -549,7 +549,7 @@ module llc_fsm (
                 if (llc_mem_req_ready_int) begin
                     next_state = REQ_WTFWD_HANDLER_MISS_MEM_RSP;
                 end
-            end            
+            end
             REQ_WTFWD_HANDLER_MISS_MEM_RSP : begin
                 if (llc_mem_rsp_valid_int) begin
                     next_state = REQ_WTFWD_HANDLER_MISS_RSP;
@@ -750,7 +750,7 @@ module llc_fsm (
                                     /* invack_cnt */ 'h0,
                                     /* word_offset */ 'h0,
                                     /* word_mask */ mshr[mshr_i].word_mask
-                                );                                
+                                );
 
                                 // Clear the MSHR entry
                                 update_mshr_state = 1'b1;
@@ -797,7 +797,7 @@ module llc_fsm (
                             lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
                             lmem_wr_en_evict_way = 1'b1;
                             clr_evict_stall = 1'b1;
-                        end                    
+                        end
                         `LLC_SV : begin
                             if (llc_rsp_out_ready_int) begin
                                 send_rsp_out (
@@ -809,7 +809,7 @@ module llc_fsm (
                                     /* invack_cnt */ 'h0,
                                     /* word_offset */ 'h0,
                                     /* word_mask */ mshr[mshr_i].word_mask
-                                );                                
+                                );
 
                                 // Clear the MSHR entry
                                 update_mshr_state = 1'b1;
@@ -835,7 +835,7 @@ module llc_fsm (
                         /* hprot */ mshr[mshr_i].hprot,
                         /* line */ mshr[mshr_i].line
                     );
-                end            
+                end
             end
             RSP_RVK_O_HANDLER : begin
                 // Directly update the RAMs because only one response is expected - lines and owner.
@@ -902,7 +902,7 @@ module llc_fsm (
                         lmem_way_in = mshr[mshr_i].way;
                         lmem_wr_data_state = `LLC_S;
                         lmem_wr_en_state = 1'b1;
-                    end                    
+                    end
                 endcase
             end
             ONGOING_FLUSH_LOOKUP : begin
@@ -911,8 +911,8 @@ module llc_fsm (
             end
             ONGOING_FLUSH_PROCESS : begin
                 // If the line in flush_way is not dirty, we can safely invalidate it,
-                // similar to how we do in evictions.            
-                if (!dirty_bits_buf[flush_way]) begin
+                // similar to how we do in evictions.
+                if (!dirty_bits_buf[flush_way] || states_buf[flush_way] == `LLC_I) begin
                     lmem_set_in = flush_set;
                     lmem_way_in = flush_way;
                     lmem_wr_data_state = `LLC_I;
@@ -949,7 +949,7 @@ module llc_fsm (
                         incr_flush_set = 1'b1;
                     end
                 end
-            end                        
+            end
             REQ_MSHR_LOOKUP : begin
                 // Check for conflicts in MSHR. Also, read set from RAMs to buffers for the tag lookup in next cycle.
                 mshr_op_code = `LLC_MSHR_PEEK_REQ;
@@ -978,7 +978,7 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ owners_cache_id[0],
                                     /* word_mask */ word_owner_mask,
-                                    /* line */ 'h0 
+                                    /* line */ 'h0
                                 );
                             end
                         end
@@ -998,7 +998,7 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ fwd_l2_cnt,
                                     /* word_mask */ `WORD_MASK_ALL,
-                                    /* line */ 'h0 
+                                    /* line */ 'h0
                                 );
 
                                 incr_invack_cnt = 1'b1;
@@ -1009,7 +1009,7 @@ module llc_fsm (
                             incr_l2_cnt = 1'b1;
                         end
                     end
-                endcase                        
+                endcase
             end
             REQ_ODATA_HANDLER_HIT_RSP : begin
                 case (states_buf[req_in_way])
@@ -1169,7 +1169,7 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ owners_cache_id[0],
                                     /* word_mask */ word_owner_mask,
-                                    /* line */ 'h0 
+                                    /* line */ 'h0
                                 );
 
                                 fill_mshr_entry (
@@ -1182,7 +1182,7 @@ module llc_fsm (
                                     /* invack_cnt */ 'h0,
                                     /* line */ lines_buf[req_in_way],
                                     /* word_mask */ word_owner_mask
-                                );                                
+                                );
                             end
                         end
                     end
@@ -1357,7 +1357,7 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ owners_cache_id[0],
                                     /* word_mask */ word_owner_mask,
-                                    /* line */ llc_req_in.line 
+                                    /* line */ llc_req_in.line
                                 );
                             end
                         end
@@ -1377,7 +1377,7 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ fwd_l2_cnt,
                                     /* word_mask */ `WORD_MASK_ALL,
-                                    /* line */ 'h0 
+                                    /* line */ 'h0
                                 );
 
                                 incr_invack_cnt = 1'b1;
@@ -1388,7 +1388,7 @@ module llc_fsm (
                             incr_l2_cnt = 1'b1;
                         end
                     end
-                endcase                        
+                endcase
             end
             REQ_WTFWD_HANDLER_HIT_RSP : begin
                 case (states_buf[req_in_way])
@@ -1411,7 +1411,7 @@ module llc_fsm (
                                     /* word_mask */ word_no_owner_mask
                                 );
                             end
-                             
+
                             lmem_set_in = line_br.set;
                             lmem_way_in = req_in_way;
                             write_line_helper (
@@ -1541,7 +1541,7 @@ module llc_fsm (
                         /* word_mask */ llc_req_in.word_mask
                     );
                 end
-            end            
+            end
             REQ_EVICT : begin
                 case (states_buf[evict_way_buf])
                     `LLC_V : begin
@@ -1565,7 +1565,7 @@ module llc_fsm (
                             lmem_wr_en_evict_way = 1'b1;
                             lmem_wr_en_state = 1'b1;
                         end else begin
-                            // For words that are owned elsewhere, we need to first revoke them. 
+                            // For words that are owned elsewhere, we need to first revoke them.
                             // TODO: We assume line granularity here. Need coalescing for word granularity.
                             if (llc_fwd_out_ready_int) begin
                                 send_fwd_out (
@@ -1574,8 +1574,8 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ owners_evict_cache_id[0],
                                     /* word_mask */ word_mask_owned_evict,
-                                    /* line */ 'h0 
-                                );    
+                                    /* line */ 'h0
+                                );
 
                                 fill_mshr_entry (
                                     /* msg */ `FWD_RVK_O,
@@ -1608,7 +1608,7 @@ module llc_fsm (
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ fwd_l2_cnt,
                                     /* word_mask */ `WORD_MASK_ALL,
-                                    /* line */ 'h0 
+                                    /* line */ 'h0
                                 );
 
                                 incr_invack_cnt = 1'b1;

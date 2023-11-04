@@ -3,7 +3,7 @@
 
 `include "cache_consts.svh"
 
-`define FPGA_DBG (* mark_debug = "true" *)
+`define FPGA_DBG // (* mark_debug = "true" *)
 
 `define WORD_MASK_ALL ((1 << `WORDS_PER_LINE) - 1)
 `define DCS_WIDTH 2

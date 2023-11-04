@@ -141,8 +141,6 @@ void l2_spandex_tb::l2_test()
     for (int j = 0; j < 8; j++) {
         for (int i = 0; i < L2_WAYS; i++) {
             if (i % 2 == 0) {
-                get_inval(addr.word /* addr */, DATA /* hprot */);
-
                 wait();
             } else {
                 line.range(BITS_PER_WORD - 1, 0) = i+2;
@@ -150,8 +148,6 @@ void l2_spandex_tb::l2_test()
 
                 get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
                     DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
-
-                get_inval(addr.word /* addr */, DATA /* hprot */);
 
                 wait();
 
