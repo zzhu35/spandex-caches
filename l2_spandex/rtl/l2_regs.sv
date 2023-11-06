@@ -190,7 +190,7 @@ module l2_regs (
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
-            wb_evict_buf <= 'h0;
+            wb_evict_buf <= `N_WB-1;
         end else if (clear_wb_entry && !ongoing_drain) begin
             wb_evict_buf <= wb_evict_buf + 1;
         end
