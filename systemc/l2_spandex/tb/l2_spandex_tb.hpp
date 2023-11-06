@@ -96,6 +96,8 @@ public:
     void get_req_out(coh_msg_t coh_msg, addr_t addr, hprot_t hprot, line_t line, word_mask_t word_mask);
     void get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, addr_t addr, 
         line_t line, word_mask_t word_mask);
+    void get_fwd_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, addr_t addr, 
+        line_t line, word_mask_t word_mask);
     void put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask);
     void put_rsp_in(coh_msg_t coh_msg, addr_t addr, line_t line, word_mask_t word_mask, invack_cnt_t invack_cnt);
     void get_rd_rsp(line_t line);

@@ -140,7 +140,7 @@ module l2_input_decoder (
                     set_fwd_in_from_stalled = 1'b1;
                 end
 `ifdef USE_WB
-            end else if (ongoing_drain) begin
+            end else if (ongoing_drain && mshr_cnt != 0) begin
                 do_ongoing_drain_next = 1'b1;
 `endif
             end else if (ongoing_fence && !ongoing_drain) begin

@@ -2756,6 +2756,44 @@ void l2_spandex_tb::l2_test()
         0b0001 /* word_mask */, 0 /* invack_cnt */);
 
     wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 2.4.1 - FWD_WTFwd + NACK + retry.    
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.4.1!");
+    base_addr = 0x83500600;
+    addr.breakdown(base_addr);    
+
+    word = 0x2;
+
+    // FwdWTFwd to word 0 - should miss
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+        1 /* use_owner_pred */, 1 /* dcs */, 1 /* pred_cid */);
+
+    line = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_fwd_out(FWD_WTfwd /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0001 /* word_mask */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+
+    put_rsp_in(RSP_NACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
 #else
     ////////////////////////////////////////////////////////////////
     // TEST 2.3 - ReqWTFwd (hit and miss - SPX_I, SPX_S,
@@ -3122,6 +3160,49 @@ void l2_spandex_tb::l2_test()
 
     get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
         DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_NACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 2.4.1 - FWD_WTFwd + NACK + retry.    
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.4.1!");
+    base_addr = 0x83500600;
+    addr.breakdown(base_addr);    
+
+    word = 0x2;
+
+    // ReqWTFwd to word 0 - should miss
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+        1 /* use_owner_pred */, 1 /* dcs */, 1 /* pred_cid */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    // Fence to flush WB
+    l2_fence_tb.put(0x2);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_fwd_out(FWD_WTfwd /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0001 /* word_mask */);
 
     wait();
 
@@ -5280,6 +5361,38 @@ void l2_spandex_tb::get_rsp_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_re
 
     if (rpt)
 	CACHE_REPORT_VAR(sc_time_stamp(), "RSP_OUT", rsp_out);
+}
+
+void l2_spandex_tb::get_fwd_out(coh_msg_t coh_msg, cache_id_t req_id, bool to_req, addr_t addr,
+    line_t line, word_mask_t word_mask)
+{
+    l2_fwd_out_t fwd_out;
+
+    fwd_out = l2_fwd_out_tb.get();
+
+    if (fwd_out.coh_msg != coh_msg ||
+	(fwd_out.req_id != req_id && to_req) ||
+	fwd_out.addr != addr.range(TAG_RANGE_HI, SET_RANGE_LO) ||
+	(fwd_out.line != line) ||
+    fwd_out.word_mask != word_mask) {
+
+	CACHE_REPORT_ERROR("get fwd out addr", fwd_out.addr);
+	CACHE_REPORT_ERROR("get fwd out addr gold", addr.range(TAG_RANGE_HI, SET_RANGE_LO));
+	CACHE_REPORT_ERROR("get fwd out coh_msg", fwd_out.coh_msg);
+	CACHE_REPORT_ERROR("get fwd out coh_msg gold", coh_msg);
+	CACHE_REPORT_ERROR("get fwd out req_id", fwd_out.req_id);
+	CACHE_REPORT_ERROR("get fwd out req_id gold", req_id);
+	CACHE_REPORT_ERROR("get fwd out to_req", fwd_out.to_req);
+	CACHE_REPORT_ERROR("get fwd out to_req gold", to_req);
+	CACHE_REPORT_ERROR("get fwd out line", fwd_out.line);
+	CACHE_REPORT_ERROR("get fwd out line gold", line);
+	CACHE_REPORT_ERROR("get fwd out word_mask", fwd_out.word_mask);
+	CACHE_REPORT_ERROR("get fwd out word_mask gold", word_mask);
+    error_count++;
+    }
+
+    if (rpt)
+	CACHE_REPORT_VAR(sc_time_stamp(), "FWD_OUT", fwd_out);
 }
 
 void l2_spandex_tb::put_fwd_in(mix_msg_t coh_msg, addr_t addr, cache_id_t req_id, line_t line, word_mask_t word_mask)

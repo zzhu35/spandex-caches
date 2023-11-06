@@ -176,14 +176,6 @@ module l2_core(
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
     assign lmem_rd_en = 1'b1;
 
-    assign l2_fwd_out_valid_int = 1'b0;
-    assign l2_fwd_out_o.coh_msg = 'h0;
-    assign l2_fwd_out_o.req_id = 'h0;
-    assign l2_fwd_out_o.to_req = 1'b0;
-    assign l2_fwd_out_o.addr = 'h0;
-    assign l2_fwd_out_o.line = 'h0;
-    assign l2_fwd_out_o.word_mask = 'h0;
-
     //instances
     l2_bufs bufs_u(.*);
     l2_fsm fsm_u(.*);

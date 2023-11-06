@@ -27,6 +27,7 @@ module l2_fsm(
     `FPGA_DBG input logic l2_rd_rsp_ready_int,
     `FPGA_DBG input logic l2_req_out_ready_int,
     `FPGA_DBG input logic l2_rsp_out_ready_int,
+    `FPGA_DBG input logic l2_fwd_out_ready_int,
     `FPGA_DBG input logic l2_inval_ready_int,
     `FPGA_DBG input logic l2_bresp_ready_int,
     // MSHR
@@ -162,6 +163,7 @@ module l2_fsm(
     `FPGA_DBG output logic l2_rsp_out_valid_int,
     `FPGA_DBG output logic l2_inval_valid_int,
     `FPGA_DBG output logic l2_bresp_valid_int,
+    `FPGA_DBG output logic l2_fwd_out_valid_int,
     `FPGA_DBG output logic lmem_wr_rst,
     `FPGA_DBG output logic lmem_wr_en_state,
     `FPGA_DBG output logic lmem_wr_en_line,
@@ -210,6 +212,7 @@ module l2_fsm(
     l2_rd_rsp_t.out l2_rd_rsp_o,
     l2_rsp_out_t.out l2_rsp_out_o,
     l2_req_out_t.out l2_req_out_o,
+    l2_fwd_out_t.out l2_fwd_out_o,
     l2_inval_t.out l2_inval_o
    );
 
@@ -941,6 +944,14 @@ module l2_fsm(
         l2_inval_valid_int = 1'b0;
         l2_bresp_valid_int = 1'b0;
         l2_bresp_o = `BRESP_OKAY;
+
+        l2_fwd_out_valid_int = 1'b0;
+        l2_fwd_out_o.coh_msg = 'h0;
+        l2_fwd_out_o.req_id = 'h0;
+        l2_fwd_out_o.to_req = 1'b0;
+        l2_fwd_out_o.addr = 'h0;
+        l2_fwd_out_o.line = 'h0;
+        l2_fwd_out_o.word_mask = 'h0;
 
         lmem_wr_rst = 1'b0;
         lmem_wr_en_state = 1'b0;
@@ -1865,7 +1876,7 @@ module l2_fsm(
             CPU_REQ_ADD_WB : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                if (l2_req_out_ready_int && l2_inval_ready_int) begin
+                if (l2_req_out_ready_int && l2_fwd_out_ready_int && l2_inval_ready_int) begin
                     write_word_helper (
                         /* line_in */ 'h0,
                         /* word */ l2_cpu_req.word,
@@ -1888,13 +1899,24 @@ module l2_fsm(
                         /* word_mask */ 1 << addr_br.w_off
                     );
 
-                    send_req_out (
-                        /* coh_msg */ `REQ_WTfwd,
-                        /* hprot */ l2_cpu_req.hprot,
-                        /* line_addr */ addr_br.line_addr,
-                        /* line */ wtfwd_temp_line,
-                        /* word_mask */ 1 << addr_br.w_off
-                    );
+                    if (l2_cpu_req.use_owner_pred) begin
+                        send_fwd_out (
+                            /* coh_msg */ `FWD_WTfwd,
+                            /* req_id */ l2_cpu_req.pred_cid,
+                            /* to_req */ 1'b1,
+                            /* line_addr */ addr_br.line_addr,
+                            /* line */ wtfwd_temp_line,
+                            /* word_mask */ 1 << addr_br.w_off
+                        );
+                    end else begin
+                        send_req_out (
+                            /* coh_msg */ `REQ_WTfwd,
+                            /* hprot */ l2_cpu_req.hprot,
+                            /* line_addr */ addr_br.line_addr,
+                            /* line */ wtfwd_temp_line,
+                            /* word_mask */ 1 << addr_br.w_off
+                        );
+                    end
 
                     // If there was a tag hit but we found the state of the word
                     // to be not in SPX_R, we write-through the data without
@@ -2010,7 +2032,7 @@ module l2_fsm(
             CPU_REQ_DISPATCH_WB : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                if (l2_req_out_ready_int) begin
+                if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ `WRITE,
                         /* hprot */ wb[wb_dispatch_i].hprot,
@@ -2027,13 +2049,24 @@ module l2_fsm(
                     wb_dispatch_tag = wb[wb_dispatch_i].tag;
                     wb_dispatch_set = wb[wb_dispatch_i].set;
 
-                    send_req_out (
-                        /* coh_msg */ `REQ_WTfwd,
-                        /* hprot */ wb[wb_dispatch_i].hprot,
-                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
-                        /* line */ wb[wb_dispatch_i].line,
-                        /* word_mask */ wb[wb_dispatch_i].word_mask
-                    );
+                    if (l2_cpu_req.use_owner_pred) begin
+                        send_fwd_out (
+                            /* coh_msg */ `FWD_WTfwd,
+                            /* req_id */ wb[wb_dispatch_i].pred_cid,
+                            /* to_req */ 1'b1,
+                            /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                            /* line */ wb[wb_dispatch_i].line,
+                            /* word_mask */ wb[wb_dispatch_i].word_mask
+                        );
+                    end else begin
+                        send_req_out (
+                            /* coh_msg */ `REQ_WTfwd,
+                            /* hprot */ wb[wb_dispatch_i].hprot,
+                            /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                            /* line */ wb[wb_dispatch_i].line,
+                            /* word_mask */ wb[wb_dispatch_i].word_mask
+                        );
+                    end
 
                     clear_wb_entry = 1'b1;
                 end
@@ -2106,6 +2139,23 @@ module l2_fsm(
         l2_req_out_o.line = line;
         l2_req_out_o.word_mask = word_mask;
         l2_req_out_valid_int = 1'b1;
+    endfunction
+
+    function void send_fwd_out;
+        input coh_msg_t coh_msg;
+        input cache_id_t req_id;
+        input logic to_req;
+        input line_addr_t line_addr;
+        input line_t line;
+        input word_mask_t word_mask;
+
+        l2_fwd_out_o.coh_msg = coh_msg;
+        l2_fwd_out_o.req_id = req_id;
+        l2_fwd_out_o.to_req = to_req;
+        l2_fwd_out_o.addr = line_addr;
+        l2_fwd_out_o.line = line;
+        l2_fwd_out_o.word_mask = word_mask;
+        l2_fwd_out_valid_int = 1'b1;
     endfunction
 
     function void clear_mshr_entry;
