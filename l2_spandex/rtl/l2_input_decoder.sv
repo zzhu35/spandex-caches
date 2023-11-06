@@ -18,6 +18,9 @@ module l2_input_decoder (
     `FPGA_DBG input addr_t cpu_req_addr,
     // To check if new request can be tracked
     input logic [`MSHR_BITS_P1-1:0] mshr_cnt,
+`ifdef USE_WB
+    input logic [`WB_BITS_P1-1:0] wb_cnt,
+`endif            
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,
@@ -28,7 +31,7 @@ module l2_input_decoder (
     input logic [`L2_WAY_BITS:0] flush_way,
     `FPGA_DBG input logic ongoing_fence,
     `FPGA_DBG input logic ongoing_drain,
-    `FPGA_DBG input logic drain_in_progress,
+    `FPGA_DBG input logic mshr_write_pending,
 
     // Assign cpu_req from conflict registers
     `FPGA_DBG output logic set_cpu_req_from_conflict,
@@ -41,6 +44,10 @@ module l2_input_decoder (
     output logic do_fence_next,
     output logic do_ongoing_fence,
     output logic do_ongoing_fence_next,
+`ifdef USE_WB
+    output logic do_ongoing_drain,
+    output logic do_ongoing_drain_next,
+`endif
     output logic do_rsp,
     output logic do_rsp_next,
     output logic do_fwd,
@@ -73,6 +80,9 @@ module l2_input_decoder (
         do_fwd_next = 1'b0;
         do_cpu_req_next = 1'b0;
         do_fence_next = 1'b0;
+`ifdef USE_WB
+        do_ongoing_drain_next = 1'b0;
+`endif            
         do_ongoing_fence_next = 1'b0;
         do_flush_next = 1'b0;
 
@@ -113,7 +123,7 @@ module l2_input_decoder (
         // - do_cpu_req_next; unless there are no free MSHR entries, an evict stall, an ongoing
         // fence or drain. Either service a new request or the set conflicted request (priority to latter).
         if (decode_en) begin
-            if (l2_fence_valid_int && !ongoing_fence && !drain_in_progress) begin
+            if (l2_fence_valid_int && !ongoing_fence && !ongoing_drain) begin
                 l2_fence_ready_int = 1'b1;
                 do_fence_next = 1'b1;
             end else if (l2_flush_valid_int && mshr_cnt == `N_MSHR) begin
@@ -129,7 +139,11 @@ module l2_input_decoder (
                 end else begin
                     set_fwd_in_from_stalled = 1'b1;
                 end
-            end else if (ongoing_fence && !drain_in_progress) begin
+`ifdef USE_WB
+            end else if (ongoing_drain) begin
+                do_ongoing_drain_next = 1'b1;
+`endif
+            end else if (ongoing_fence && !ongoing_drain) begin
                 do_ongoing_fence_next = 1'b1;
             end else if (ongoing_flush) begin
                 if (flush_set < `L2_SETS) begin
@@ -146,7 +160,7 @@ module l2_input_decoder (
                     clr_ongoing_flush = 1'b1;
                     flush_done = 1'b1;
                 end
-            end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !drain_in_progress) begin
+            end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !ongoing_drain) begin
                 do_cpu_req_next = 1'b1;
                 if (!set_conflict) begin
                     l2_cpu_req_ready_int = 1'b1;
@@ -193,6 +207,9 @@ module l2_input_decoder (
         if (!rst) begin
             do_fence <= 0;
             do_flush <= 1'b0;
+`ifdef USE_WB
+            do_ongoing_drain <= 0;
+`endif            
             do_ongoing_fence <= 0;
             do_rsp <= 0;
             do_fwd <= 0;
@@ -210,6 +227,9 @@ module l2_input_decoder (
             do_fence <= do_fence_next;
             do_flush <= do_flush_next;
             do_ongoing_fence <= do_ongoing_fence_next;
+`ifdef USE_WB
+            do_ongoing_drain <= do_ongoing_drain_next;
+`endif            
             do_rsp <= do_rsp_next;
             do_fwd <= do_fwd_next;
             do_cpu_req <= do_cpu_req_next;
@@ -227,8 +247,12 @@ module l2_input_decoder (
 
     always_comb begin
         clr_ongoing_drain = 1'b0;
-
-        if (!drain_in_progress && ongoing_drain) begin
+`ifndef USE_WB
+        if (!mshr_write_pending && ongoing_drain)
+`else
+        if (!mshr_write_pending && wb_cnt == `N_WB && ongoing_drain)
+`endif
+        begin
             clr_ongoing_drain = 1'b1;
         end
     end

@@ -16,6 +16,8 @@ http://rsim.cs.uiuc.edu/
 
 #include "cache_consts.hpp"
 
+#define USE_WB
+
 #ifdef  COH_MSG_TYPE_WIDTH
 #undef  COH_MSG_TYPE_WIDTH
 #define COH_MSG_TYPE_WIDTH 4

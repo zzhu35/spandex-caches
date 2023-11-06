@@ -137,9 +137,32 @@ module l2_core(
     word_mask_t update_mshr_value_word_mask_reg;
 
     fence_t l2_fence;
-    logic ongoing_fence, drain_in_progress, clr_ongoing_fence, set_ongoing_fence;
+    logic ongoing_fence, mshr_write_pending, clr_ongoing_fence, set_ongoing_fence;
     logic ongoing_drain, clr_ongoing_drain, set_ongoing_drain;
     logic do_fence, do_fence_next, do_ongoing_fence, do_ongoing_fence_next;
+
+`ifdef USE_WB
+    logic do_ongoing_drain, do_ongoing_drain_next;
+    logic wb_hit_next, wb_hit, wb_empty_next, wb_empty, wb_valid_next, wb_valid;
+    logic [`WB_BITS-1:0] wb_hit_i_next, wb_hit_i, wb_empty_i_next, wb_empty_i, wb_valid_i_next, wb_valid_i;
+    logic [`WB_BITS-1:0] wb_evict_buf;
+    logic mshr_drain_conflict, add_wb_entry, clear_wb_entry;
+    logic update_wb_way, update_wb_line, update_wb_hprot, update_wb_word_mask;
+    logic update_wb_dcs_en, update_wb_dcs, update_wb_use_owner_pred, update_wb_pred_cid;
+    logic wb_op_code;
+    l2_way_t update_wb_value_way;
+    line_t update_wb_value_line;
+    hprot_t update_wb_value_hprot;
+    word_mask_t update_wb_value_word_mask;
+    logic update_wb_value_dcs_en;
+    dcs_t update_wb_value_dcs;
+    logic update_wb_value_use_owner_pred;
+    cache_id_t update_wb_value_pred_cid;
+    l2_tag_t wb_dispatch_tag;
+    l2_set_t wb_dispatch_set;
+    logic [`WB_BITS_P1-1:0] wb_cnt;
+    wb_buf_t wb[`N_WB];
+`endif
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
@@ -177,5 +200,8 @@ module l2_core(
     l2_mshr mshr_u (.*);
     l2_write_word write_word_u(.*);
     l2_write_word_amo write_word_amo_u(.*);
+`ifdef USE_WB
+    l2_wb wb_u (.*);
+`endif
 
 endmodule

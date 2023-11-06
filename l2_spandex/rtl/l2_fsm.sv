@@ -12,6 +12,10 @@ module l2_fsm(
     `FPGA_DBG input logic do_flush_next,
     `FPGA_DBG input logic do_ongoing_fence,
     `FPGA_DBG input logic do_ongoing_fence_next,
+`ifdef USE_WB
+    `FPGA_DBG input logic do_ongoing_drain,
+    `FPGA_DBG input logic do_ongoing_drain_next,
+`endif
     `FPGA_DBG input logic do_rsp,
     `FPGA_DBG input logic do_rsp_next,
     `FPGA_DBG input logic do_fwd,
@@ -54,6 +58,23 @@ module l2_fsm(
     `FPGA_DBG input logic word_hit_next,
     `FPGA_DBG input state_t word_hit_state,
     `FPGA_DBG input state_t word_hit_state_next,
+`ifdef USE_WB
+    `FPGA_DBG input logic wb_hit_next,
+    `FPGA_DBG input logic wb_hit,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_hit_i_next,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_hit_i,
+    `FPGA_DBG input logic wb_empty_next,
+    `FPGA_DBG input logic wb_empty,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_empty_i_next,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_empty_i,
+    `FPGA_DBG input logic wb_valid_next,
+    `FPGA_DBG input logic wb_valid,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_valid_i_next,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_valid_i,
+    `FPGA_DBG input logic [`WB_BITS-1:0] wb_evict_buf,
+    `FPGA_DBG input logic mshr_drain_conflict,
+    `FPGA_DBG input wb_buf_t wb[`N_WB],
+`endif
     // Inputs from write_word modules
     input line_t write_word_line_out,
     input line_t write_word_amo_line_out,
@@ -70,6 +91,7 @@ module l2_fsm(
     `FPGA_DBG input fence_t l2_fence,
     `FPGA_DBG input logic ongoing_atomic,
     `FPGA_DBG input logic ongoing_flush,
+    `FPGA_DBG input logic ongoing_drain,
     `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
     `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
 
@@ -110,6 +132,30 @@ module l2_fsm(
     `FPGA_DBG output amo_t update_mshr_value_amo,
     `FPGA_DBG output word_mask_t update_mshr_value_word_mask,
     `FPGA_DBG output word_mask_t update_mshr_value_word_mask_reg,
+`ifdef USE_WB
+    // To WB
+    `FPGA_DBG output logic add_wb_entry,
+    `FPGA_DBG output logic clear_wb_entry,
+    `FPGA_DBG output logic update_wb_way,
+    `FPGA_DBG output logic update_wb_line,
+    `FPGA_DBG output logic update_wb_hprot,
+    `FPGA_DBG output logic update_wb_word_mask,
+    `FPGA_DBG output logic update_wb_dcs_en,
+    `FPGA_DBG output logic update_wb_dcs,
+    `FPGA_DBG output logic update_wb_use_owner_pred,
+    `FPGA_DBG output logic update_wb_pred_cid,
+    `FPGA_DBG output logic wb_op_code,
+    `FPGA_DBG output l2_way_t update_wb_value_way,
+    `FPGA_DBG output line_t update_wb_value_line,
+    `FPGA_DBG output hprot_t update_wb_value_hprot,
+    `FPGA_DBG output word_mask_t update_wb_value_word_mask,
+    `FPGA_DBG output logic update_wb_value_dcs_en,
+    `FPGA_DBG output dcs_t update_wb_value_dcs,
+    `FPGA_DBG output logic update_wb_value_use_owner_pred,
+    `FPGA_DBG output cache_id_t update_wb_value_pred_cid,
+    `FPGA_DBG output l2_tag_t wb_dispatch_tag,
+    `FPGA_DBG output l2_set_t wb_dispatch_set,
+`endif
     // To external interfaces - new data available.
     `FPGA_DBG output logic l2_rd_rsp_valid_int,
     `FPGA_DBG output logic l2_req_out_valid_int,
@@ -190,11 +236,12 @@ module l2_fsm(
     localparam FWD_WTFWD_HANDLER = 6'b010010;
     localparam FWD_WTFWD_HANDLER_NACK = 6'b010011;
 
-    localparam ONGOING_FLUSH_LOOKUP = 6'b011101;
-    localparam ONGOING_FLUSH_PROCESS = 6'b011110;
-    localparam ONGOING_FLUSH_EVICT = 6'b011111;
-    localparam NEW_FENCE_HANDLER = 6'b100000;
-    localparam ONGOING_FENCE_HANDLER = 6'b100001;
+    localparam ONGOING_FLUSH_LOOKUP = 6'b011100;
+    localparam ONGOING_FLUSH_PROCESS = 6'b011101;
+    localparam ONGOING_FLUSH_EVICT = 6'b011110;
+    localparam NEW_FENCE_HANDLER = 6'b011111;
+    localparam ONGOING_FENCE_HANDLER = 6'b100000;
+    localparam ONGOING_DRAIN_HANDLER = 6'b100001;
 
     localparam CPU_REQ_MSHR_LOOKUP = 6'b100010;
     localparam CPU_REQ_SET_CONFLICT = 6'b100011;
@@ -210,7 +257,9 @@ module l2_fsm(
     localparam CPU_REQ_WRITE_ATOMIC_NO_REQ = 6'b101101;
     localparam CPU_REQ_WRITE_ATOMIC_REQ = 6'b101110;
     localparam CPU_REQ_EVICT = 6'b101111;
-    localparam CPU_REQ_WRITE_ADD_WB = 6'b110000;
+    localparam CPU_REQ_ADD_WB = 6'b110000;
+    localparam CPU_REQ_DISPATCH_WB = 6'b110001;
+    localparam CPU_REQ_DRAIN_WB = 6'b110010;
 
     `FPGA_DBG logic [5:0] state, next_state;
     always_ff @(posedge clk or negedge rst) begin
@@ -277,6 +326,11 @@ module l2_fsm(
         end
     end
 
+`ifdef USE_WB
+    logic [`WB_BITS-1:0] wb_dispatch_i;
+    assign wb_dispatch_i = ongoing_drain ? wb_valid_i : wb_evict_buf;
+`endif
+
     // FSM 1
     // Decide which state to go to next;
     // no outputs updated.
@@ -302,6 +356,10 @@ module l2_fsm(
                     next_state = RSP_MSHR_LOOKUP;
                 end else if (do_fwd_next) begin
                     next_state = FWD_MSHR_LOOKUP;
+`ifdef USE_WB
+                end else if (do_ongoing_drain_next) begin
+                    next_state = ONGOING_DRAIN_HANDLER;
+`endif
                 end else if (do_ongoing_fence_next) begin
                     next_state = ONGOING_FENCE_HANDLER;
                 end else if (do_flush_next) begin
@@ -322,6 +380,15 @@ module l2_fsm(
             ONGOING_FENCE_HANDLER : begin
                 next_state = DECODE;
             end
+`ifdef USE_WB
+            ONGOING_DRAIN_HANDLER : begin
+                if (wb_valid_next) begin
+                    next_state = CPU_REQ_DRAIN_WB;
+                end else begin
+                    next_state = DECODE;
+                end
+            end            
+`endif
             // -------------------
             // Response handler
             // -------------------
@@ -629,7 +696,7 @@ module l2_fsm(
                                             if (word_hit_next && word_hit_state_next == `SPX_R) begin
                                                 next_state = CPU_REQ_WRITE_NO_REQ;
                                             end else begin
-                                                next_state = CPU_REQ_WRITE_ADD_WB;
+                                                next_state = CPU_REQ_ADD_WB;
                                             end
                                         end
                                         default : begin
@@ -671,7 +738,7 @@ module l2_fsm(
                                 if (l2_cpu_req.dcs_en) begin
                                     case(l2_cpu_req.dcs)
                                         `DCS_ReqWTfwd : begin
-                                            next_state = CPU_REQ_WRITE_ADD_WB;
+                                            next_state = CPU_REQ_ADD_WB;
                                         end
                                         default : begin
                                             next_state = DECODE;
@@ -693,7 +760,7 @@ module l2_fsm(
                     if (l2_cpu_req.cpu_msg == `WRITE && l2_cpu_req.dcs_en) begin
                         case(l2_cpu_req.dcs)
                             `DCS_ReqWTfwd : begin
-                                next_state = CPU_REQ_WRITE_ADD_WB;
+                                next_state = CPU_REQ_ADD_WB;
                             end
                             default : begin
                                 next_state = DECODE;
@@ -763,13 +830,47 @@ module l2_fsm(
                     end
                 end
             end
-            // TODO: This must wait till entry is added to write-buffer. However,
-            // before implementing WB, we will just forward with word mask.
-            CPU_REQ_WRITE_ADD_WB : begin
+`ifndef USE_WB                
+            CPU_REQ_ADD_WB : begin
                 if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     next_state = DECODE;
                 end
             end
+`else
+            CPU_REQ_ADD_WB : begin
+                if (l2_inval_ready_int) begin
+                    if (wb_hit) begin
+                        next_state = DECODE;
+                    end else if (wb_empty) begin
+                        next_state = DECODE;
+                    end else begin
+                        if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
+                            next_state = CPU_REQ_SET_CONFLICT;
+                        end else begin
+                            next_state = CPU_REQ_DISPATCH_WB;
+                        end
+                    end
+                end
+            end
+            CPU_REQ_DISPATCH_WB : begin
+                if (ongoing_drain) begin
+                    if (l2_req_out_ready_int) begin
+                        next_state = DECODE;
+                    end
+                end else begin
+                    if (l2_req_out_ready_int) begin
+                        next_state = CPU_REQ_MSHR_LOOKUP;
+                    end
+                end
+            end
+            CPU_REQ_DRAIN_WB : begin
+                if (!mshr_drain_conflict) begin
+                    next_state = CPU_REQ_DISPATCH_WB;
+                end else begin
+                    next_state = DECODE;
+                end
+            end
+`endif
         endcase
     end
 
@@ -893,6 +994,30 @@ module l2_fsm(
         incr_flush_way = 1'b0;
         incr_flush_set = 1'b0;
 
+`ifdef USE_WB
+        add_wb_entry = 1'b0;
+        clear_wb_entry = 1'b0;
+        update_wb_way = 1'b0;
+        update_wb_line = 1'b0;
+        update_wb_hprot = 1'b0;
+        update_wb_word_mask = 1'b0;
+        update_wb_dcs_en = 1'b0;
+        update_wb_dcs = 1'b0;
+        update_wb_use_owner_pred = 1'b0;
+        update_wb_pred_cid = 1'b0;
+        wb_op_code = `L2_WB_IDLE;
+        update_wb_value_way = 'h0;
+        update_wb_value_line = 'h0;
+        update_wb_value_hprot = 'h0;
+        update_wb_value_word_mask = 'h0;
+        update_wb_value_dcs_en = 1'b0;
+        update_wb_value_dcs = 'h0;
+        update_wb_value_use_owner_pred = 1'b0;
+        update_wb_value_pred_cid = 'h0;
+        wb_dispatch_tag = 'h0;
+        wb_dispatch_set = 'h0;
+`endif
+
         case (state)
             RESET : begin
                 lmem_wr_rst = 1'b1;
@@ -922,6 +1047,11 @@ module l2_fsm(
                 clr_ongoing_fence = 1'b1;
                 acc_flush_done = 1'b1;
             end
+`ifdef USE_WB
+            ONGOING_DRAIN_HANDLER : begin
+                wb_op_code = `L2_WB_PEEK_REQ;
+            end
+`endif
             RSP_MSHR_LOOKUP : begin
                 mshr_op_code = `L2_MSHR_LOOKUP;
             end
@@ -1430,6 +1560,9 @@ module l2_fsm(
                 mshr_op_code = `L2_MSHR_PEEK_REQ;
                 rd_set_into_bufs = 1'b1;
                 lmem_set_in = addr_br.set;
+`ifdef USE_WB
+                wb_op_code = `L2_WB_PEEK_REQ;
+`endif                
             end
             CPU_REQ_SET_CONFLICT : begin
                 set_cpu_req_conflict = 1'b1;
@@ -1728,14 +1861,10 @@ module l2_fsm(
                     end
                 end
             end
-            CPU_REQ_WRITE_ADD_WB : begin
+`ifndef USE_WB                
+            CPU_REQ_ADD_WB : begin
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
-                // TODO: Currently, we're only considering the word offset in the
-                // CPU request for the MSHR entry and req_out. When we introduce the
-                // write-buffer, the word_mask should be the coalesced word mask.
-                // TODO: Currently, we're assuming ReqWTFwd is the only non-FCS write
-                // request. Later, we will also need to add REQ_O as an option.
                 if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     write_word_helper (
                         /* line_in */ 'h0,
@@ -1792,8 +1921,134 @@ module l2_fsm(
                     );
                 end
             end
+`else                
+            CPU_REQ_ADD_WB : begin
+                if (l2_inval_ready_int) begin
+                    if (wb_hit) begin
+                        // If there is a WB hit, we simply update the line, word_mask
+                        // and FCS fields of the existing entry.
+                        // If there is no hit but an empty entry is found, we will initialize
+                        // all the fields with the incoming request.
+                        write_word_helper (
+                            /* line_in */ wb[wb_hit_i].line,
+                            /* word */ l2_cpu_req.word,
+                            /* w_off */ addr_br.w_off,
+                            /* b_off */ addr_br.b_off,
+                            /* hsize */ l2_cpu_req.hsize,
+                            /* line_out */ update_wb_value_line
+                        );
+
+                        fill_wb_entry (
+                            /* way */ wb[wb_hit_i].way,
+                            /* hprot */ wb[wb_hit_i].hprot,
+                            /* word_mask */ wb[wb_hit_i].word_mask | 1 << addr_br.w_off,
+                            /* dcs_en */ l2_cpu_req.dcs_en,
+                            /* dcs */ l2_cpu_req.dcs,
+                            /* use_owner_pred */ l2_cpu_req.use_owner_pred,
+                            /* pred_cid */ l2_cpu_req.pred_cid
+                        );
+
+                        send_inval (
+                            /* addr */ addr_br.line_addr,
+                            /* hprot */ `DATA
+                        );
+                    end else if (wb_empty) begin
+                        // If there is no hit but an empty entry is found, we will initialize
+                        // all the fields with the incoming request.
+                        write_word_helper (
+                            /* line_in */ 'h0,
+                            /* word */ l2_cpu_req.word,
+                            /* w_off */ addr_br.w_off,
+                            /* b_off */ addr_br.b_off,
+                            /* hsize */ l2_cpu_req.hsize,
+                            /* line_out */ update_wb_value_line
+                        );
+
+                        // TODO: we currently set way to 0 for ReqWTFwd, but
+                        // we may choose to allocate for ReqO, in which case,
+                        // we must add the way we are writing to.
+                        fill_wb_entry (
+                            /* way */ 'h0,
+                            /* hprot */ l2_cpu_req.hprot,
+                            /* word_mask */ 1 << addr_br.w_off,
+                            /* dcs_en */ l2_cpu_req.dcs_en,
+                            /* dcs */ l2_cpu_req.dcs,
+                            /* use_owner_pred */ l2_cpu_req.use_owner_pred,
+                            /* pred_cid */ l2_cpu_req.pred_cid
+                        );
+
+                        // If there was a tag hit but we found the state of the word
+                        // to be not in SPX_R, we write-through the data without
+                        // allocation. Therefore, we must also invalidate the (now) stale
+                        // data was in non-SPX_R state in this L2 and in the L1. However,
+                        // we must be careful not to invalidate any SPX_R words in the line
+                        // that the write-through was not sent for. Therefore, we only do
+                        // this if the line is in shared state. If the line were invalid,
+                        // it would not be a tag hit. If one of the other words were not invalid,
+                        // the only option is if they are in SPX_R, in which case, we must not
+                        // invalidate them.
+                        if (tag_hit && word_mask_shared) begin
+                            lmem_set_in = addr_br.set;
+                            lmem_way_in = cpu_req_way;
+                            for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                                lmem_wr_data_state[i] = `SPX_I;
+                            end
+                            lmem_wr_en_state = 1'b1;
+                        end
+
+                        send_inval (
+                            /* addr */ addr_br.line_addr,
+                            /* hprot */ `DATA
+                        );
+                    end else begin
+                        mshr_op_code = `L2_MSHR_PEEK_WB;
+                        wb_dispatch_tag = wb[wb_dispatch_i].tag;
+                        wb_dispatch_set = wb[wb_dispatch_i].set;
+                    end
+                end
+            end
+            CPU_REQ_DISPATCH_WB : begin
+                // We add the MSHR entry (and decrement the MSHR count) only
+                // if the req_out is accepted.
+                if (l2_req_out_ready_int) begin
+                    fill_mshr_entry (
+                        /* cpu_msg */ `WRITE,
+                        /* hprot */ wb[wb_dispatch_i].hprot,
+                        /* hsize */ 'h0,
+                        /* tag */ wb[wb_dispatch_i].tag,
+                        /* way */ wb[wb_dispatch_i].way,
+                        /* state */ `SPX_XRV,
+                        /* word */ 'h0,
+                        /* line */ wb[wb_dispatch_i].line,
+                        /* amo */ 'h0,
+                        /* word_mask */ wb[wb_dispatch_i].word_mask
+                    );
+
+                    wb_dispatch_tag = wb[wb_dispatch_i].tag;
+                    wb_dispatch_set = wb[wb_dispatch_i].set;
+
+                    send_req_out (
+                        /* coh_msg */ `REQ_WTfwd,
+                        /* hprot */ wb[wb_dispatch_i].hprot,
+                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                        /* line */ wb[wb_dispatch_i].line,
+                        /* word_mask */ wb[wb_dispatch_i].word_mask
+                    );
+
+                    clear_wb_entry = 1'b1;
+                end
+            end            
+            CPU_REQ_DRAIN_WB : begin
+                mshr_op_code = `L2_MSHR_PEEK_DRAIN;
+                wb_dispatch_tag = wb[wb_dispatch_i].tag;
+                wb_dispatch_set = wb[wb_dispatch_i].set;
+            end
+`endif
             default : begin
                 mshr_op_code = `L2_MSHR_IDLE;
+`ifdef USE_WB
+                wb_op_code = `L2_WB_IDLE;
+`endif                
             end
         endcase
     end
@@ -1907,6 +2162,27 @@ module l2_fsm(
         update_mshr_value_word_mask_reg = word_mask;
         add_mshr_entry = 1'b1;
     endfunction
+
+`ifdef USE_WB
+    function void fill_wb_entry;
+        input l2_way_t way;
+        input hprot_t hprot;
+        input word_mask_t word_mask;
+        input logic dcs_en;
+        input dcs_t dcs;
+        input logic use_owner_pred;
+        input cache_id_t pred_cid;
+
+        update_wb_value_way = way;
+        update_wb_value_hprot = hprot;
+        update_wb_value_word_mask = word_mask;
+        update_wb_value_dcs_en = dcs_en;
+        update_wb_value_dcs = dcs;
+        update_wb_value_use_owner_pred = use_owner_pred;
+        update_wb_value_pred_cid = pred_cid;
+        add_wb_entry = 1'b1;
+    endfunction
+`endif
 
     function void write_word_helper;
         input line_t line_i;

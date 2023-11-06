@@ -32,6 +32,12 @@ module l2_regs (
     // Entry in MSHR that corresponds to fwd_stall
     input logic set_fwd_stall_entry,
     input logic [`MSHR_BITS-1:0] set_fwd_stall_entry_data,
+`ifdef USE_WB
+    input logic add_wb_entry,
+    input logic wb_hit,
+    input logic clear_wb_entry,
+`endif
+
     // Registers
     output logic evict_stall,
     output logic set_conflict,
@@ -44,6 +50,10 @@ module l2_regs (
     output logic [`L2_SET_BITS:0] flush_set,
     output logic [`L2_WAY_BITS:0] flush_way,
     output logic [`MSHR_BITS-1:0] fwd_stall_entry,
+`ifdef USE_WB
+    output logic [`WB_BITS_P1-1:0] wb_cnt,
+    output logic [`WB_BITS-1:0] wb_evict_buf,
+`endif
     output logic [`MSHR_BITS_P1-1:0] mshr_cnt
     );
 
@@ -166,6 +176,26 @@ module l2_regs (
             flush_way <= flush_way + 1;
         end
     end
+
+`ifdef USE_WB
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            wb_cnt <= `N_WB;
+        end else if (add_wb_entry && !wb_hit) begin
+            wb_cnt <= wb_cnt - 1;
+        end else if (clear_wb_entry) begin
+            wb_cnt <= wb_cnt + 1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            wb_evict_buf <= 'h0;
+        end else if (clear_wb_entry && !ongoing_drain) begin
+            wb_evict_buf <= wb_evict_buf + 1;
+        end
+    end
+`endif
 
 endmodule
 

@@ -27,6 +27,11 @@ module l2_mshr(
     input amo_t  update_mshr_value_amo,
     input word_mask_t update_mshr_value_word_mask,
     input word_mask_t update_mshr_value_word_mask_reg,
+`ifdef USE_WB
+    input logic clear_wb_entry,
+    input l2_tag_t wb_dispatch_tag,
+    input l2_set_t wb_dispatch_set,
+`endif
 
     addr_breakdown_t.in addr_br,
     line_breakdown_l2_t.in line_br,
@@ -37,7 +42,10 @@ module l2_mshr(
     output logic set_fwd_stall_entry,
     output logic [`MSHR_BITS-1:0] set_fwd_stall_entry_data,
     // Drain status - any ownership requests pending.
-    output logic drain_in_progress,
+    output logic mshr_write_pending,
+`ifdef USE_WB
+    output logic mshr_drain_conflict,
+`endif
     // Signals indicating whether there was a hit and the index for hit.
     output logic mshr_hit_next,
     output logic mshr_hit,
@@ -79,6 +87,23 @@ module l2_mshr(
                         mshr[i].amo <= update_mshr_value_amo;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end
+`ifdef USE_WB
+                end else if (add_mshr_entry && clear_wb_entry) begin
+                    // TODO: we assume that for entries added from the WB, we do not need 
+                    // the w_off and b_off because the line is already updated using them.
+                    if (mshr_i == i) begin
+                        mshr[i].cpu_msg <= update_mshr_value_cpu_msg;
+                        mshr[i].set <= wb_dispatch_set;
+                        mshr[i].way <= update_mshr_value_way;
+                        mshr[i].hsize <= update_mshr_value_hsize;
+                        mshr[i].w_off <= addr_br.w_off;
+                        mshr[i].b_off <= addr_br.b_off;
+                        mshr[i].hprot <= update_mshr_value_hprot;
+                        mshr[i].word <= update_mshr_value_word;
+                        mshr[i].amo <= update_mshr_value_amo;
+                        mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
+                    end
+`endif                    
                 end
             end
 
@@ -138,6 +163,9 @@ module l2_mshr(
         set_fwd_stall = 1'b0;
         clr_fwd_stall = 1'b0;
         fwd_stall_override = 1'b0;
+`ifdef USE_WB
+        mshr_drain_conflict = 1'b0;
+`endif
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
@@ -220,6 +248,36 @@ module l2_mshr(
                     set_fwd_stall_entry_data = mshr_i_next;
                 end
             end
+            // Check if there is a conflicting entry to a WB entry being dispatched. If yes, stall.
+`ifdef USE_WB
+            `L2_MSHR_PEEK_WB : begin
+                for (int i = 0; i < `N_MSHR; i++) begin
+                    if (mshr[i].state == `SPX_I) begin
+                        mshr_i_next = i;
+                    end
+
+                    // If the incoming request matches with an entry in the MSHR,
+                    // assert set_conflict (which is sampled in l2_core).
+                    if (mshr[i].tag == wb_dispatch_tag && mshr[i].set == wb_dispatch_set && mshr[i].state != `SPX_I) begin
+                        set_set_conflict_mshr = 1'b1;
+                        clr_set_conflict_mshr = 1'b0;
+                    end
+                end
+            end
+            `L2_MSHR_PEEK_DRAIN : begin
+                for (int i = 0; i < `N_MSHR; i++) begin
+                    if (mshr[i].state == `SPX_I) begin
+                        mshr_i_next = i;
+                    end
+
+                    // If the incoming request matches with an entry in the MSHR,
+                    // assert set_conflict (which is sampled in l2_core).
+                    if (mshr[i].tag == wb_dispatch_tag && mshr[i].set == wb_dispatch_set && mshr[i].state != `SPX_I) begin
+                        mshr_drain_conflict = 1'b1;
+                    end
+                end
+            end            
+`endif            
             default : begin
                 mshr_hit_next = 1'b0;
             end
@@ -237,11 +295,11 @@ module l2_mshr(
     end
 
     always_comb begin
-        drain_in_progress = 1'b0;
+        mshr_write_pending = 1'b0;
 
         for (int i = 0; i < `N_MSHR; i++) begin
-            if (ongoing_drain && (mshr[i].state == `SPX_XR || mshr[i].state == `SPX_XRV || mshr[i].state == `SPX_AMO)) begin
-                drain_in_progress = 1'b1;
+            if (mshr[i].state == `SPX_XR || mshr[i].state == `SPX_XRV || mshr[i].state == `SPX_AMO) begin
+                mshr_write_pending = 1'b1;
             end
         end
     end

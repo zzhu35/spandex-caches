@@ -85,4 +85,18 @@ typedef struct packed{
     word_mask_t             word_mask_reg;
 } mshr_llc_buf_t;
 
+typedef struct packed{
+    l2_tag_t            tag;
+    l2_set_t            set;
+    l2_way_t            way;
+    hprot_t             hprot;
+    line_t              line;
+    word_mask_t         word_mask;
+    logic dcs_en;
+    dcs_t dcs;
+    logic use_owner_pred;
+    cache_id_t pred_cid;    
+    logic valid;
+} wb_buf_t;
+
 `endif // __SPANDEX_TYPES_SVH__

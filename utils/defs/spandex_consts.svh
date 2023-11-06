@@ -5,6 +5,8 @@
 
 `define FPGA_DBG // (* mark_debug = "true" *)
 
+`define USE_WB
+
 `define WORD_MASK_ALL ((1 << `WORDS_PER_LINE) - 1)
 `define DCS_WIDTH 2
 
@@ -27,6 +29,9 @@
 `define WB_BITS     2
 `define WB_BITS_P1  3
 
+`define L2_WB_PEEK_REQ    1'b0
+`define L2_WB_IDLE        1'b1
+
 // MSHR
 `define N_MSHR          `N_REQS
 `define MSHR_BITS       `REQS_BITS
@@ -36,7 +41,9 @@
 `define L2_MSHR_PEEK_REQ    3'b001
 `define L2_MSHR_PEEK_FLUSH  3'b010
 `define L2_MSHR_PEEK_FWD    3'b011
-`define L2_MSHR_IDLE        3'b100
+`define L2_MSHR_PEEK_WB     3'b100
+`define L2_MSHR_PEEK_DRAIN  3'b101
+`define L2_MSHR_IDLE        3'b110
 
 `define LLC_MSHR_LOOKUP      3'b000
 `define LLC_MSHR_PEEK_REQ    3'b001
