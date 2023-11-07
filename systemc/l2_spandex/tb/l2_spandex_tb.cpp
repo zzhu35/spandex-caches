@@ -3922,6 +3922,223 @@ void l2_spandex_tb::l2_test()
 
         wait();
     }
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 2.7 - Set conflict before dispatch
+    // 1 - WB is full but unable to dispatch because of set conflict.
+    // 2 - Unable dispatch next entry for drain because of set conflict.
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.7!");
+
+    ////////////////////////////////////////////////////////////////
+    // 1 - WB is full but unable to dispatch because of set conflict.
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500900;
+    addr.breakdown(base_addr);    
+
+    // Fill the WB
+    for (int i = 0; i < N_WB; i++) {
+        word = i+1;
+
+        // ReqWTFwd to word 0 - should miss
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+            0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+
+        get_inval(addr.word /* addr */, DATA /* hprot */);
+
+        addr.tag_incr(1);
+
+        wait();
+    }
+
+    // Perform an unrelated regular store within the same set.
+    word = 0x1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    // New ReqWTFwd to same set - should miss
+    addr.tag_incr(1);
+    word = N_WB+1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+        0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+    
+    for (int i = 0; i < 10; i++) {
+        wait();
+    }
+
+    // Now send the response for the write
+    base_addr = 0x83500900;
+    addr.breakdown(base_addr);    
+    addr.tag_incr(N_WB);
+
+    word = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);                
+
+    wait();
+
+    // Dispatch WB entry at wb_evict_buf
+    base_addr = 0x83500900;
+    addr.breakdown(base_addr);
+    addr.tag_incr(N_WB-1);
+
+    word = N_WB-1+1;
+
+    line = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);        
+
+    // Service new request
+    base_addr = 0x83500900;
+    addr.breakdown(base_addr);
+    addr.tag_incr(N_WB+1);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();    
+    
+    // Fence to flush WB
+    l2_fence_tb.put(0x2);
+
+    wait();
+
+    // Drain old requests first (new request must be added at the end).
+    base_addr = 0x83500900;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < N_WB-1; i++) {
+        word = i+1;
+
+        line = 0;
+        line.range(BITS_PER_WORD - 1, 0) = word;
+
+        get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+        wait();
+
+        put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+            0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+        addr.tag_incr(1);
+
+        wait();
+    }
+
+    // Now drain new request
+    base_addr = 0x83500900;
+    addr.breakdown(base_addr);
+    addr.tag_incr(N_WB+1);
+
+    word = N_WB+1;
+
+    line = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);        
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // 2 - Unable dispatch next entry for drain because of set conflict.
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500A00;
+    addr.breakdown(base_addr);    
+
+    // Fill the WB
+    for (int i = 0; i < N_WB; i++) {
+        word = i+1;
+
+        // ReqWTFwd to word 0 - should miss
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+            0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+
+        get_inval(addr.word /* addr */, DATA /* hprot */);
+
+        addr.tag_incr(1);
+
+        wait();
+    }
+
+    // Perform an unrelated AMO within the same set.
+    word = 0x1;
+
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        AMO_SWAP /* amo */, 1 /* aq */, 1 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    base_addr = 0x83500A00;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < N_WB; i++) {
+        word = i+1;
+
+        line = 0;
+        line.range(BITS_PER_WORD - 1, 0) = word;
+
+        get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+        wait();
+
+        put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+            0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+        addr.tag_incr(1);
+
+        wait();
+    }
+
+    for (int i = 0; i < 10; i++) {
+        wait();
+    }
+
+    // Now send the response for the AMO
+    word = 0x2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);                
+
+    wait();
 #endif    
 
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
