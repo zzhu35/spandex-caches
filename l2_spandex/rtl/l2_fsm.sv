@@ -2069,6 +2069,12 @@ module l2_fsm(
                     end
 
                     clear_wb_entry = 1'b1;
+
+                    // We set this here so that when the control returns to CPU_REQ_MSHR_LOOKUP, the pending
+                    // store set is loaded into the rd set bufs.
+                    if (!ongoing_drain) begin
+                        lmem_set_in = addr_br.set;
+                    end
                 end
             end            
             CPU_REQ_DRAIN_WB : begin
