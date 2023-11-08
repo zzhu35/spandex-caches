@@ -7,9 +7,9 @@ module llc_input_decoder (
     input logic rst,
     input logic decode_en,
     // Valid inputs from interfaces
-    input logic llc_rst_tb_valid_int,
-    input logic llc_rsp_in_valid_int,
-    input logic llc_req_in_valid_int,
+    `FPGA_DBG input logic llc_rst_tb_valid_int,
+    `FPGA_DBG input logic llc_rsp_in_valid_int,
+    `FPGA_DBG input logic llc_req_in_valid_int,
     `FPGA_DBG input line_addr_t rsp_in_addr,
     `FPGA_DBG input line_addr_t req_in_addr,
     // To check if new request can be tracked

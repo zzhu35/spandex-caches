@@ -315,7 +315,7 @@ module l2_fsm(
     // words in the forward if not a tag hit.
     word_mask_t ack_mask, nack_mask;
     assign ack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & word_mask_owned) : 'h0) : 'h0;
-    assign nack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & ~word_mask_owned) : l2_fwd_in.word_mask) : 'h0;
+    assign nack_mask = do_fwd ? ((mshr_hit && mshr[mshr_i] == `SPX_RI) ? l2_fwd_in.word_mask : (tag_hit ? (l2_fwd_in.word_mask & ~word_mask_owned) : l2_fwd_in.word_mask)) : 'h0;
 
     // Helper logic to test word mask owned of the current flush way.
     word_mask_t word_mask_owned_flush;
@@ -523,6 +523,9 @@ module l2_fsm(
                     `FWD_REQ_Odata : begin
                         next_state = FWD_REQ_ODATA_HANDLER;
                     end
+                    `FWD_WTfwd : begin
+                        next_state = FWD_WTFWD_HANDLER;
+                    end
                     default : begin
                         next_state = DECODE;
                     end
@@ -576,12 +579,16 @@ module l2_fsm(
                 end
             end
             FWD_WTFWD_HANDLER : begin
-                if (ack_mask) begin
-                    if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                if (mshr_hit && mshr[mshr_i] == `SPX_RI) begin
+                    next_state = FWD_WTFWD_HANDLER_NACK;
+                end else begin
+                    if (ack_mask) begin
+                        if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                            next_state = FWD_WTFWD_HANDLER_NACK;
+                        end
+                    end else begin
                         next_state = FWD_WTFWD_HANDLER_NACK;
                     end
-                end else begin
-                    next_state = FWD_WTFWD_HANDLER_NACK;
                 end
             end
             FWD_WTFWD_HANDLER_NACK : begin
@@ -1447,16 +1454,15 @@ module l2_fsm(
                 end
             end
             FWD_WTFWD_HANDLER : begin
+                // If there is an MSHR hit and the entry is being evicted,
+                // then we do not stall the forward, as it could lead to a
+                // deadlock. Instead, we just the NACK the sender so that the
+                // forward can be re-attempted to the LLC.
                 // If there is a tag match and the words sent in the forward
                 // are owned in this cache, ack_mask will be non-zero and we will
                 // send a RSP_O to the sender.
-                // Here, we not consider MSHR hits and simply stall the forward.
-                // An MSHR hit could happen if the MSHR entry is in `SPX_XR where it's
-                // waiting for ownership but the forward arrived before the response.
-                // Here, it is better to stall before updating the data from the forward.
-                // Another case is if the ownership is being downgraded, in which case, the
-                // forward can be stalled till the downgrade is complete and then NACK'ed.
-                if (ack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                if (mshr_hit && mshr[mshr_i] == `SPX_RI) begin
+                end else if (ack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     // We will update the words with ack_mask in memory.
                     lmem_set_in = line_br.set;
                     lmem_way_in = way_hit;

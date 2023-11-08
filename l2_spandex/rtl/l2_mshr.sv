@@ -234,6 +234,11 @@ module l2_mshr(
                                     fwd_stall_override = 1'b1;
                                 end
                             end
+                            `FWD_WTfwd : begin
+                                if (mshr[i].state == `SPX_RI) begin
+                                    fwd_stall_override = 1'b1;
+                                end
+                            end
                         endcase
 
                         if (!fwd_stall_override) begin

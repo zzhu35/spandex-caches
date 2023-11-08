@@ -3224,7 +3224,7 @@ void l2_spandex_tb::l2_test()
     // TEST 2.5 - REQ_Odata for read, followed by FWD_WTFwd
     // Revoke and attempt FWD_WTFwd again - NACK.
     // REQ_Odata for read again, with FWD_WTFwd (fwd_stall)
-    // Revoke and attempt FWD_WTFwd again (fwd_stall) - NACK.    
+    // Revoke and attempt FWD_WTFwd again (no fwd_stall) - NACK.    
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 2.5!");
     base_addr = 0x83500700;
@@ -3490,6 +3490,9 @@ void l2_spandex_tb::l2_test()
     put_fwd_in(FWD_WTfwd /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
             line /* line */, 0b0001 /* word_mask */);
     
+    get_rsp_out(RSP_NACK /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            0 /* line */, 0b0001 /* word_mask */);
+
     wait();
 
     word = 0x8;
@@ -3502,18 +3505,13 @@ void l2_spandex_tb::l2_test()
     put_fwd_in(FWD_WTfwd /* coh_msg */, addr.word /* addr */, 2 /* req_id */,
             line /* line */, 0b0010 /* word_mask */);
 
+    get_rsp_out(RSP_NACK /* coh_msg */, 2 /* req_id */, 1 /* to_req */, addr.word /* addr */,
+            0 /* line */, 0b0010 /* word_mask */);
+
     wait();
 
     put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
          0b0011 /* word_mask */, 0 /* invack_cnt */);
-
-    get_rsp_out(RSP_NACK /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
-            0 /* line */, 0b0001 /* word_mask */);
-
-    wait();
-
-    get_rsp_out(RSP_NACK /* coh_msg */, 2 /* req_id */, 1 /* to_req */, addr.word /* addr */,
-            0 /* line */, 0b0010 /* word_mask */);
 
     wait();
 

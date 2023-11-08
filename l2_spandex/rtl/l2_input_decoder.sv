@@ -7,25 +7,25 @@ module l2_input_decoder (
     input logic rst,
     input logic decode_en,
     // Valid inputs from interfaces
-    input logic l2_flush_valid_int,
-    input logic l2_fence_valid_int,
-    input logic l2_rsp_in_valid_int,
-    input logic l2_fwd_in_valid_int,
-    input logic l2_cpu_req_valid_int,
+    `FPGA_DBG input logic l2_flush_valid_int,
+    `FPGA_DBG input logic l2_fence_valid_int,
+    `FPGA_DBG input logic l2_rsp_in_valid_int,
+    `FPGA_DBG input logic l2_fwd_in_valid_int,
+    `FPGA_DBG input logic l2_cpu_req_valid_int,
     `FPGA_DBG input line_addr_t rsp_in_addr,
     `FPGA_DBG input line_addr_t fwd_in_addr,
     `FPGA_DBG input line_addr_t fwd_in_tmp_addr,
     `FPGA_DBG input addr_t cpu_req_addr,
     // To check if new request can be tracked
-    input logic [`MSHR_BITS_P1-1:0] mshr_cnt,
+    `FPGA_DBG input logic [`MSHR_BITS_P1-1:0] mshr_cnt,
 `ifdef USE_WB
-    input logic [`WB_BITS_P1-1:0] wb_cnt,
+    `FPGA_DBG input logic [`WB_BITS_P1-1:0] wb_cnt,
 `endif            
     // State registers from regs/others
     input logic evict_stall,
     input logic set_conflict,
     input logic fwd_stall,
-    input logic fwd_stall_ended,
+    `FPGA_DBG input logic fwd_stall_ended,
     input logic ongoing_flush,
     input logic [`L2_SET_BITS:0] flush_set,
     input logic [`L2_WAY_BITS:0] flush_way,
