@@ -69,7 +69,7 @@
 // DeNovo states
 `define SPX_R       (`SPX_NUM_STATE - 1)
 `define SPX_S       (`SPX_NUM_STATE - 2)
-`define SPX_MAX_V   (`SPX_S - 1)
+`define SPX_V       (`SPX_S - 1)
 `define SPX_I       0
 
 // DeNovo Transient state

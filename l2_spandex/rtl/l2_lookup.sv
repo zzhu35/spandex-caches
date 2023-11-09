@@ -25,6 +25,8 @@ module l2_lookup (
     output l2_way_t empty_way_next,
     output l2_way_t way_hit,
     output l2_way_t way_hit_next,
+    output word_mask_t word_mask_valid,
+    output word_mask_t word_mask_valid_next,
     output word_mask_t word_mask_shared,
     output word_mask_t word_mask_shared_next,
     output word_mask_t word_mask_owned,
@@ -44,6 +46,7 @@ module l2_lookup (
         tag_hit_next = 1'b0;
         empty_way_next = 'h0;
         empty_way_found_next = 1'b0;
+        word_mask_valid_next = 'h0;
         word_mask_shared_next = 'h0;
         word_mask_owned_next = 'h0;
         word_mask_owned_evict_next = 'h0;
@@ -77,8 +80,6 @@ module l2_lookup (
                             empty_way_next = i;
                         end
 
-                        // TODO: When adding valid state, we should check whether it is
-                        // greater than current_valid_state.
                         // Given that the tag is hit and the line is present, we check
                         // whether word being requested is in valid state as well.
                         // (it is possible that the word we requested for is not in valid state).
@@ -94,8 +95,12 @@ module l2_lookup (
                             if (states_buf[way_hit_next][j] == `SPX_R) begin
                                 word_mask_owned_next[j] = 1'b1;
                                 word_mask_shared_next[j] = 1'b1;
+                                word_mask_valid_next[j] = 1'b1;
                             end else if (states_buf[way_hit_next][j] == `SPX_S) begin
                                 word_mask_shared_next[j] = 1'b1;
+                                word_mask_valid_next[j] = 1'b1;
+                            end else if (states_buf[way_hit_next][j] == `SPX_V) begin
+                                word_mask_valid_next[j] = 1'b1;
                             end
                         end
                     end
@@ -143,8 +148,12 @@ module l2_lookup (
                             if (states_buf[way_hit_next][j] == `SPX_R) begin
                                 word_mask_owned_next[j] = 1'b1;
                                 word_mask_shared_next[j] = 1'b1;
+                                word_mask_valid_next[j] = 1'b1;
                             end else if (states_buf[way_hit_next][j] == `SPX_S) begin
                                 word_mask_shared_next[j] = 1'b1;
+                                word_mask_valid_next[j] = 1'b1;
+                            end else if (states_buf[way_hit_next][j] == `SPX_V) begin
+                                word_mask_valid_next[j] = 1'b1;
                             end
                         end
                     end
@@ -159,6 +168,7 @@ module l2_lookup (
             tag_hit <= 1'b0;
             empty_way <= 0;
             empty_way_found <= 1'b0;
+            word_mask_valid <= 0;
             word_mask_shared <= 0;
             word_mask_owned <= 0;
             word_mask_owned_evict <= 0;
@@ -169,6 +179,7 @@ module l2_lookup (
             tag_hit <= tag_hit_next;
             empty_way <= empty_way_next;
             empty_way_found <= empty_way_found_next;
+            word_mask_valid <= word_mask_valid_next;
             word_mask_shared <= word_mask_shared_next;
             word_mask_owned <= word_mask_owned_next;
             word_mask_owned_evict <= word_mask_owned_evict_next;

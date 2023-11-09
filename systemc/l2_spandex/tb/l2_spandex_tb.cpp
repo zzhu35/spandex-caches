@@ -4136,8 +4136,364 @@ void l2_spandex_tb::l2_test()
     put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
         0b0011 /* word_mask */, 0 /* invack_cnt */);                
 
+    get_rd_rsp(line /* line */);
+
     wait();
 #endif    
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 2.8 - Read miss with REQ_V.
+    // Read hit with REQ_V on owned state.
+    // Read hit with REQ_V on shared state.
+    // Read hit with REQ_V on valid state.
+    // {Read miss with REQ_V} x L2_WAYS + 1.
+    // Read miss with REQ_V + WTFwd + Read.
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 2.8!");
+
+    ////////////////////////////////////////////////////////////////
+    // 1 - Read miss with REQ_V.    
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500B00;
+    addr.breakdown(base_addr);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = 0x1;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // 2 - Read hit with REQ_V on owned state.
+    ////////////////////////////////////////////////////////////////
+    addr.tag_incr(1);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqOdata /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = 0x2;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // 3 - Read hit with REQ_V on shared state.
+    ////////////////////////////////////////////////////////////////
+    addr.tag_incr(1);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_S /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = 0x3;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_S /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // 4 - Read hit with REQ_V on valid state.
+    ////////////////////////////////////////////////////////////////
+    addr.tag_incr(1);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = 0x4;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // 5 - {Read miss with REQ_V} x L2_WAYS + 1.
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500C00;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < L2_WAYS; i++) {
+        put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+            0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+        get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+        wait();
+
+        word = i+2;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+        line.range(BITS_PER_WORD - 1, 0) = word;
+
+        put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+        get_rd_rsp(line /* line */);
+
+        wait();
+
+        addr.tag_incr(1);
+
+        wait();
+    }
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    base_addr = 0x83500C00;
+    addr.breakdown(base_addr);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    addr.tag_incr(L2_WAYS);
+
+    get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = L2_WAYS;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    ////////////////////////////////////////////////////////////////
+    // 6 - Read miss with REQ_V + WTFwd + Read.
+    ////////////////////////////////////////////////////////////////
+#ifndef USE_WB
+#else
+    addr.set_incr(1);
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = 0x2;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
+
+    word = 0x3;
+
+    // ReqWTFwd to word 0 - should miss
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+        0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+    
+    // Fence to flush WB
+    l2_fence_tb.put(0x2);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0001 /* word_mask */);
+
+    wait();
+
+    word = 0x3;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+
+    put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0001 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();    
+
+    word = 0x4;
+
+    // ReqWTFwd to word 0 - should miss
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+        0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+   
+    // ReqWTFwd to word 1 - should miss
+    put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+        addr.word + 8 /* addr */, word /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, DCS_ReqWTfwd /* dcs_en */,
+        0 /* use_owner_pred */, 1 /* dcs */, 0 /* pred_cid */);
+
+    get_inval(addr.word /* addr */, DATA /* hprot */);
+
+    wait();
+     
+    // Fence to flush WB
+    l2_fence_tb.put(0x2);
+
+    wait();
+
+    line = 0;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */, 0 /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    wait();    
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqV /* dcs */, 0 /* pred_cid */);
+
+    get_req_out(REQ_V /* coh_msg */, addr.word /* addr */,
+        DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    word = 0x5;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+
+    put_rsp_in(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */,
+        0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();        
+#endif
 
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
