@@ -37,6 +37,7 @@ L2_SRC += rtl/*.sv
 
 RTL_SRC ?=
 RTL_SRC += $(ESP_ROOT)/rtl/techmap/virtex7/mem/*.v
+RTL_SRC += $(ESP_ROOT)/rtl/cores/ariane/ariane/src/common_cells/src/sram.sv
 RTL_SRC += $(VIVADO)/data/verilog/src/glbl.v
 RTL_SRC += $(VIVADO)/data/verilog/src/retarget/RAMB*.v
 RTL_SRC += $(VIVADO)/data/verilog/src/unisims/RAMB*.v
