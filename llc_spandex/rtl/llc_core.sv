@@ -176,7 +176,12 @@ module llc_core (
     llc_regs regs_u(.*);
     llc_input_decoder input_decoder_u(.*);
     llc_interfaces interfaces_u (.*);
+`ifdef XILINX_FPGA
     llc_localmem localmem_u(.*);
+`endif
+`ifdef ASIC
+    llc_localmem_asic localmem_u(.*);
+`endif
     llc_bufs bufs_u(.*);
     llc_lookup lookup_u(.*);
     llc_fsm fsm_u(.*);
