@@ -5,6 +5,8 @@ VIVADO = $(XILINX_VIVADO)
 ESP_ROOT = ../../../..
 ACCEL = $(ESP_ROOT)/accelerators/stratus_hls/common/inc
 
+TEST_ID ?= 0
+
 FLAGS ?=
 FLAGS += -NOWarn SCK505
 FLAGS += -SCTOP sc_main
@@ -13,6 +15,7 @@ FLAGS += -DRTL_CACHE
 FLAGS += -TOP glbl
 FLAGS += -access +R
 FLAGS += -ncvlog_args,"-define XILINX_FPGA"
+FLAGS += -DTEST_ID=$(TEST_ID)
 
 INCDIR ?=
 INCDIR += -I$(ACCEL)

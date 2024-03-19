@@ -17,9 +17,10 @@ interface l2_cpu_req_t;
     logic use_owner_pred;
     dcs_t dcs;
     cache_id_t pred_cid;
+    addr_t len;
 
-    modport in (input cpu_msg, hsize, hprot, addr, word, amo, aq, rl, dcs_en, use_owner_pred, dcs, pred_cid);
-    modport out (output cpu_msg, hsize, hprot, addr, word, amo, aq, rl, dcs_en, use_owner_pred, dcs, pred_cid);
+    modport in (input cpu_msg, hsize, hprot, addr, word, amo, aq, rl, dcs_en, use_owner_pred, dcs, pred_cid, len);
+    modport out (output cpu_msg, hsize, hprot, addr, word, amo, aq, rl, dcs_en, use_owner_pred, dcs, pred_cid, len);
 
 endinterface
 

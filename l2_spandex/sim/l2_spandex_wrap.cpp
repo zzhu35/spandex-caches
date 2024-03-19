@@ -17,6 +17,7 @@ void l2_wrapper_conv::thread_l2_cpu_req_data_conv(){
     l2_cpu_req_data_conv_use_owner_pred = tmp.use_owner_pred;
     l2_cpu_req_data_conv_dcs = tmp.dcs;
     l2_cpu_req_data_conv_pred_cid = tmp.pred_cid;
+    l2_cpu_req_data_conv_len = tmp.len;
 }
 
 void l2_wrapper_conv::thread_l2_fwd_in_data_conv(){

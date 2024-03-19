@@ -18,6 +18,7 @@ module l2_spandex_rtl_top(
     `FPGA_DBG input logic l2_cpu_req_data_use_owner_pred,
     `FPGA_DBG input dcs_t l2_cpu_req_data_dcs,
     `FPGA_DBG input cache_id_t l2_cpu_req_data_pred_cid,
+    `FPGA_DBG input addr_t l2_cpu_req_data_len,
     `FPGA_DBG input logic l2_fwd_in_valid,
     `FPGA_DBG input mix_msg_t l2_fwd_in_data_coh_msg,
     `FPGA_DBG input line_addr_t l2_fwd_in_data_addr,
@@ -93,6 +94,7 @@ module l2_spandex_rtl_top(
     assign l2_cpu_req_i.use_owner_pred = l2_cpu_req_data_use_owner_pred;
     assign l2_cpu_req_i.dcs = l2_cpu_req_data_dcs;
     assign l2_cpu_req_i.pred_cid = l2_cpu_req_data_pred_cid;
+    assign l2_cpu_req_i.len = l2_cpu_req_data_len;
 
     l2_fwd_in_t l2_fwd_in_i();
     assign l2_fwd_in_i.coh_msg = l2_fwd_in_data_coh_msg;

@@ -22,6 +22,8 @@ module l2_fsm(
     `FPGA_DBG input logic do_fwd_next,
     `FPGA_DBG input logic do_cpu_req,
     `FPGA_DBG input logic do_cpu_req_next,
+    `FPGA_DBG input logic do_bulk_req,
+    `FPGA_DBG input logic do_bulk_req_next,
     `FPGA_DBG input logic is_flush_all,
     // Whether external interfaces are ready for new data.
     `FPGA_DBG input logic l2_rd_rsp_ready_int,
@@ -95,6 +97,9 @@ module l2_fsm(
     `FPGA_DBG input logic ongoing_atomic,
     `FPGA_DBG input logic ongoing_flush,
     `FPGA_DBG input logic ongoing_drain,
+    `FPGA_DBG input logic ongoing_read_bulk_req,
+    `FPGA_DBG input logic ongoing_write_bulk_req,
+    `FPGA_DBG input addr_t bulk_done,
     `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
     `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
 
@@ -207,6 +212,15 @@ module l2_fsm(
     `FPGA_DBG output logic clr_ongoing_atomic,
     `FPGA_DBG output logic incr_flush_way,
     `FPGA_DBG output logic incr_flush_set,
+    `FPGA_DBG output logic set_ongoing_read_bulk_req,
+    `FPGA_DBG output logic set_ongoing_write_bulk_req,
+    `FPGA_DBG output logic clr_ongoing_bulk_req,
+    `FPGA_DBG output logic set_cpu_req_bulk,
+    `FPGA_DBG output logic set_cpu_req_bulk_addr,
+    `FPGA_DBG output addr_t set_cpu_req_bulk_addr_data,
+    `FPGA_DBG output logic incr_bulk_done_1,
+    `FPGA_DBG output logic incr_bulk_done_2,
+    `FPGA_DBG output logic clr_bulk_done,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -268,6 +282,8 @@ module l2_fsm(
     localparam CPU_REQ_ADD_WB = 6'b110000;
     localparam CPU_REQ_DISPATCH_WB = 6'b110001;
     localparam CPU_REQ_DRAIN_WB = 6'b110010;
+
+    localparam BULK_REQ_HANDLER = 6'b110011;
 
     `FPGA_DBG logic [5:0] state, next_state;
     always_ff @(posedge clk or negedge rst) begin
@@ -374,6 +390,8 @@ module l2_fsm(
                     next_state = ONGOING_FLUSH_LOOKUP;
                 end else if (do_cpu_req_next) begin
                     next_state = CPU_REQ_MSHR_LOOKUP;
+                end else if (do_bulk_req_next) begin
+                    next_state = BULK_REQ_HANDLER;
                 end
             end
             // -------------------
@@ -941,6 +959,17 @@ module l2_fsm(
                 end
             end
 `endif
+            BULK_REQ_HANDLER : begin
+                if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
+                    next_state = CPU_REQ_SET_CONFLICT;
+                end else begin
+                    if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
+                        next_state = CPU_REQ_TAG_LOOKUP;
+                    end else begin
+                        next_state = DECODE;
+                    end
+                end                
+            end
         endcase
     end
 
@@ -1096,6 +1125,16 @@ module l2_fsm(
         wb_dispatch_set = 'h0;
 `endif
 
+        set_ongoing_read_bulk_req = 1'b0;
+        set_ongoing_write_bulk_req = 1'b0;
+        clr_ongoing_bulk_req = 1'b0;
+        set_cpu_req_bulk = 1'b0;
+        set_cpu_req_bulk_addr = 1'b0;
+        set_cpu_req_bulk_addr_data = 'h0;
+        incr_bulk_done_1 = 1'b0;
+        incr_bulk_done_2 = 1'b0;
+        clr_bulk_done = 1'b0;
+
         case (state)
             RESET : begin
                 lmem_wr_rst = 1'b1;
@@ -1110,6 +1149,8 @@ module l2_fsm(
                 end else if (do_flush_next) begin
                     lmem_set_in = flush_set;
                 end else if (do_cpu_req_next) begin
+                    lmem_set_in = addr_br_next.set;
+                end else if (do_bulk_req_next) begin
                     lmem_set_in = addr_br_next.set;
                 end
             end
@@ -2290,6 +2331,73 @@ module l2_fsm(
                 wb_dispatch_set = wb[wb_dispatch_i].set;
             end
 `endif
+
+            BULK_REQ_HANDLER : begin
+                if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
+                    // Check the MSHR if there are any conflicting entries - this should only happens for 
+                    // writes. Read the lmem_rd into the buf registers.
+                    mshr_op_code = `L2_MSHR_PEEK_BULK;
+                    rd_set_into_bufs = 1'b1;
+                    lmem_set_in = addr_br.set;
+
+                    // Increment the current address for DMA transfer
+                    // Increment the number of transfers done and compare to check if complete.
+                    // Different increments and checks for loads (line-basis) and stores (word-basis).
+                    if (!(set_conflict | set_set_conflict_mshr) | clr_set_conflict_mshr) begin
+                        if (l2_cpu_req.cpu_msg == `READ) begin
+                            // Only for load, we need to reload bulk request; for store, each request
+                            // has the necessary fields already.
+                            set_cpu_req_bulk_addr = 1'b1;
+
+                            // If the load address (ideally, first one) is not line-aligned, we increment by 1.
+                            // We have different done checks to accomodate single word loads (e.g., sync reads).
+                            if (addr_br.w_off) begin
+                                set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * addr_br.w_off;
+                                incr_bulk_done_1 = 1'b1;
+
+                                if (bulk_done + 1 == l2_cpu_req.len) begin
+                                    clr_ongoing_bulk_req = 1'b1;
+                                    clr_bulk_done = 1'b1;
+                                end
+                            end else begin
+                                set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * `WORDS_PER_LINE;
+                                incr_bulk_done_2 = 1'b1;
+
+                                if (bulk_done + 2 >= l2_cpu_req.len) begin
+                                    clr_ongoing_bulk_req = 1'b1;
+                                    clr_bulk_done = 1'b1;
+                                end
+                            end
+                        end else begin
+                            // Stores are always word-granularity and we always increment by 1.
+                            incr_bulk_done_1 = 1'b1;
+
+                            if (bulk_done + 1 == l2_cpu_req.len) begin
+                                clr_ongoing_bulk_req = 1'b1;
+                                clr_bulk_done = 1'b1;
+                            end
+                        end
+                    end
+`ifdef USE_WB
+                    // Even for bulk transfers, we need a free/hit write buffer entry to coalesce bulk stores.
+                    wb_op_code = `L2_WB_PEEK_REQ;
+`endif                
+                end else begin
+                    mshr_op_code = `L2_MSHR_PEEK_BULK;
+
+                    // If there is no existing conflict, start the DMA transfer.
+                    // Set the necessary registers for the next iteration of the FSM.
+                    if (!(set_conflict | set_set_conflict_mshr) | clr_set_conflict_mshr) begin
+                        set_cpu_req_bulk = 1'b1;
+
+                        if (l2_cpu_req.cpu_msg == `READ) begin
+                            set_ongoing_read_bulk_req = 1'b1;
+                        end else begin
+                            set_ongoing_write_bulk_req = 1'b1;
+                        end
+                    end
+                end                
+            end
             default : begin
                 mshr_op_code = `L2_MSHR_IDLE;
 `ifdef USE_WB

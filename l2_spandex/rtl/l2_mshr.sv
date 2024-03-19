@@ -283,6 +283,29 @@ module l2_mshr(
                 end
             end            
 `endif            
+            // Check if there is an earlier bulk entry exists in the MSHR. If yes, stall.
+            `L2_MSHR_PEEK_BULK : begin
+                clr_set_conflict_mshr = 1'b1;
+
+                for (int i = 0; i < `N_MSHR; i++) begin
+                    if (mshr[i].state == `SPX_I) begin
+                        mshr_i_next = i;
+                    end
+
+                    // If the incoming request matches with an entry in the MSHR,
+                    // assert set_conflict (which is sampled in l2_core).
+                    if (mshr[i].set == addr_br.set && mshr[i].state != `SPX_I) begin
+                        set_set_conflict_mshr = 1'b1;
+                        clr_set_conflict_mshr = 1'b0;
+                    end
+
+                    // If the incoming request is greater/equal to the current bulk done 
+                    if (mshr[i].set + 1 == addr_br.set && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `READ) begin
+                        set_set_conflict_mshr = 1'b1;
+                        clr_set_conflict_mshr = 1'b0;
+                    end
+                end
+            end
             default : begin
                 mshr_hit_next = 1'b0;
             end

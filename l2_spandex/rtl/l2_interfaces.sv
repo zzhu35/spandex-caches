@@ -34,6 +34,10 @@ module l2_interfaces(
     input logic l2_bresp_ready,
     input logic l2_bresp_valid_int,
     input bresp_t l2_bresp_o,
+    input logic set_cpu_req_from_bulk,
+    input logic set_cpu_req_bulk,
+    input logic set_cpu_req_bulk_addr,
+    input addr_t set_cpu_req_bulk_addr_data,
 
     l2_cpu_req_t.in l2_cpu_req_i,
     l2_fwd_in_t.in l2_fwd_in_i,
@@ -73,6 +77,8 @@ module l2_interfaces(
     output line_addr_t fwd_in_tmp_addr,
     output addr_t cpu_req_addr,
     output fence_t l2_fence,
+    output addr_t l2_cpu_req_len_int,
+    output addr_t l2_cpu_conflict_len_int,
 
     l2_req_out_t.out l2_req_out,
     l2_rsp_out_t.out l2_rsp_out,
@@ -113,6 +119,7 @@ module l2_interfaces(
             l2_cpu_req_tmp.use_owner_pred <= 0;
             l2_cpu_req_tmp.dcs <= 0;
             l2_cpu_req_tmp.pred_cid <= 0;
+            l2_cpu_req_tmp.len <= 0;
         end else if (l2_cpu_req_valid && l2_cpu_req_ready && !l2_cpu_req_ready_int) begin
             l2_cpu_req_tmp.cpu_msg <= l2_cpu_req_i.cpu_msg;
             l2_cpu_req_tmp.hsize <= l2_cpu_req_i.hsize;
@@ -126,6 +133,7 @@ module l2_interfaces(
             l2_cpu_req_tmp.use_owner_pred <= l2_cpu_req_i.use_owner_pred;
             l2_cpu_req_tmp.dcs <= l2_cpu_req_i.dcs;
             l2_cpu_req_tmp.pred_cid <= l2_cpu_req_i.pred_cid;
+            l2_cpu_req_tmp.len <= l2_cpu_req_i.len;
         end
     end
 
@@ -141,6 +149,7 @@ module l2_interfaces(
     assign l2_cpu_req_next.use_owner_pred = (!l2_cpu_req_valid_tmp) ? l2_cpu_req_i.use_owner_pred : l2_cpu_req_tmp.use_owner_pred;
     assign l2_cpu_req_next.dcs = (!l2_cpu_req_valid_tmp) ? l2_cpu_req_i.dcs : l2_cpu_req_tmp.dcs;
     assign l2_cpu_req_next.pred_cid = (!l2_cpu_req_valid_tmp) ? l2_cpu_req_i.pred_cid : l2_cpu_req_tmp.pred_cid;
+    assign l2_cpu_req_next.len = (!l2_cpu_req_valid_tmp) ? l2_cpu_req_i.len : l2_cpu_req_tmp.len;
 
     //L2 FWD IN
     logic l2_fwd_in_valid_tmp;
@@ -455,6 +464,7 @@ module l2_interfaces(
     //READ FROM INPUT
     //cpu req + conflict
     l2_cpu_req_t l2_cpu_req_conflict ();
+    l2_cpu_req_t l2_cpu_req_bulk ();
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             l2_cpu_req.cpu_msg <= 0;
@@ -469,6 +479,7 @@ module l2_interfaces(
             l2_cpu_req.use_owner_pred <= 0;
             l2_cpu_req.dcs <= 0;
             l2_cpu_req.pred_cid <= 0;
+            l2_cpu_req.len <= 0;
         end else if (set_cpu_req_from_conflict) begin
             l2_cpu_req.cpu_msg <= l2_cpu_req_conflict.cpu_msg;
             l2_cpu_req.hsize <= l2_cpu_req_conflict.hsize;
@@ -482,6 +493,21 @@ module l2_interfaces(
             l2_cpu_req.use_owner_pred <= l2_cpu_req_conflict.use_owner_pred;
             l2_cpu_req.dcs <= l2_cpu_req_conflict.dcs;
             l2_cpu_req.pred_cid <= l2_cpu_req_conflict.pred_cid;
+            l2_cpu_req.len <= l2_cpu_req_conflict.len;
+        end else if (set_cpu_req_from_bulk) begin
+            l2_cpu_req.cpu_msg <= l2_cpu_req_bulk.cpu_msg;
+            l2_cpu_req.hsize <= l2_cpu_req_bulk.hsize;
+            l2_cpu_req.hprot <= l2_cpu_req_bulk.hprot;
+            l2_cpu_req.addr <= l2_cpu_req_bulk.addr;
+            l2_cpu_req.word <= l2_cpu_req_bulk.word;
+            l2_cpu_req.amo <= l2_cpu_req_bulk.amo;
+            l2_cpu_req.aq <= l2_cpu_req_bulk.aq;
+            l2_cpu_req.rl <= l2_cpu_req_bulk.rl;
+            l2_cpu_req.dcs_en <= l2_cpu_req_bulk.dcs_en;
+            l2_cpu_req.use_owner_pred <= l2_cpu_req_bulk.use_owner_pred;
+            l2_cpu_req.dcs <= l2_cpu_req_bulk.dcs;
+            l2_cpu_req.pred_cid <= l2_cpu_req_bulk.pred_cid;
+            l2_cpu_req.len <= l2_cpu_req_bulk.len;
         end else if (l2_cpu_req_valid_int && l2_cpu_req_ready_int) begin
             l2_cpu_req.cpu_msg <= l2_cpu_req_next.cpu_msg;
             l2_cpu_req.hsize <= l2_cpu_req_next.hsize;
@@ -495,8 +521,12 @@ module l2_interfaces(
             l2_cpu_req.use_owner_pred <= l2_cpu_req_next.use_owner_pred;
             l2_cpu_req.dcs <= l2_cpu_req_next.dcs;
             l2_cpu_req.pred_cid <= l2_cpu_req_next.pred_cid;
+            l2_cpu_req.len <= l2_cpu_req_next.len;
         end
     end
+
+    assign l2_cpu_req_len_int = l2_cpu_req_valid_int ? l2_cpu_req_next.len : 'h0;
+    assign l2_cpu_conflict_len_int = l2_cpu_req_conflict.len;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -512,6 +542,7 @@ module l2_interfaces(
             l2_cpu_req_conflict.use_owner_pred <= 0;
             l2_cpu_req_conflict.dcs <= 0;
             l2_cpu_req_conflict.pred_cid <= 0;
+            l2_cpu_req_conflict.len <= 0;
         end else if (set_cpu_req_conflict) begin
             l2_cpu_req_conflict.cpu_msg <= l2_cpu_req.cpu_msg;
             l2_cpu_req_conflict.hsize <= l2_cpu_req.hsize;
@@ -525,6 +556,41 @@ module l2_interfaces(
             l2_cpu_req_conflict.use_owner_pred <= l2_cpu_req.use_owner_pred;
             l2_cpu_req_conflict.dcs <= l2_cpu_req.dcs;
             l2_cpu_req_conflict.pred_cid <= l2_cpu_req.pred_cid;
+            l2_cpu_req_conflict.len <= l2_cpu_req.len;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            l2_cpu_req_bulk.cpu_msg <= 0;
+            l2_cpu_req_bulk.hsize <= 0;
+            l2_cpu_req_bulk.hprot <= 0;
+            l2_cpu_req_bulk.addr <= 0;
+            l2_cpu_req_bulk.word <= 0;
+            l2_cpu_req_bulk.amo <= 0;
+            l2_cpu_req_bulk.aq <= 0;
+            l2_cpu_req_bulk.rl <= 0;
+            l2_cpu_req_bulk.dcs_en <= 0;
+            l2_cpu_req_bulk.use_owner_pred <= 0;
+            l2_cpu_req_bulk.dcs <= 0;
+            l2_cpu_req_bulk.pred_cid <= 0;
+            l2_cpu_req_bulk.len <= 0;
+        end else if (set_cpu_req_bulk) begin
+            l2_cpu_req_bulk.cpu_msg <= l2_cpu_req.cpu_msg;
+            l2_cpu_req_bulk.hsize <= l2_cpu_req.hsize;
+            l2_cpu_req_bulk.hprot <= l2_cpu_req.hprot;
+            l2_cpu_req_bulk.addr <= l2_cpu_req.addr;
+            l2_cpu_req_bulk.word <= l2_cpu_req.word;
+            l2_cpu_req_bulk.amo <= l2_cpu_req.amo;
+            l2_cpu_req_bulk.aq <= l2_cpu_req.aq;
+            l2_cpu_req_bulk.rl <= l2_cpu_req.rl;
+            l2_cpu_req_bulk.dcs_en <= l2_cpu_req.dcs_en;
+            l2_cpu_req_bulk.use_owner_pred <= l2_cpu_req.use_owner_pred;
+            l2_cpu_req_bulk.dcs <= l2_cpu_req.dcs;
+            l2_cpu_req_bulk.pred_cid <= l2_cpu_req.pred_cid;
+            l2_cpu_req_bulk.len <= l2_cpu_req.len;
+        end else if (set_cpu_req_bulk_addr) begin
+            l2_cpu_req_bulk.addr <= set_cpu_req_bulk_addr_data;
         end
     end
 
@@ -608,5 +674,6 @@ module l2_interfaces(
                             (l2_fwd_in_valid_tmp ? l2_fwd_in_tmp.addr : l2_fwd_in_i.addr);
     assign fwd_in_tmp_addr = l2_fwd_in_valid_tmp ? l2_fwd_in_tmp.addr : l2_fwd_in_i.addr;
     assign cpu_req_addr = set_cpu_req_from_conflict ? l2_cpu_req_conflict.addr :
-                            (l2_cpu_req_valid_tmp ? l2_cpu_req_tmp.addr : l2_cpu_req_i.addr);
+                            (set_cpu_req_from_bulk ? l2_cpu_req_bulk.addr :
+                            (l2_cpu_req_valid_tmp ? l2_cpu_req_tmp.addr : l2_cpu_req_i.addr));
 endmodule

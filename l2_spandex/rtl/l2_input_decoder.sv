@@ -32,11 +32,17 @@ module l2_input_decoder (
     `FPGA_DBG input logic ongoing_fence,
     `FPGA_DBG input logic ongoing_drain,
     `FPGA_DBG input logic mshr_write_pending,
+    `FPGA_DBG input logic ongoing_read_bulk_req,
+    `FPGA_DBG input logic ongoing_write_bulk_req,
+    `FPGA_DBG input addr_t l2_cpu_req_len_int,
+    `FPGA_DBG input addr_t l2_cpu_conflict_len_int,
 
     // Assign cpu_req from conflict registers
     `FPGA_DBG output logic set_cpu_req_from_conflict,
     // Assign fwd_in from conflict registers
     `FPGA_DBG output logic set_fwd_in_from_stalled,
+    // Assign cpu_req from bulk transfer registers
+    `FPGA_DBG output logic set_cpu_req_from_bulk,
     // Accept the new input now
     output logic do_flush,
     output logic do_flush_next,
@@ -54,6 +60,8 @@ module l2_input_decoder (
     output logic do_fwd_next,
     output logic do_cpu_req,
     output logic do_cpu_req_next,
+    output logic do_bulk_req,
+    output logic do_bulk_req_next,
     // Ready signals sent to interfaces
     output logic l2_flush_ready_int,
     output logic l2_fence_ready_int,
@@ -85,6 +93,7 @@ module l2_input_decoder (
 `endif            
         do_ongoing_fence_next = 1'b0;
         do_flush_next = 1'b0;
+        do_bulk_req_next = 1'b0;
 
         l2_rsp_in_ready_int = 1'b0;
         l2_fwd_in_ready_int = 1'b0;
@@ -113,6 +122,7 @@ module l2_input_decoder (
         clr_flush_set = 1'b0;
         clr_flush_way = 1'b0;
         flush_done = 1'b0;
+        set_cpu_req_from_bulk = 1'b0;
 
         // Priority:
         // - do_fence_next; unless there is an ongoing fence or drain already.
@@ -160,12 +170,37 @@ module l2_input_decoder (
                     clr_ongoing_flush = 1'b1;
                     flush_done = 1'b1;
                 end
-            end else if ((l2_cpu_req_valid_int || set_conflict) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !ongoing_drain) begin
+            end else if (((l2_cpu_req_valid_int && l2_cpu_req_len_int == 'h0) || (set_conflict && l2_cpu_conflict_len_int == 'h0)) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !ongoing_drain) begin
                 do_cpu_req_next = 1'b1;
+
                 if (!set_conflict) begin
                     l2_cpu_req_ready_int = 1'b1;
                 end else begin
                     set_cpu_req_from_conflict = 1'b1;
+                end
+            end else if (((l2_cpu_req_valid_int && l2_cpu_req_len_int != 'h0) || ongoing_read_bulk_req || ongoing_write_bulk_req || (set_conflict && l2_cpu_conflict_len_int != 'h0)) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !ongoing_drain) begin
+                if (l2_cpu_req_valid_int && ongoing_write_bulk_req) begin
+                    // Store bulk pending
+                    do_bulk_req_next = 1'b1;
+
+                    if (!set_conflict) begin
+                        l2_cpu_req_ready_int = 1'b1;
+                    end else begin
+                        set_cpu_req_from_conflict = 1'b1;
+                    end
+                end else if (ongoing_read_bulk_req) begin
+                    // Load bulk pending
+                    set_cpu_req_from_bulk = 1'b1;
+                    do_bulk_req_next = 1'b1;
+                end else if (l2_cpu_req_valid_int && !(ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
+                    // New bulk transfer
+                    do_bulk_req_next = 1'b1;
+
+                    if (!set_conflict) begin
+                        l2_cpu_req_ready_int = 1'b1;
+                    end else begin
+                        set_cpu_req_from_conflict = 1'b1;
+                    end
                 end
             end
             // Parse line addresses for rsp and fwd as line_br
@@ -214,6 +249,7 @@ module l2_input_decoder (
             do_rsp <= 0;
             do_fwd <= 0;
             do_cpu_req <= 0;
+            do_bulk_req <= 0;
             line_br.tag <= 0;
             line_br.set <= 0;
             addr_br.line <= 0;
@@ -233,6 +269,7 @@ module l2_input_decoder (
             do_rsp <= do_rsp_next;
             do_fwd <= do_fwd_next;
             do_cpu_req <= do_cpu_req_next;
+            do_bulk_req <= do_bulk_req_next;
             line_br.tag <= line_br_next.tag;
             line_br.set <= line_br_next.set;
             addr_br.line <= addr_br_next.line;

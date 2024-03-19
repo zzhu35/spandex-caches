@@ -43,7 +43,8 @@
 `define L2_MSHR_PEEK_FWD    3'b011
 `define L2_MSHR_PEEK_WB     3'b100
 `define L2_MSHR_PEEK_DRAIN  3'b101
-`define L2_MSHR_IDLE        3'b110
+`define L2_MSHR_PEEK_BULK   3'b110
+`define L2_MSHR_IDLE        3'b111
 
 `define LLC_MSHR_LOOKUP      3'b000
 `define LLC_MSHR_PEEK_REQ    3'b001

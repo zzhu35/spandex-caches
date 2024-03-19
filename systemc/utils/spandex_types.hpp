@@ -93,6 +93,7 @@ public:
     bool    use_owner_pred;
     dcs_t   dcs;
     cache_id_t pred_cid;
+    addr_t len;
 
 
     l2_cpu_req_t() :
@@ -107,7 +108,8 @@ public:
     dcs_en(0),
     use_owner_pred(0),
     dcs(0),
-    pred_cid(0)
+    pred_cid(0),
+    len(0)
     {}
 
     inline l2_cpu_req_t& operator  = (const l2_cpu_req_t& x) {
@@ -123,6 +125,7 @@ public:
         use_owner_pred = x.use_owner_pred;
         dcs     = x.dcs;
         pred_cid = x.pred_cid;
+        len = x.len;
         return *this;
     }
     inline bool operator  == (const l2_cpu_req_t& x) const {
@@ -137,7 +140,8 @@ public:
             x.dcs_en  == dcs_en    &&
             x.use_owner_pred == use_owner_pred    &&
             x.dcs     == dcs    &&
-            x.pred_cid == pred_cid);
+            x.pred_cid == pred_cid  &&
+            x.len == len);
     }
     inline friend void sc_trace(sc_trace_file *tf, const l2_cpu_req_t& x, const std::string & name) {
         sc_trace(tf, x.cpu_msg , name + ".cpu_msg ");
@@ -152,6 +156,7 @@ public:
         sc_trace(tf, x.use_owner_pred, name + ".use_owner_pred");
         sc_trace(tf, x.dcs,      name + ".dcs");
         sc_trace(tf, x.pred_cid, name + ".pred_cid");
+        sc_trace(tf, x.len, name + ".len");
     }
     inline friend ostream & operator<<(ostream& os, const l2_cpu_req_t& x) {
         os << hex << "("
@@ -166,7 +171,8 @@ public:
            << ", dcs_en: "  << x.dcs_en
            << ", use_owner_pred: " << x.use_owner_pred
            << ", dcs: "     << x.dcs
-           << ", pred_cid: "<< x.pred_cid  << ")";
+           << ", pred_cid: "<< x.pred_cid
+           << ", len:      "<< x.len  << ")";
         return os;
     }
 };

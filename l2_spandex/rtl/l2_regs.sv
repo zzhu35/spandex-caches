@@ -24,6 +24,12 @@ module l2_regs (
     input logic set_ongoing_atomic,
     input logic set_ongoing_flush,
     input logic clr_ongoing_flush,
+    input logic set_ongoing_read_bulk_req,
+    input logic set_ongoing_write_bulk_req,
+    input logic clr_ongoing_bulk_req,
+    input logic incr_bulk_done_1,
+    input logic incr_bulk_done_2,
+    input logic clr_bulk_done,
     input logic incr_flush_set,
     input logic clr_flush_set,
     input logic incr_flush_way,
@@ -47,6 +53,9 @@ module l2_regs (
     output logic ongoing_drain,
     output logic ongoing_atomic,
     output logic ongoing_flush,
+    output logic ongoing_read_bulk_req,
+    output logic ongoing_write_bulk_req,
+    output addr_t bulk_done,
     output logic [`L2_SET_BITS:0] flush_set,
     output logic [`L2_WAY_BITS:0] flush_way,
     output logic [`MSHR_BITS-1:0] fwd_stall_entry,
@@ -196,5 +205,31 @@ module l2_regs (
         end
     end
 `endif
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            ongoing_read_bulk_req <= 1'b0;
+            ongoing_write_bulk_req <= 1'b0;
+        end else if (clr_ongoing_bulk_req) begin
+            ongoing_read_bulk_req <= 1'b0;
+            ongoing_write_bulk_req <= 1'b0;
+        end else if (set_ongoing_read_bulk_req) begin
+            ongoing_read_bulk_req <= 1'b1;
+        end else if (set_ongoing_write_bulk_req) begin
+            ongoing_write_bulk_req <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            bulk_done <= 0;
+        end else if (clr_bulk_done) begin
+            bulk_done <= 0;
+        end else if (incr_bulk_done_1) begin
+            bulk_done <= bulk_done + 1;
+        end else if (incr_bulk_done_2) begin
+            bulk_done <= bulk_done + 2;
+        end
+    end
 
 endmodule
