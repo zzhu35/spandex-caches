@@ -134,51 +134,53 @@ module llc_fsm (
     llc_dma_rsp_out_t.out llc_dma_rsp_out_o
     );
 
-    //STATE ENCODING
-    localparam RESET = 6'b000000;
-    localparam DECODE = 6'b000001;
+    // LLC FSM state name enums
+    typedef enum logic[5:0] {
+        RESET,
+        DECODE,
 
-    localparam RSP_MSHR_LOOKUP = 6'b000010;
-    localparam RSP_INV_HANDLER = 6'b000011;
-    localparam RSP_INV_HANDLER_MEM_REQ = 6'b000100;
-    localparam RSP_RVK_O_HANDLER = 6'b000101;
+        RSP_MSHR_LOOKUP,
+        RSP_INV_HANDLER,
+        RSP_INV_HANDLER_MEM_REQ,
+        RSP_RVK_O_HANDLER,
 
-    localparam ONGOING_FLUSH_LOOKUP = 6'b000110;
-    localparam ONGOING_FLUSH_PROCESS = 6'b000111;
-    localparam ONGOING_FLUSH_EVICT = 6'b001000;
+        ONGOING_FLUSH_LOOKUP,
+        ONGOING_FLUSH_PROCESS,
+        ONGOING_FLUSH_EVICT,
 
-    localparam REQ_MSHR_LOOKUP = 6'b010000;
-    localparam REQ_SET_CONFLICT = 6'b010001;
-    localparam REQ_TAG_LOOKUP = 6'b010010;
-    localparam REQ_ODATA_HANDLER_HIT = 6'b010011;
-    localparam REQ_ODATA_HANDLER_HIT_RSP = 6'b010100;
-    localparam REQ_ODATA_HANDLER_MISS = 6'b010101;
-    localparam REQ_ODATA_HANDLER_MISS_MEM_RSP = 6'b010110;
-    localparam REQ_ODATA_HANDLER_MISS_RSP = 6'b010111;
-    localparam REQ_S_HANDLER_HIT = 6'b011000;
-    localparam REQ_S_HANDLER_HIT_RSP = 6'b011001;
-    localparam REQ_S_HANDLER_MISS = 6'b011010;
-    localparam REQ_S_HANDLER_MISS_MEM_RSP = 6'b011011;
-    localparam REQ_S_HANDLER_MISS_RSP = 6'b011100;
-    localparam REQ_WB_HANDLER_HIT = 6'b011101;
-    localparam REQ_WB_HANDLER_MISS = 6'b011110;
-    localparam REQ_WTFWD_HANDLER_HIT = 6'b011111;
-    localparam REQ_WTFWD_HANDLER_HIT_RSP = 6'b100000;
-    localparam REQ_WTFWD_HANDLER_MISS = 6'b100001;
-    localparam REQ_WTFWD_HANDLER_MISS_MEM_RSP = 6'b100010;
-    localparam REQ_WTFWD_HANDLER_MISS_RSP = 6'b100011;
-    localparam REQ_V_HANDLER_HIT = 6'b100100;
-    localparam REQ_V_HANDLER_HIT_RSP = 6'b100101;
-    localparam REQ_V_HANDLER_MISS = 6'b100110;
-    localparam REQ_V_HANDLER_MISS_MEM_RSP = 6'b100111;
-    localparam REQ_V_HANDLER_MISS_RSP = 6'b101000;
-    localparam REQ_EVICT = 6'b101001;
-    localparam REQ_EVICT_FWD_RVK = 6'b101010;
-    localparam REQ_EVICT_FWD_INV = 6'b101011;
+        REQ_MSHR_LOOKUP,
+        REQ_SET_CONFLICT,
+        REQ_TAG_LOOKUP,
+        REQ_ODATA_HANDLER_HIT,
+        REQ_ODATA_HANDLER_HIT_RSP,
+        REQ_ODATA_HANDLER_MISS,
+        REQ_ODATA_HANDLER_MISS_MEM_RSP,
+        REQ_ODATA_HANDLER_MISS_RSP,
+        REQ_S_HANDLER_HIT,
+        REQ_S_HANDLER_HIT_RSP,
+        REQ_S_HANDLER_MISS,
+        REQ_S_HANDLER_MISS_MEM_RSP,
+        REQ_S_HANDLER_MISS_RSP,
+        REQ_WB_HANDLER_HIT,
+        REQ_WB_HANDLER_MISS,
+        REQ_WTFWD_HANDLER_HIT,
+        REQ_WTFWD_HANDLER_HIT_RSP,
+        REQ_WTFWD_HANDLER_MISS,
+        REQ_WTFWD_HANDLER_MISS_MEM_RSP,
+        REQ_WTFWD_HANDLER_MISS_RSP,
+        REQ_V_HANDLER_HIT,
+        REQ_V_HANDLER_HIT_RSP,
+        REQ_V_HANDLER_MISS,
+        REQ_V_HANDLER_MISS_MEM_RSP,
+        REQ_V_HANDLER_MISS_RSP,
+        REQ_EVICT,
+        REQ_EVICT_FWD_RVK,
+        REQ_EVICT_FWD_INV,
 
-    localparam SEND_FWD_WITH_OWNER_MASK = 6'b110000;
+        SEND_FWD_WITH_OWNER_MASK
+    } llc_state_t;
 
-    `FPGA_DBG logic [5:0] state, next_state;
+    `FPGA_DBG llc_state_t state, next_state;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             state <= RESET;

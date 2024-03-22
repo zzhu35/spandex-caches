@@ -232,60 +232,63 @@ module l2_fsm(
     l2_inval_t.out l2_inval_o
    );
 
-    localparam RESET = 6'b000000;
-    localparam DECODE = 6'b000001;
+    // L2 FSM state name enums
+    typedef enum logic[5:0] {
+        RESET,
+        DECODE,
 
-    localparam RSP_MSHR_LOOKUP = 6'b000010;
-    localparam RSP_ODATA_HANDLER = 6'b000011;
-    localparam RSP_S_HANDLER = 6'b000100;
-    localparam RSP_WB_ACK_HANDLER = 6'b000101;
-    localparam RSP_O_HANDLER = 6'b000110;
-    localparam RSP_V_HANDLER = 6'b000111;
-    localparam RSP_NACK_HANDLER = 6'b001000;
+        RSP_MSHR_LOOKUP,
+        RSP_ODATA_HANDLER,
+        RSP_S_HANDLER,
+        RSP_WB_ACK_HANDLER,
+        RSP_O_HANDLER,
+        RSP_V_HANDLER,
+        RSP_NACK_HANDLER,
 
-    localparam FWD_MSHR_LOOKUP = 6'b001100;
-    localparam FWD_STALL = 6'b001101;
-    localparam FWD_MSHR_HIT = 6'b001110;
-    localparam FWD_TAG_LOOKUP = 6'b001111;
-    localparam FWD_LOOKUP_HIT = 6'b010000;
-    localparam FWD_INV_HANDLER = 6'b010001;
-    localparam FWD_RVK_O_HANDLER = 6'b010010;
-    localparam FWD_REQ_S_HANDLER = 6'b010011;
-    localparam FWD_REQ_S_HANDLER_RVK = 6'b010100;
-    localparam FWD_REQ_ODATA_HANDLER = 6'b010101;
-    localparam FWD_REQ_V_HANDLER = 6'b010110;
-    localparam FWD_REQ_V_HANDLER_NACK = 6'b010111;
-    localparam FWD_WTFWD_HANDLER = 6'b011000;
-    localparam FWD_WTFWD_HANDLER_NACK = 6'b011001;
+        FWD_MSHR_LOOKUP,
+        FWD_STALL,
+        FWD_MSHR_HIT,
+        FWD_TAG_LOOKUP,
+        FWD_LOOKUP_HIT,
+        FWD_INV_HANDLER,
+        FWD_RVK_O_HANDLER,
+        FWD_REQ_S_HANDLER,
+        FWD_REQ_S_HANDLER_RVK,
+        FWD_REQ_ODATA_HANDLER,
+        FWD_REQ_V_HANDLER,
+        FWD_REQ_V_HANDLER_NACK,
+        FWD_WTFWD_HANDLER,
+        FWD_WTFWD_HANDLER_NACK,
 
-    localparam ONGOING_FLUSH_LOOKUP = 6'b011100;
-    localparam ONGOING_FLUSH_PROCESS = 6'b011101;
-    localparam ONGOING_FLUSH_EVICT = 6'b011110;
-    localparam NEW_FENCE_HANDLER = 6'b011111;
-    localparam ONGOING_FENCE_HANDLER = 6'b100000;
-    localparam ONGOING_DRAIN_HANDLER = 6'b100001;
+        ONGOING_FLUSH_LOOKUP,
+        ONGOING_FLUSH_PROCESS,
+        ONGOING_FLUSH_EVICT,
+        NEW_FENCE_HANDLER,
+        ONGOING_FENCE_HANDLER,
+        ONGOING_DRAIN_HANDLER,
 
-    localparam CPU_REQ_MSHR_LOOKUP = 6'b100010;
-    localparam CPU_REQ_SET_CONFLICT = 6'b100011;
-    localparam CPU_REQ_TAG_LOOKUP = 6'b100100;
-    localparam CPU_REQ_AMO_NO_REQ = 6'b100101;
-    localparam CPU_REQ_AMO_REQ = 6'b100110;
-    localparam CPU_REQ_READ_NO_REQ = 6'b100111;
-    localparam CPU_REQ_READ_REQ = 6'b101000;
-    localparam CPU_REQ_READ_ATOMIC_NO_REQ = 6'b101001;
-    localparam CPU_REQ_READ_ATOMIC_REQ = 6'b101010;
-    localparam CPU_REQ_WRITE_NO_REQ = 6'b101011;
-    localparam CPU_REQ_WRITE_REQ = 6'b101100;
-    localparam CPU_REQ_WRITE_ATOMIC_NO_REQ = 6'b101101;
-    localparam CPU_REQ_WRITE_ATOMIC_REQ = 6'b101110;
-    localparam CPU_REQ_EVICT = 6'b101111;
-    localparam CPU_REQ_ADD_WB = 6'b110000;
-    localparam CPU_REQ_DISPATCH_WB = 6'b110001;
-    localparam CPU_REQ_DRAIN_WB = 6'b110010;
+        CPU_REQ_MSHR_LOOKUP,
+        CPU_REQ_SET_CONFLICT,
+        CPU_REQ_TAG_LOOKUP,
+        CPU_REQ_AMO_NO_REQ,
+        CPU_REQ_AMO_REQ,
+        CPU_REQ_READ_NO_REQ,
+        CPU_REQ_READ_REQ,
+        CPU_REQ_READ_ATOMIC_NO_REQ,
+        CPU_REQ_READ_ATOMIC_REQ,
+        CPU_REQ_WRITE_NO_REQ,
+        CPU_REQ_WRITE_REQ,
+        CPU_REQ_WRITE_ATOMIC_NO_REQ,
+        CPU_REQ_WRITE_ATOMIC_REQ,
+        CPU_REQ_EVICT,
+        CPU_REQ_ADD_WB,
+        CPU_REQ_DISPATCH_WB,
+        CPU_REQ_DRAIN_WB,
 
-    localparam BULK_REQ_HANDLER = 6'b110011;
+        BULK_REQ_HANDLER
+    } l2_state_t;
 
-    `FPGA_DBG logic [5:0] state, next_state;
+    `FPGA_DBG l2_state_t state, next_state;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             state <= RESET;
@@ -973,11 +976,6 @@ module l2_fsm(
         endcase
     end
 
-    addr_t addr_tmp;
-    line_addr_t line_addr_tmp;
-    unstable_state_t state_tmp;
-    coh_msg_t coh_msg_tmp;
-
     // FSM 2
     // Based on next state decided in FSM 1,
     // update outputs for that next state.
@@ -1084,11 +1082,6 @@ module l2_fsm(
         addr_br_reqs.set = 'h0;
         addr_br_reqs.w_off = 'h0;
         addr_br_reqs.b_off = 'h0;
-
-        addr_tmp = 'h0;
-        line_addr_tmp = 'h0;
-        state_tmp = 'h0;
-        coh_msg_tmp = 'h0;
 
         evict_way_reg = 'h0;
 
