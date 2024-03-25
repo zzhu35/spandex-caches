@@ -36,13 +36,14 @@ module l2_input_decoder (
     `FPGA_DBG input logic ongoing_write_bulk_req,
     `FPGA_DBG input addr_t l2_cpu_req_len_int,
     `FPGA_DBG input addr_t l2_cpu_conflict_len_int,
+    `FPGA_DBG input logic bulk_decode_en,
 
     // Assign cpu_req from conflict registers
     `FPGA_DBG output logic set_cpu_req_from_conflict,
     // Assign fwd_in from conflict registers
     `FPGA_DBG output logic set_fwd_in_from_stalled,
     // Assign cpu_req from bulk transfer registers
-    `FPGA_DBG output logic set_cpu_req_from_bulk,
+    `FPGA_DBG output logic set_cpu_req_from_bulk_decode,
     // Accept the new input now
     output logic do_flush,
     output logic do_flush_next,
@@ -122,7 +123,7 @@ module l2_input_decoder (
         clr_flush_set = 1'b0;
         clr_flush_way = 1'b0;
         flush_done = 1'b0;
-        set_cpu_req_from_bulk = 1'b0;
+        set_cpu_req_from_bulk_decode = 1'b0;
 
         // Priority:
         // - do_fence_next; unless there is an ongoing fence or drain already.
@@ -132,7 +133,7 @@ module l2_input_decoder (
         // - do_ongoing_fence_next; to service the self-invalidation after drain is complete.
         // - do_cpu_req_next; unless there are no free MSHR entries, an evict stall, an ongoing
         // fence or drain. Either service a new request or the set conflicted request (priority to latter).
-        if (decode_en) begin
+        if (decode_en || bulk_decode_en) begin
             if (l2_fence_valid_int && !ongoing_fence && !ongoing_drain) begin
                 l2_fence_ready_int = 1'b1;
                 do_fence_next = 1'b1;
@@ -190,7 +191,9 @@ module l2_input_decoder (
                     end
                 end else if (ongoing_read_bulk_req) begin
                     // Load bulk pending
-                    set_cpu_req_from_bulk = 1'b1;
+                    if (decode_en) begin
+                        set_cpu_req_from_bulk_decode = 1'b1;
+                    end
                     do_bulk_req_next = 1'b1;
                 end else if (l2_cpu_req_valid_int && !(ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
                     // New bulk transfer
@@ -259,7 +262,7 @@ module l2_input_decoder (
             addr_br.set <= 0;
             addr_br.w_off <= 0;
             addr_br.b_off <= 0;
-        end else if (decode_en) begin
+        end else if (decode_en || bulk_decode_en) begin
             do_fence <= do_fence_next;
             do_flush <= do_flush_next;
             do_ongoing_fence <= do_ongoing_fence_next;

@@ -167,9 +167,9 @@ module l2_core(
     addr_t l2_cpu_req_len_int, l2_cpu_conflict_len_int, bulk_done;
     logic do_bulk_req, do_bulk_req_next, ongoing_read_bulk_req, ongoing_write_bulk_req;
     logic set_ongoing_read_bulk_req, set_ongoing_write_bulk_req, clr_ongoing_bulk_req;
-    logic set_cpu_req_from_bulk, set_cpu_req_bulk, set_cpu_req_bulk_addr;
+    logic set_cpu_req_from_bulk, set_cpu_req_from_bulk_fsm, set_cpu_req_from_bulk_decode, set_cpu_req_bulk, set_cpu_req_bulk_addr;
     addr_t set_cpu_req_bulk_addr_data;
-    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done;
+    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, bulk_decode_en;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
@@ -182,6 +182,8 @@ module l2_core(
     assign clr_set_conflict = clr_set_conflict_fsm | clr_set_conflict_mshr;
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
     assign lmem_rd_en = 1'b1;
+
+    assign set_cpu_req_from_bulk = set_cpu_req_from_bulk_fsm | set_cpu_req_from_bulk_decode;
 
     //instances
     l2_bufs bufs_u(.*);

@@ -102,6 +102,7 @@ module l2_fsm(
     `FPGA_DBG input addr_t bulk_done,
     `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
     `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
+    `FPGA_DBG input addr_t cpu_req_addr,
 
     // Inputs from input_decoder -
     // line_br for responses/forwards and addr_br for input requests.
@@ -221,6 +222,8 @@ module l2_fsm(
     `FPGA_DBG output logic incr_bulk_done_1,
     `FPGA_DBG output logic incr_bulk_done_2,
     `FPGA_DBG output logic clr_bulk_done,
+    `FPGA_DBG output logic bulk_decode_en,
+    `FPGA_DBG output logic set_cpu_req_from_bulk_fsm,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -285,7 +288,8 @@ module l2_fsm(
         CPU_REQ_DISPATCH_WB,
         CPU_REQ_DRAIN_WB,
 
-        BULK_REQ_HANDLER
+        BULK_REQ_HANDLER,
+        BULK_REQ_TAG_LOOKUP
     } l2_state_t;
 
     `FPGA_DBG l2_state_t state, next_state;
@@ -357,6 +361,15 @@ module l2_fsm(
     logic [`WB_BITS-1:0] wb_dispatch_i;
     assign wb_dispatch_i = ongoing_drain ? wb_valid_i : wb_evict_buf;
 `endif
+
+    logic decode_en_done;
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            decode_en_done <= 0;
+        end else begin
+            decode_en_done <= decode_en;
+        end
+    end
 
     // FSM 1
     // Decide which state to go to next;
@@ -963,15 +976,133 @@ module l2_fsm(
             end
 `endif
             BULK_REQ_HANDLER : begin
-                if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
-                    next_state = CPU_REQ_SET_CONFLICT;
+                if (do_rsp_next) begin
+                    next_state = RSP_MSHR_LOOKUP;
+                end else if (do_fwd_next) begin
+                    next_state = FWD_MSHR_LOOKUP; 
                 end else begin
-                    if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
-                        next_state = CPU_REQ_TAG_LOOKUP;
+                    if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
+                        next_state = CPU_REQ_SET_CONFLICT;
                     end else begin
-                        next_state = DECODE;
+                        if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
+                            next_state = BULK_REQ_TAG_LOOKUP;
+                        end else begin
+                            next_state = DECODE;
+                        end
+                    end           
+                end
+            end
+            BULK_REQ_TAG_LOOKUP : begin
+                // Almost a duplicate of the CPU_REQ_TAG_LOOKUP state. Only the Spandex-optimized
+                // cases (e.g., ReqOdata hit) have immediate servicing code in FSM 2.
+                if (tag_hit_next) begin
+                    case(l2_cpu_req.cpu_msg)
+                        `READ : begin
+                            if (l2_cpu_req.dcs_en) begin
+                                case(l2_cpu_req.dcs)
+                                    `DCS_ReqOdata : begin
+                                        if (word_mask_owned_next == `WORD_MASK_ALL) begin
+                                            // Here, we immediately service the read response.
+                                            // TODO: ensure that the operations in this state are idempotent.
+                                            if (l2_rd_rsp_ready_int) begin
+                                                if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
+                                                    next_state = BULK_REQ_HANDLER;
+                                                end else begin
+                                                    next_state = DECODE;
+                                                end                                                
+                                            end
+                                        end else begin
+                                            next_state = CPU_REQ_READ_REQ;
+                                        end
+                                    end
+                                    `DCS_ReqV : begin
+                                        if (word_mask_valid_next == `WORD_MASK_ALL) begin
+                                            next_state = CPU_REQ_READ_NO_REQ;
+                                        end else begin
+                                            next_state = CPU_REQ_READ_REQ;
+                                        end
+                                    end
+                                    default : begin
+                                        next_state = DECODE;
+                                    end
+                                endcase
+                            end else begin
+                                if (word_mask_shared_next == `WORD_MASK_ALL) begin
+                                    next_state = CPU_REQ_READ_NO_REQ;
+                                end else begin
+                                    next_state = CPU_REQ_READ_REQ;
+                                end
+                            end
+                        end
+                        `WRITE : begin
+                            if (l2_cpu_req.dcs_en) begin
+                                case(l2_cpu_req.dcs)
+                                    `DCS_ReqWTfwd : begin
+                                        if (word_hit_next && word_hit_state_next == `SPX_R) begin
+                                            next_state = CPU_REQ_WRITE_NO_REQ;
+                                        end else begin
+                                            next_state = CPU_REQ_ADD_WB;
+                                        end
+                                    end
+                                    default : begin
+                                        next_state = DECODE;
+                                    end
+                                endcase
+                            end else begin
+                                if (word_mask_owned_next == `WORD_MASK_ALL) begin
+                                    next_state = CPU_REQ_WRITE_NO_REQ;
+                                end else begin
+                                    next_state = CPU_REQ_WRITE_REQ;
+                                end
+                            end
+                        end
+                        default : begin
+                            next_state = DECODE;
+                        end
+                    endcase
+                end else if (empty_way_found_next) begin
+                    case(l2_cpu_req.cpu_msg)
+                        `READ : begin
+                            next_state = CPU_REQ_READ_REQ;
+                        end
+                        `READ_ATOMIC : begin
+                            next_state = CPU_REQ_READ_ATOMIC_REQ;
+                        end
+                        `WRITE : begin
+                            if (l2_cpu_req.dcs_en) begin
+                                case(l2_cpu_req.dcs)
+                                    `DCS_ReqWTfwd : begin
+                                        next_state = CPU_REQ_ADD_WB;
+                                    end
+                                    default : begin
+                                        next_state = DECODE;
+                                    end
+                                endcase
+                            end else begin
+                                next_state = CPU_REQ_WRITE_REQ;
+                            end
+                        end
+                        `WRITE_ATOMIC : begin
+                            next_state = CPU_REQ_WRITE_ATOMIC_REQ;
+                        end
+                        default : begin
+                            next_state = DECODE;
+                        end
+                    endcase
+                end else begin
+                    if (l2_cpu_req.cpu_msg == `WRITE && l2_cpu_req.dcs_en) begin
+                        case(l2_cpu_req.dcs)
+                            `DCS_ReqWTfwd : begin
+                                next_state = CPU_REQ_ADD_WB;
+                            end
+                            default : begin
+                                next_state = DECODE;
+                            end
+                        endcase
+                    end else begin
+                        next_state = CPU_REQ_EVICT;
                     end
-                end                
+                end
             end
         endcase
     end
@@ -1127,6 +1258,9 @@ module l2_fsm(
         incr_bulk_done_1 = 1'b0;
         incr_bulk_done_2 = 1'b0;
         clr_bulk_done = 1'b0;
+
+        bulk_decode_en = 1'b0;
+        set_cpu_req_from_bulk_fsm = 1'b0;
 
         case (state)
             RESET : begin
@@ -2327,47 +2461,67 @@ module l2_fsm(
 
             BULK_REQ_HANDLER : begin
                 if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
-                    // Check the MSHR if there are any conflicting entries - this should only happens for 
-                    // writes. Read the lmem_rd into the buf registers.
-                    mshr_op_code = `L2_MSHR_PEEK_BULK;
-                    rd_set_into_bufs = 1'b1;
-                    lmem_set_in = addr_br.set;
+                    // Decode the possible cache inputs in this cycle
+                    if (!decode_en_done) begin
+                        bulk_decode_en = 1'b1;
+                    end
 
-                    // Increment the current address for DMA transfer
-                    // Increment the number of transfers done and compare to check if complete.
-                    // Different increments and checks for loads (line-basis) and stores (word-basis).
-                    if (!(set_conflict | set_set_conflict_mshr) | clr_set_conflict_mshr) begin
-                        if (l2_cpu_req.cpu_msg == `READ) begin
-                            // Only for load, we need to reload bulk request; for store, each request
-                            // has the necessary fields already.
-                            set_cpu_req_bulk_addr = 1'b1;
+                    if (do_rsp_next) begin
+                        // If there is a response pending, do nothing here.
+                        // FSM 1 will transition to bulk response handler (for RSP_O) or regular response handler.
+                        // TODO: it's possible to lookup MSHR here, use mshr_hit_next to check hit and if the 
+                        // response type is RSP_O, immediately service the response.
+                    end else if (do_fwd_next) begin
+                        // If there is a forward pending, simply set the LMEM signal (similar to what DECODE does).
+                        // TODO: it's possible to lookup MSHR here as well, if there is a conflict, stall. Else,
+                        // immediately look the tag to check for hit. If it is hit and the type is a write-through forward,
+                        // immediately, send the response. Else, you can transition to the other state.
+                        lmem_set_in = line_br_next.set;
+                    end else begin
+                        // If there is no response or forward pending, then we can service the next pending bulk element.
+                        // -----
+                        // Check the MSHR if there are any conflicting entries - this should only happens for 
+                        // writes. Read the lmem_rd into the buf registers.
+                        mshr_op_code = `L2_MSHR_PEEK_BULK;
+                        rd_set_into_bufs = 1'b1;
+                        lmem_set_in = bulk_decode_en ? addr_br_next.set : addr_br.set;
 
-                            // If the load address (ideally, first one) is not line-aligned, we increment by 1.
-                            // We have different done checks to accomodate single word loads (e.g., sync reads).
-                            if (addr_br.w_off) begin
-                                set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * addr_br.w_off;
+                        // Increment the current address for DMA transfer
+                        // Increment the number of transfers done and compare to check if complete.
+                        // Different increments and checks for loads (line-basis) and stores (word-basis).
+                        if (!(set_conflict | set_set_conflict_mshr) | clr_set_conflict_mshr) begin
+                            if (l2_cpu_req.cpu_msg == `READ) begin
+                                // Only for load, we need to reload bulk request; for store, each request
+                                // has the necessary fields already.
+                                set_cpu_req_bulk_addr = 1'b1;
+
+                                // If the load address (ideally, first one) is not line-aligned, we increment by 1.
+                                // We have different done checks to accomodate single word loads (e.g., sync reads).
+                                if (bulk_decode_en ? addr_br_next.w_off : addr_br.w_off) begin
+                                    set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * (bulk_decode_en ? addr_br_next.w_off : addr_br.w_off);
+                                    incr_bulk_done_1 = 1'b1;
+
+                                    if (bulk_done + 1 == l2_cpu_req.len) begin
+                                        clr_ongoing_bulk_req = 1'b1;
+                                        clr_bulk_done = 1'b1;
+                                    end
+                                end else begin
+                                    set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * `WORDS_PER_LINE;
+                                    incr_bulk_done_2 = 1'b1;
+
+                                    if (bulk_done + 2 >= l2_cpu_req.len) begin
+                                        clr_ongoing_bulk_req = 1'b1;
+                                        clr_bulk_done = 1'b1;
+                                    end
+                                end
+                            end else begin
+                                // Stores are always word-granularity and we always increment by 1.
                                 incr_bulk_done_1 = 1'b1;
 
                                 if (bulk_done + 1 == l2_cpu_req.len) begin
                                     clr_ongoing_bulk_req = 1'b1;
                                     clr_bulk_done = 1'b1;
                                 end
-                            end else begin
-                                set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * `WORDS_PER_LINE;
-                                incr_bulk_done_2 = 1'b1;
-
-                                if (bulk_done + 2 >= l2_cpu_req.len) begin
-                                    clr_ongoing_bulk_req = 1'b1;
-                                    clr_bulk_done = 1'b1;
-                                end
-                            end
-                        end else begin
-                            // Stores are always word-granularity and we always increment by 1.
-                            incr_bulk_done_1 = 1'b1;
-
-                            if (bulk_done + 1 == l2_cpu_req.len) begin
-                                clr_ongoing_bulk_req = 1'b1;
-                                clr_bulk_done = 1'b1;
                             end
                         end
                     end
@@ -2391,6 +2545,33 @@ module l2_fsm(
                     end
                 end                
             end
+
+            BULK_REQ_TAG_LOOKUP : begin
+                lookup_en = 1'b1;
+                lookup_mode = `L2_LOOKUP;
+                lmem_set_in = cpu_req_addr[`L2_SET_RANGE_HI : `SET_RANGE_LO];
+
+                // If the tag hits here, and if the request is a read with ownership, i.e., Spandex-optimized
+                // read, then immediately respond with the line in the bufs.
+                if (tag_hit_next) begin
+                    case(l2_cpu_req.cpu_msg)
+                        `READ : begin
+                            if (l2_cpu_req.dcs_en) begin
+                                case(l2_cpu_req.dcs)
+                                    `DCS_ReqOdata : begin
+                                        if (word_mask_owned_next == `WORD_MASK_ALL) begin
+                                            send_rd_rsp(/* line */ lines_buf[cpu_req_way]);
+
+                                            set_cpu_req_from_bulk_fsm = 1'b1;
+                                        end
+                                    end                
+                                endcase
+                            end
+                        end
+                    endcase
+                end
+            end
+
             default : begin
                 mshr_op_code = `L2_MSHR_IDLE;
 `ifdef USE_WB

@@ -594,6 +594,9 @@ module l2_interfaces(
         end
     end
 
+    addr_t l2_cpu_req_bulk_addr;
+    assign l2_cpu_req_bulk_addr = l2_cpu_req_bulk.addr;
+
     //fwd in + stalled
     l2_fwd_in_t l2_fwd_in_stalled ();
     always_ff @(posedge clk or negedge rst) begin
@@ -674,6 +677,6 @@ module l2_interfaces(
                             (l2_fwd_in_valid_tmp ? l2_fwd_in_tmp.addr : l2_fwd_in_i.addr);
     assign fwd_in_tmp_addr = l2_fwd_in_valid_tmp ? l2_fwd_in_tmp.addr : l2_fwd_in_i.addr;
     assign cpu_req_addr = set_cpu_req_from_conflict ? l2_cpu_req_conflict.addr :
-                            (set_cpu_req_from_bulk ? l2_cpu_req_bulk.addr :
+                            (set_cpu_req_from_bulk | set_cpu_req_bulk_addr ? l2_cpu_req_bulk.addr :
                             (l2_cpu_req_valid_tmp ? l2_cpu_req_tmp.addr : l2_cpu_req_i.addr));
 endmodule
