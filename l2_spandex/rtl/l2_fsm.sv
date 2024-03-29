@@ -221,6 +221,8 @@ module l2_fsm(
     `FPGA_DBG output addr_t set_cpu_req_bulk_addr_data,
     `FPGA_DBG output logic incr_bulk_done_1,
     `FPGA_DBG output logic incr_bulk_done_2,
+    `FPGA_DBG output logic decr_bulk_done_1,
+    `FPGA_DBG output logic decr_bulk_done_2,
     `FPGA_DBG output logic clr_bulk_done,
     `FPGA_DBG output logic bulk_decode_en,
     `FPGA_DBG output logic set_cpu_req_from_bulk_fsm,
@@ -1006,7 +1008,11 @@ module l2_fsm(
                                             // TODO: ensure that the operations in this state are idempotent.
                                             if (l2_rd_rsp_ready_int) begin
                                                 if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
-                                                    next_state = BULK_REQ_HANDLER;
+                                                    if (bulk_done == l2_cpu_req.len) begin
+                                                        next_state = DECODE;
+                                                    end else begin
+                                                        next_state = BULK_REQ_HANDLER;
+                                                    end
                                                 end else begin
                                                     next_state = DECODE;
                                                 end                                                
@@ -1257,6 +1263,8 @@ module l2_fsm(
         set_cpu_req_bulk_addr_data = 'h0;
         incr_bulk_done_1 = 1'b0;
         incr_bulk_done_2 = 1'b0;
+        decr_bulk_done_1 = 1'b0;
+        decr_bulk_done_2 = 1'b0;
         clr_bulk_done = 1'b0;
 
         bulk_decode_en = 1'b0;
@@ -2484,6 +2492,8 @@ module l2_fsm(
                         // writes. Read the lmem_rd into the buf registers.
                         mshr_op_code = `L2_MSHR_PEEK_BULK;
                         rd_set_into_bufs = 1'b1;
+                        // We will use the set calculated in this cycle if its an ongoing bulk request. Else,
+                        // if we came here from decode, we can use addr_br, similar to CPU_REQ_MSHR_LOOKUP.
                         lmem_set_in = bulk_decode_en ? addr_br_next.set : addr_br.set;
 
                         // Increment the current address for DMA transfer
@@ -2497,31 +2507,16 @@ module l2_fsm(
 
                                 // If the load address (ideally, first one) is not line-aligned, we increment by 1.
                                 // We have different done checks to accomodate single word loads (e.g., sync reads).
-                                if (bulk_decode_en ? addr_br_next.w_off : addr_br.w_off) begin
+                                if ((bulk_decode_en ? addr_br_next.w_off : addr_br.w_off ) || (l2_cpu_req.len - bulk_done == 'h1)) begin
                                     set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * (bulk_decode_en ? addr_br_next.w_off : addr_br.w_off);
                                     incr_bulk_done_1 = 1'b1;
-
-                                    if (bulk_done + 1 == l2_cpu_req.len) begin
-                                        clr_ongoing_bulk_req = 1'b1;
-                                        clr_bulk_done = 1'b1;
-                                    end
                                 end else begin
                                     set_cpu_req_bulk_addr_data = l2_cpu_req.addr + `BYTES_PER_WORD * `WORDS_PER_LINE;
                                     incr_bulk_done_2 = 1'b1;
-
-                                    if (bulk_done + 2 >= l2_cpu_req.len) begin
-                                        clr_ongoing_bulk_req = 1'b1;
-                                        clr_bulk_done = 1'b1;
-                                    end
                                 end
                             end else begin
                                 // Stores are always word-granularity and we always increment by 1.
                                 incr_bulk_done_1 = 1'b1;
-
-                                if (bulk_done + 1 == l2_cpu_req.len) begin
-                                    clr_ongoing_bulk_req = 1'b1;
-                                    clr_bulk_done = 1'b1;
-                                end
                             end
                         end
                     end
@@ -2551,6 +2546,11 @@ module l2_fsm(
                 lookup_mode = `L2_LOOKUP;
                 lmem_set_in = cpu_req_addr[`L2_SET_RANGE_HI : `SET_RANGE_LO];
 
+                if (bulk_done == l2_cpu_req.len) begin
+                    clr_ongoing_bulk_req = 1'b1;
+                    clr_bulk_done = 1'b1;
+                end
+
                 // If the tag hits here, and if the request is a read with ownership, i.e., Spandex-optimized
                 // read, then immediately respond with the line in the bufs.
                 if (tag_hit_next) begin
@@ -2569,6 +2569,24 @@ module l2_fsm(
                             end
                         end
                     endcase
+                end else if (empty_way_found_next) begin
+                end else begin
+                    if (l2_cpu_req.cpu_msg == `WRITE && l2_cpu_req.dcs_en) begin
+                    end else begin                    
+                        // If we need to evict a line before servicing this bulk
+                        // element, we need to first decrement the bulk transfer trackers
+                        // and then proceed to CPU_REQ_EVICT in FSM 1.
+                        if (l2_cpu_req.cpu_msg == `READ) begin
+                            set_cpu_req_bulk_addr = 1'b1;
+                            set_cpu_req_bulk_addr_data = l2_cpu_req.addr;
+                            decr_bulk_done_2 = 1'b1;
+                        end else begin
+                            decr_bulk_done_1 = 1'b1;
+                        end
+
+                        clr_ongoing_bulk_req = 1'b0;
+                        clr_bulk_done = 1'b0;
+                    end                    
                 end
             end
 

@@ -4810,7 +4810,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // 4. Write miss (aligned, word-gran)
     ////////////////////////////////////////////////////////////////
-    base_addr = 0x83500F30;
+    base_addr = 0x83500F40;
     addr.breakdown(base_addr);
 
     // Write 1 word
@@ -4844,7 +4844,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // 5. Write miss (un-aligned, word-gran)
     ////////////////////////////////////////////////////////////////
-    base_addr = 0x83500F48;
+    base_addr = 0x83500F58;
     addr.breakdown(base_addr);
 
     // Write 1 word
@@ -4878,7 +4878,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     // 6. Write miss (un-aligned, line-gran)
     ////////////////////////////////////////////////////////////////
-    base_addr = 0x83500F58;
+    base_addr = 0x83500F68;
     addr.breakdown(base_addr);
 
     // Write 1 line 
@@ -4916,7 +4916,7 @@ void l2_spandex_tb::l2_test()
     ////////////////////////////////////////////////////////////////
     CACHE_REPORT_INFO("[SPANDEX] Test 3.1!");
 
-    base_addr = 0x83500F78;
+    base_addr = 0x83500F88;
     addr.breakdown(base_addr);
 
     num_lines = 2;
@@ -5442,6 +5442,89 @@ void l2_spandex_tb::l2_test()
     get_rd_rsp(line /* line */);
 
     wait();
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 3.5 - Bulk ReqOdata with evict
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 3.5!");
+
+    base_addr = 0x83500220;
+    addr.breakdown(base_addr);
+
+    // Write to all lines of 3rd line
+    for (int i = 0; i < L2_WAYS; i++) {
+        addr.tag_incr(1);
+
+        word = i+1;
+
+        put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+            addr.word /* addr */, word /* word */, DATA /* hprot */,
+            0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+            0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+        get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+        wait();
+
+        line = 0;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+        put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+    }
+
+    // Do a bulk read of 4 lines
+    base_addr = 0x83500200;
+    addr.breakdown(base_addr);
+
+    num_lines = 4;
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 1 /* dcs_en */,
+        0 /* use_owner_pred */, DCS_ReqOdata /* dcs */, 0 /* pred_cid */, num_lines * WORDS_PER_LINE /* len */);
+
+    for (int i = 0; i < num_lines; i++) {
+        if (i == 2) {
+            base_addr = 0x83500220;
+            addr.breakdown(base_addr);
+            addr.tag_incr(1);
+
+            line.range(BITS_PER_WORD - 1, 0) = 0x1;
+            line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 0x2;
+
+            get_req_out(REQ_WB /* coh_msg */, addr.word /* addr */,
+                DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
+
+            get_inval(addr.word /* addr */, DATA /* hprot */);
+
+            wait();
+
+            put_rsp_in(RSP_WB_ACK /* coh_msg */, addr.word /* addr */, 0 /* line */,
+                0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+            wait();            
+        }
+
+        base_addr = 0x83500200;
+        addr.breakdown(base_addr);
+
+        get_req_out(REQ_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */,
+            DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+        
+        line.range(BITS_PER_WORD - 1, 0) = i+1;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+        for (int i = 0; i < 8; i++) {
+            wait();
+        }
+
+        put_rsp_in(RSP_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */,
+            0b0011 /* word_mask */, 0 /* invack_cnt */);
+
+        get_rd_rsp(line /* line */);
+    } 
 
 #endif // TEST_ID
 

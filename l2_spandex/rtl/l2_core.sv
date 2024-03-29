@@ -169,7 +169,7 @@ module l2_core(
     logic set_ongoing_read_bulk_req, set_ongoing_write_bulk_req, clr_ongoing_bulk_req;
     logic set_cpu_req_from_bulk, set_cpu_req_from_bulk_fsm, set_cpu_req_from_bulk_decode, set_cpu_req_bulk, set_cpu_req_bulk_addr;
     addr_t set_cpu_req_bulk_addr_data;
-    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, bulk_decode_en;
+    logic incr_bulk_done_1, incr_bulk_done_2, decr_bulk_done_1, decr_bulk_done_2, clr_bulk_done, bulk_decode_en;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
