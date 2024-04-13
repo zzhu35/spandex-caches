@@ -79,6 +79,7 @@ module l2_interfaces(
     output fence_t l2_fence,
     output addr_t l2_cpu_req_len_int,
     output addr_t l2_cpu_conflict_len_int,
+    output addr_t l2_cpu_bulk_len_int,
 
     l2_req_out_t.out l2_req_out,
     l2_rsp_out_t.out l2_rsp_out,
@@ -527,6 +528,7 @@ module l2_interfaces(
 
     assign l2_cpu_req_len_int = l2_cpu_req_valid_int ? l2_cpu_req_next.len : 'h0;
     assign l2_cpu_conflict_len_int = l2_cpu_req_conflict.len;
+    assign l2_cpu_bulk_len_int = l2_cpu_req_bulk.len;
 
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin

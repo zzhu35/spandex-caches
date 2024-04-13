@@ -35,7 +35,9 @@ module l2_input_decoder (
     `FPGA_DBG input logic ongoing_read_bulk_req,
     `FPGA_DBG input logic ongoing_write_bulk_req,
     `FPGA_DBG input addr_t l2_cpu_req_len_int,
+    `FPGA_DBG input addr_t l2_cpu_bulk_len_int,
     `FPGA_DBG input addr_t l2_cpu_conflict_len_int,
+    `FPGA_DBG input addr_t bulk_done,
 
     // Assign cpu_req from conflict registers
     `FPGA_DBG output logic set_cpu_req_from_conflict,
@@ -76,6 +78,9 @@ module l2_input_decoder (
     output logic flush_done,
     // Clear ongoing drain if drain is complete
     `FPGA_DBG output logic clr_ongoing_drain,
+    // Clear ongoing bulk if length is complete
+    `FPGA_DBG output logic clr_bulk_done,
+    `FPGA_DBG output logic clr_ongoing_bulk_req,
     // Line and address breakdowns
     line_breakdown_l2_t.out line_br,
     addr_breakdown_t.out addr_br,
@@ -123,6 +128,9 @@ module l2_input_decoder (
         clr_flush_way = 1'b0;
         flush_done = 1'b0;
         set_cpu_req_from_bulk = 1'b0;
+
+        clr_ongoing_bulk_req = 1'b0;
+        clr_bulk_done = 1'b0;
 
         // Priority:
         // - do_fence_next; unless there is an ongoing fence or drain already.
@@ -179,7 +187,10 @@ module l2_input_decoder (
                     set_cpu_req_from_conflict = 1'b1;
                 end
             end else if (((l2_cpu_req_valid_int && l2_cpu_req_len_int != 'h0) || ongoing_read_bulk_req || ongoing_write_bulk_req || (set_conflict && l2_cpu_conflict_len_int != 'h0)) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !ongoing_drain) begin
-                if (l2_cpu_req_valid_int && ongoing_write_bulk_req) begin
+                if ((bulk_done == l2_cpu_bulk_len_int) && (ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
+                    clr_ongoing_bulk_req = 1'b1;
+                    clr_bulk_done = 1'b1;
+                end else if (l2_cpu_req_valid_int && ongoing_write_bulk_req) begin
                     // Store bulk pending
                     do_bulk_req_next = 1'b1;
 

@@ -300,7 +300,7 @@ module l2_mshr(
                     end
 
                     // If the incoming request is greater/equal to the current bulk done 
-                    if (mshr[i].set + 1 == addr_br.set && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `READ) begin
+                    if (((mshr[i].set + 1 == addr_br.set) || (mshr[i].tag + 1 == addr_br.tag)) && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `READ) begin
                         set_set_conflict_mshr = 1'b1;
                         clr_set_conflict_mshr = 1'b0;
                     end

@@ -601,10 +601,18 @@ module llc_fsm (
                 end
             end
             REQ_WTFWD_HANDLER_MISS : begin
-                // On miss, we send a memory request for the data,
+                // On miss, we can either directly update the line in the RAM
+                // if all words are present in the request; if not,
+                // we send a memory request for the data,
                 // and move to a second state to wait for the response.
-                if (llc_mem_req_ready_int) begin
-                    next_state = REQ_WTFWD_HANDLER_MISS_MEM_RSP;
+                if (llc_req_in.word_mask == `WORD_MASK_ALL) begin
+                    if (llc_rsp_out_ready_int) begin
+                        next_state = DECODE;
+                    end
+                end else begin
+                    if (llc_mem_req_ready_int) begin
+                        next_state = REQ_WTFWD_HANDLER_MISS_MEM_RSP;
+                    end
                 end
             end
             REQ_WTFWD_HANDLER_MISS_MEM_RSP : begin
@@ -1652,18 +1660,47 @@ module llc_fsm (
                 endcase
             end
             REQ_WTFWD_HANDLER_MISS : begin
-                if (llc_mem_req_ready_int) begin
-                    // On miss, get data from memory.
-                    send_mem_req (
-                        /* coh_msg */ `LLC_READ,
-                        /* line_addr */ llc_req_in.addr,
-                        /* hprot */ llc_req_in.hprot,
-                        /* line */ 'h0
-                    );
+                if (llc_req_in.word_mask == `WORD_MASK_ALL) begin
+                    if (llc_rsp_out_ready_int) begin
+                        // Update all RAMs - lines_buf with with words in the request,
+                        // owners_buf and sharers buf zeroed, but dirty bit ste.
+                        lmem_set_in = line_br.set;
+                        lmem_way_in = req_in_way;
+                        lmem_wr_data_line = llc_req_in.line;
+                        lmem_wr_data_dirty_bit = 1'b1;
+                        lmem_wr_data_owner = 'h0;
+                        lmem_wr_data_sharers = 'h0;
+                        lmem_wr_data_hprot = llc_req_in.hprot;
+                        lmem_wr_data_tag = line_br.tag;
+                        lmem_wr_data_state = `LLC_V;
+                        lmem_wr_en_all_mem = 1'b1;
 
-                    // Indicate ready for data from memory, and update way to be allocated.
-                    llc_mem_rsp_ready_int = 1'b1;
-                    mem_rsp_way_next = req_in_way;
+                        // Send response to requestor.
+                        send_rsp_out (
+                            /* coh_msg */ `RSP_O,
+                            /* line_addr */ llc_req_in.addr,
+                            /* line */ 'h0,
+                            /* req_id */ llc_req_in.req_id,
+                            /* dest_id */ llc_req_in.req_id,
+                            /* invack_cnt */ 'h0,
+                            /* word_offset */ 'h0,
+                            /* word_mask */ llc_req_in.word_mask
+                        );
+                    end
+                end else begin
+                    if (llc_mem_req_ready_int) begin
+                        // On miss, get data from memory.
+                        send_mem_req (
+                            /* coh_msg */ `LLC_READ,
+                            /* line_addr */ llc_req_in.addr,
+                            /* hprot */ llc_req_in.hprot,
+                            /* line */ 'h0
+                        );
+
+                        // Indicate ready for data from memory, and update way to be allocated.
+                        llc_mem_rsp_ready_int = 1'b1;
+                        mem_rsp_way_next = req_in_way;
+                    end
                 end
             end
             REQ_WTFWD_HANDLER_MISS_MEM_RSP : begin

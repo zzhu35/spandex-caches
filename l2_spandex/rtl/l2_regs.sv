@@ -29,6 +29,7 @@ module l2_regs (
     input logic clr_ongoing_bulk_req,
     input logic incr_bulk_done_1,
     input logic incr_bulk_done_2,
+    input logic decr_bulk_done_1,
     input logic clr_bulk_done,
     input logic incr_flush_set,
     input logic clr_flush_set,
@@ -229,6 +230,8 @@ module l2_regs (
             bulk_done <= bulk_done + 1;
         end else if (incr_bulk_done_2) begin
             bulk_done <= bulk_done + 2;
+        end else if (decr_bulk_done_1) begin
+            bulk_done <= bulk_done - 1;
         end
     end
 

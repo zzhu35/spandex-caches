@@ -164,12 +164,12 @@ module l2_core(
     wb_buf_t wb[`N_WB];
 `endif
 
-    addr_t l2_cpu_req_len_int, l2_cpu_conflict_len_int, bulk_done;
+    addr_t l2_cpu_req_len_int, l2_cpu_conflict_len_int, l2_cpu_bulk_len_int, bulk_done;
     logic do_bulk_req, do_bulk_req_next, ongoing_read_bulk_req, ongoing_write_bulk_req;
     logic set_ongoing_read_bulk_req, set_ongoing_write_bulk_req, clr_ongoing_bulk_req;
     logic set_cpu_req_from_bulk, set_cpu_req_bulk, set_cpu_req_bulk_addr;
     addr_t set_cpu_req_bulk_addr_data;
-    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done;
+    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, decr_bulk_done_1;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
