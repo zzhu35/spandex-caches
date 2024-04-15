@@ -7,12 +7,14 @@ module l2_mshr(
     input logic rst,
     input logic add_mshr_entry,
     input mix_msg_t fwd_in_coh_msg,
+    input logic do_bulk_rsp,
     input logic ongoing_drain,
     // Update parts of an MSHR entry.
     input logic update_mshr_state,
     input logic update_mshr_line,
     input logic update_mshr_tag,
     input logic update_mshr_word_mask,
+    input logic update_mshr_word,
     // Function of the MSHR to perform
     input logic [2:0] mshr_op_code,
     // Values to update an MSHR entry.
@@ -150,6 +152,17 @@ module l2_mshr(
                     end
                 end
             end
+
+            // Update only word of MSHR entry mshr_i
+            always_ff @(posedge clk or negedge rst) begin
+                if (!rst) begin
+                    mshr[i].word <= 0;
+                end else if (update_mshr_word || add_mshr_entry) begin
+                    if (mshr_i == i) begin
+                        mshr[i].word <= update_mshr_value_word;
+                    end
+                end
+            end
         end
     endgenerate
 
@@ -172,9 +185,16 @@ module l2_mshr(
             // Check if there is a free MSHR entry
             `L2_MSHR_LOOKUP : begin
                 for (int i = 0; i < `N_MSHR; i++) begin
-                    if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
-                        mshr_hit_next = 1'b1;
-                        mshr_i_next = i;
+                    if (do_bulk_rsp) begin
+                        if (mshr[i].word != 'h0 && mshr[i].state == `SPX_IV) begin
+                            mshr_hit_next = 1'b1;
+                            mshr_i_next = i;
+                        end
+                    end else begin
+                        if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
+                            mshr_hit_next = 1'b1;
+                            mshr_i_next = i;
+                        end
                     end
                 end
             end

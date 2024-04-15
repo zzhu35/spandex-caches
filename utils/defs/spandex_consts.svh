@@ -52,6 +52,9 @@
 
 `define LLC_LOOKUP 1'b0
 
+`define BULK_LENGTH_BITS `ADDR_BITS
+`define BULK_NACK_THRESHOLD 4
+
 // Ongoing transaction buffers
 `define LLC_N_REQS          4 // affects LLC_REQS_BITS
 `define LLC_REQS_BITS       ($clog2(`LLC_N_REQS)) // depends on LLC_N_REQS

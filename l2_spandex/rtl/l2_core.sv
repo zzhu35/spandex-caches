@@ -86,7 +86,7 @@ module l2_core(
     logic [`L2_WAY_BITS:0] flush_way;
     logic [`MSHR_BITS-1:0] mshr_i, set_fwd_stall_entry_data, fwd_stall_entry, mshr_i_next, reqs_atomic_i;
     logic [`MSHR_BITS_P1-1:0] mshr_cnt;
-    logic update_mshr_word_mask;
+    logic update_mshr_word_mask, update_mshr_word;
 
     addr_t cpu_req_addr;
     mix_msg_t fwd_in_coh_msg;
@@ -164,12 +164,13 @@ module l2_core(
     wb_buf_t wb[`N_WB];
 `endif
 
-    addr_t l2_cpu_req_len_int, l2_cpu_conflict_len_int, l2_cpu_bulk_len_int, bulk_done;
+    addr_t l2_cpu_req_len_int, l2_cpu_conflict_len_int, l2_cpu_bulk_len_int, bulk_done, bulk_nack_counter;
     logic do_bulk_req, do_bulk_req_next, ongoing_read_bulk_req, ongoing_write_bulk_req;
     logic set_ongoing_read_bulk_req, set_ongoing_write_bulk_req, clr_ongoing_bulk_req;
     logic set_cpu_req_from_bulk, set_cpu_req_bulk, set_cpu_req_bulk_addr;
     addr_t set_cpu_req_bulk_addr_data;
-    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, decr_bulk_done_1;
+    logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, decr_bulk_done_1, decr_bulk_done_2;
+    logic do_bulk_rsp, incr_bulk_nack_counter, clr_bulk_nack_counter;    
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;

@@ -80,6 +80,7 @@ module l2_input_decoder (
     `FPGA_DBG output logic clr_ongoing_drain,
     // Clear ongoing bulk if length is complete
     `FPGA_DBG output logic clr_bulk_done,
+    `FPGA_DBG output logic clr_bulk_nack_counter,
     `FPGA_DBG output logic clr_ongoing_bulk_req,
     // Line and address breakdowns
     line_breakdown_l2_t.out line_br,
@@ -131,6 +132,7 @@ module l2_input_decoder (
 
         clr_ongoing_bulk_req = 1'b0;
         clr_bulk_done = 1'b0;
+        clr_bulk_nack_counter = 1'b0;
 
         // Priority:
         // - do_fence_next; unless there is an ongoing fence or drain already.
@@ -190,6 +192,7 @@ module l2_input_decoder (
                 if ((bulk_done == l2_cpu_bulk_len_int) && (ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
                     clr_ongoing_bulk_req = 1'b1;
                     clr_bulk_done = 1'b1;
+                    clr_bulk_nack_counter = 1'b1;
                 end else if (l2_cpu_req_valid_int && ongoing_write_bulk_req) begin
                     // Store bulk pending
                     do_bulk_req_next = 1'b1;

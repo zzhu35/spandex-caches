@@ -100,6 +100,7 @@ module l2_fsm(
     `FPGA_DBG input logic ongoing_read_bulk_req,
     `FPGA_DBG input logic ongoing_write_bulk_req,
     `FPGA_DBG input addr_t bulk_done,
+    `FPGA_DBG input addr_t bulk_nack_counter,
     `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
     `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
 
@@ -127,6 +128,7 @@ module l2_fsm(
     `FPGA_DBG output logic update_mshr_line,
     `FPGA_DBG output logic update_mshr_tag,
     `FPGA_DBG output logic update_mshr_word_mask,
+    `FPGA_DBG output logic update_mshr_word,
     `FPGA_DBG output logic [2:0] mshr_op_code,
     `FPGA_DBG output logic incr_mshr_cnt,
     `FPGA_DBG output cpu_msg_t update_mshr_value_cpu_msg,
@@ -220,6 +222,9 @@ module l2_fsm(
     `FPGA_DBG output logic incr_bulk_done_1,
     `FPGA_DBG output logic incr_bulk_done_2,
     `FPGA_DBG output logic decr_bulk_done_1,
+    `FPGA_DBG output logic decr_bulk_done_2,
+    `FPGA_DBG output logic do_bulk_rsp,
+    `FPGA_DBG output logic incr_bulk_nack_counter,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -372,6 +377,7 @@ module l2_fsm(
         incr_bulk_done_1 = 1'b0;
         decr_bulk_done_1 = 1'b0;
         incr_bulk_done_2 = 1'b0;
+        decr_bulk_done_2 = 1'b0;
         set_cpu_req_bulk_addr = 1'b0;
         set_cpu_req_bulk_addr_data = 'h0;
 
@@ -402,12 +408,45 @@ module l2_fsm(
                     incr_bulk_done_1 = 1'b1;
                 end                
             end
+        end else if (ongoing_read_bypass && state == RSP_V_HANDLER) begin
+            // TODO: we assume that REQ_V misses are always at line granularity.
+            if (!update_mshr_value_word_mask) begin
+                incr_bulk_done_2 = 1'b1;
+            end
+        end else if (ongoing_read_bypass && state == RSP_NACK_HANDLER) begin
+            // TODO: we assume that REQ_V misses are always at line granularity.
+            if (!update_mshr_value_word_mask) begin
+                incr_bulk_done_2 = 1'b1;
+
+                if (bulk_nack_counter + incr_bulk_nack_counter == `BULK_NACK_THRESHOLD) begin
+                    set_cpu_req_bulk_addr = 1'b1;
+                    set_cpu_req_bulk_addr_data = (l2_rsp_in.addr * 'h10) + `BYTES_PER_WORD * `WORDS_PER_LINE;
+                end
+            end
         end
 
         // If we are performing a write and we are unable to add to write-buffer without
         // dispatching, we need to decrement the bulk done.
         if (do_bulk_req && state == CPU_REQ_ADD_WB && next_state == CPU_REQ_DISPATCH_WB) begin
             decr_bulk_done_1 = 1'b1;
+        end
+
+        if (do_bulk_req && state == CPU_REQ_READ_REQ) begin
+            if (ongoing_read_bypass) begin
+                // Only for load, we need to reload bulk request; for store, each request
+                // has the necessary fields already.
+                set_cpu_req_bulk_addr = 1'b1;
+
+                // If the load address (ideally, first one) is not line-aligned, we increment by 1.
+                // We have different done checks to accomodate single word loads (e.g., sync reads).
+                if (addr_br.w_off || (l2_cpu_req.len - bulk_done == 'h1)) begin
+                    set_cpu_req_bulk_addr_data = l2_cpu_req.addr;
+                    decr_bulk_done_1 = 1'b1;
+                end else begin
+                    set_cpu_req_bulk_addr_data = l2_cpu_req.addr;
+                    decr_bulk_done_2 = 1'b1;
+                end
+            end
         end
     end
 
@@ -1057,6 +1096,7 @@ module l2_fsm(
         update_mshr_line = 1'b0;
         update_mshr_tag = 1'b0;
         update_mshr_word_mask = 1'b0;
+        update_mshr_word = 1'b0;
         mshr_op_code = `L2_MSHR_IDLE;
         incr_mshr_cnt = 1'b0;
         update_mshr_value_cpu_msg = 'h0;
@@ -1179,6 +1219,8 @@ module l2_fsm(
 
         set_read_bypass = 1'b0;
         clr_read_bypass = 1'b0;
+        do_bulk_rsp = 1'b0;
+        incr_bulk_nack_counter = 1'b0;
 
         case (state)
             RESET : begin
@@ -1189,7 +1231,9 @@ module l2_fsm(
                 lmem_set_in = rst_set;
             end
             DECODE : begin
-                if (do_fwd_next) begin
+                if (do_rsp_next) begin
+                    lmem_set_in = line_br_next.set;
+                end else if (do_fwd_next) begin
                     lmem_set_in = line_br_next.set;
                 end else if (do_flush_next) begin
                     lmem_set_in = flush_set;
@@ -1227,6 +1271,11 @@ module l2_fsm(
             end
 `endif
             RSP_MSHR_LOOKUP : begin
+                if (l2_rsp_in.invack_cnt[0] == 1'b1) begin
+                    do_bulk_rsp = 1'b1;
+                    rd_set_into_bufs = 1'b1;
+                    lmem_set_in = line_br.set;
+                end
                 mshr_op_code = `L2_MSHR_LOOKUP;
             end
             // TODO: The current RSP_O implementation assumes word granularity REQ_O;
@@ -1401,10 +1450,26 @@ module l2_fsm(
                 if (!update_mshr_value_word_mask) begin
                     send_rd_rsp(/* line */ update_mshr_value_line);
 
-                    // Update the RAMs and clear entry
                     if (ongoing_read_bypass) begin
-                        clr_read_bypass = 1'b1;
+                        // In case of a bulk miss response, we do not update the RAMs.
+                        // We do not immediately clear the MSHR entry either. We only decrement the number
+                        // of lines remaining in the bulk transfer and send back the read response. Once the
+                        // remaining words reaches 0, we clear the MSHR entry and the read_bypass.
+                        update_mshr_value_word = mshr[mshr_i].word - 2;
+                        update_mshr_word = 1'b1;
+
+                        if (!update_mshr_value_word) begin
+                            clr_read_bypass = 1'b1;
+
+                            // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
+                            if (l2_rd_rsp_ready_int) begin
+                                update_mshr_state = 1'b1;
+                                update_mshr_value_state = `SPX_I;
+                                incr_mshr_cnt = 1'b1;
+                            end
+                        end
                     end else begin
+                        // Update the RAMs
                         clear_mshr_entry (
                             /* set */ line_br.set,
                             /* way */ mshr[mshr_i].way,
@@ -1414,13 +1479,13 @@ module l2_fsm(
                             /* state */ `SPX_V,
                             /* word_mask_reg */ mshr[mshr_i].word_mask_reg
                         );
-                    end
 
-                    // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
-                    if (l2_rd_rsp_ready_int) begin
-                        update_mshr_state = 1'b1;
-                        update_mshr_value_state = `SPX_I;
-                        incr_mshr_cnt = 1'b1;
+                        // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
+                        if (l2_rd_rsp_ready_int) begin
+                            update_mshr_state = 1'b1;
+                            update_mshr_value_state = `SPX_I;
+                            incr_mshr_cnt = 1'b1;
+                        end
                     end
                 end
             end            
@@ -1440,14 +1505,43 @@ module l2_fsm(
                         end
                     end
                     `SPX_IV: begin
-                        if (l2_req_out_ready_int) begin
-                            send_req_out (
-                                /* coh_msg */ `REQ_V,
-                                /* hprot */ mshr[mshr_i].hprot,
-                                /* line_addr */ l2_rsp_in.addr,
-                                /* line */ 'h0,
-                                /* word_mask */ mshr[mshr_i].word_mask
-                            );
+                        if (ongoing_read_bypass) begin
+                            lookup_en = 1'b1;
+                            lookup_mode = `L2_LOOKUP_FWD;
+
+                            if (tag_hit_next) begin
+                                send_rd_rsp(/* line */ lines_buf[way_hit_next]);
+                            end
+
+                            // Similar to ReqV, we only decrement the number of lines remaining
+                            // in the bulk transfer and send back the read response.
+                            update_mshr_value_word = mshr[mshr_i].word - 2;
+                            update_mshr_word = 1'b1;
+
+                            incr_bulk_nack_counter = 1'b1;
+
+                            // If this is the last response in the bulk miss or we have exceeded the threshold of
+                            // number of NACKs we can receive, we will clear the read bypass and the MSHR entry.
+                            if (!update_mshr_value_word || bulk_nack_counter + incr_bulk_nack_counter == `BULK_NACK_THRESHOLD) begin
+                                clr_read_bypass = 1'b1;
+
+                                // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
+                                if (l2_rd_rsp_ready_int) begin
+                                    update_mshr_state = 1'b1;
+                                    update_mshr_value_state = `SPX_I;
+                                    incr_mshr_cnt = 1'b1;
+                                end
+                            end
+                        end else begin
+                            if (l2_req_out_ready_int) begin
+                                send_req_out (
+                                    /* coh_msg */ `REQ_V,
+                                    /* hprot */ mshr[mshr_i].hprot,
+                                    /* line_addr */ l2_rsp_in.addr,
+                                    /* line */ 'h0,
+                                    /* word_mask */ mshr[mshr_i].word_mask
+                                );
+                            end
                         end
                     end
                     default : begin
@@ -1956,6 +2050,8 @@ module l2_fsm(
                 // for FCS requests. Say, for read with ReqOData, it is possible
                 // that the line being read has partially owned words. Hence,
                 // using word_mask_owned is important.
+                // If bulk miss: we capture remainder length as part of the word field
+                // in MSHR entry and send as part of line field in req_out.
                 if (l2_req_out_ready_int && l2_inval_ready_int) begin
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
@@ -1967,7 +2063,8 @@ module l2_fsm(
                                     (l2_cpu_req.dcs == `DCS_ReqOdata) ? `SPX_XR : 
                                     ((l2_cpu_req.dcs == `DCS_ReqV) ? `SPX_IV :
                                     `SPX_IS),
-                        /* word */ l2_cpu_req.word,
+                        /* word */ ongoing_read_bypass ? l2_cpu_req.len - bulk_done + (decr_bulk_done_2 * 2) + decr_bulk_done_1 :
+                                   'h0,
                         /* line */ lines_buf[cpu_req_way],
                         /* amo */ 'h0,
                         /* word_mask */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? ~word_mask_owned: 
@@ -1982,7 +2079,7 @@ module l2_fsm(
                                       `REQ_S),
                         /* hprot */ l2_cpu_req.hprot,
                         /* line_addr */ addr_br.line_addr,
-                        /* line */ 'h0,
+                        /* line */ ongoing_read_bypass ? l2_cpu_req.len - bulk_done + (decr_bulk_done_2 * 2) + decr_bulk_done_1 : 'h0,
                         /* word_mask */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? ~word_mask_owned: 
                                         ((l2_cpu_req.dcs == `DCS_ReqV) ? ~word_mask_valid: 
                                         ~word_mask_shared)

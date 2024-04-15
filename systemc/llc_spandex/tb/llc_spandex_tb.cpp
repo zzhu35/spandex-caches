@@ -17,6 +17,10 @@ http://rsim.cs.uiuc.edu/
 
 #define L2_SETS LLC_SETS
 
+#ifndef TEST_ID
+#define TEST_ID 0
+#endif
+
 /*
  * Processes
  */
@@ -81,6 +85,8 @@ void llc_spandex_tb::llc_test()
     CACHE_REPORT_INFO("[SPANDEX] Reset done!");
 
     error_count = 0;
+
+#if (TEST_ID == 0)    
 
     ////////////////////////////////////////////////////////////////
     // TEST 0 - Flush
@@ -1770,7 +1776,7 @@ void llc_spandex_tb::llc_test()
     // Hit in shared state
     ////////////////////////////////////////////////////////////////
     // New read from cache 1
-    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, line /* line */, 1 /* req_id */,
+    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, 0 /* line */, 1 /* req_id */,
     DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
 
     get_rsp_out(RSP_V /* coh_msg */, addr.word /* addr */, line /* line */, 0 /* invack_cnt */,
@@ -1864,6 +1870,170 @@ void llc_spandex_tb::llc_test()
   
     wait();
 
+#elif (TEST_ID == 1)
+
+    ////////////////////////////////////////////////////////////////
+    // TEST 1.7: Bulk ReqV - HIT/MISS/NACK
+    ////////////////////////////////////////////////////////////////
+    CACHE_REPORT_INFO("[SPANDEX] Test 1.7!");
+    base_addr = 0x83500000;
+    addr.breakdown(base_addr);
+
+    int num_lines = 8;
+
+    /////////////////////////////////////////////////////////////
+    // HIT
+    ////////////////////////////////////////////////////////////////
+    for (int i = 0; i < num_lines; i++) {
+      put_req_in(REQ_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 0 /* req_id */,
+      DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+      get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word + (i * 0x10) /* addr */, 0 /* line */);
+
+      wait();
+
+      word = i;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      put_mem_rsp(line /* line */);
+
+      get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 0 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();      
+    }
+
+    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, num_lines * WORDS_PER_LINE /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+  
+    wait();
+
+    for (int i = 0; i < num_lines; i++) {
+      word = i;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();      
+    }    
+
+    wait();
+
+    /////////////////////////////////////////////////////////////
+    // MISS
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500100;
+    addr.breakdown(base_addr);
+
+    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, num_lines * WORDS_PER_LINE /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+  
+    for (int i = 0; i < num_lines; i++) {
+      get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word + (i * 0x10) /* addr */, 0 /* line */);
+
+      wait();
+
+      word = i;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      put_mem_rsp(line /* line */);
+
+      get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();      
+    }    
+
+    wait();
+
+    /////////////////////////////////////////////////////////////
+    // NACK - every other line is owned
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500000;
+    addr.breakdown(base_addr);
+
+    for (int i = 0; i < num_lines; i+=2) {
+      put_req_in(REQ_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 0 /* req_id */,
+      DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+      word = i;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      get_rsp_out(RSP_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 0 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();      
+    }
+
+    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, num_lines * WORDS_PER_LINE /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+  
+    for (int i = 0; i < num_lines; i++) {
+      if (i % 2 == 0) {
+        get_rsp_out(RSP_NACK /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 1 /* invack_cnt */,
+        0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+        wait();
+      } else {
+        word = i;
+        line.range(BITS_PER_WORD - 1, 0) = word;
+        line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+        get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+        0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+        wait();
+      }     
+    }    
+
+    /////////////////////////////////////////////////////////////
+    // NACK - 3rd to 6th line are owned 
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500100;
+    addr.breakdown(base_addr);
+
+    for (int i = 2; i < 6; i++) {
+      put_req_in(REQ_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 0 /* req_id */,
+      DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+      word = i;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      get_rsp_out(RSP_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 0 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();      
+    }
+
+    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, num_lines * WORDS_PER_LINE /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+  
+    for (int i = 0; i < 2; i++) {
+      word = i;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();
+    }    
+
+    for (int i = 2; i < 6; i++) {
+      get_rsp_out(RSP_NACK /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 1 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();
+    }  
+
+    wait();
+#endif 
 	  CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 
     // End simulation

@@ -22,6 +22,12 @@ module llc_regs (
     input logic clr_flush_set,
     input logic incr_flush_way,
     input logic clr_flush_way,
+    input logic incr_bulk_nack_counter,
+    input logic clr_bulk_nack_counter,
+    input logic clr_ongoing_bulk_req,
+    input logic set_ongoing_bulk_req,
+    input logic clr_bulk_done,
+    input logic incr_bulk_done,
 
     // Registers
     output logic ongoing_flush,
@@ -30,6 +36,9 @@ module llc_regs (
     output logic evict_stall,
     output logic set_conflict,
     output logic req_in_stalled_valid,
+    output addr_t bulk_nack_counter,
+    output addr_t bulk_done,
+    output logic ongoing_bulk_req,
     output logic [`MSHR_BITS_P1-1:0] mshr_cnt
     );
 
@@ -104,5 +113,34 @@ module llc_regs (
         end
     end
 
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            bulk_nack_counter <= 0;
+        end else if (clr_bulk_nack_counter) begin
+            bulk_nack_counter <= 0;
+        end else if (incr_bulk_nack_counter) begin
+            bulk_nack_counter <= bulk_nack_counter + 1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            ongoing_bulk_req <= 1'b0;
+        end else if (clr_ongoing_bulk_req) begin
+            ongoing_bulk_req <= 1'b0;
+        end else if (set_ongoing_bulk_req) begin
+            ongoing_bulk_req <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            bulk_done <= 0;
+        end else if (clr_bulk_done) begin
+            bulk_done <= 0;
+        end else if (incr_bulk_done) begin
+            bulk_done <= bulk_done + 2;
+        end
+    end
 
 endmodule

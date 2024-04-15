@@ -30,6 +30,9 @@ module l2_regs (
     input logic incr_bulk_done_1,
     input logic incr_bulk_done_2,
     input logic decr_bulk_done_1,
+    input logic decr_bulk_done_2,
+    input logic incr_bulk_nack_counter,
+    input logic clr_bulk_nack_counter,
     input logic clr_bulk_done,
     input logic incr_flush_set,
     input logic clr_flush_set,
@@ -57,6 +60,7 @@ module l2_regs (
     output logic ongoing_read_bulk_req,
     output logic ongoing_write_bulk_req,
     output addr_t bulk_done,
+    output addr_t bulk_nack_counter,
     output logic [`L2_SET_BITS:0] flush_set,
     output logic [`L2_WAY_BITS:0] flush_way,
     output logic [`MSHR_BITS-1:0] fwd_stall_entry,
@@ -232,6 +236,18 @@ module l2_regs (
             bulk_done <= bulk_done + 2;
         end else if (decr_bulk_done_1) begin
             bulk_done <= bulk_done - 1;
+        end else if (decr_bulk_done_2) begin
+            bulk_done <= bulk_done - 2;
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            bulk_nack_counter <= 0;
+        end else if (incr_bulk_nack_counter) begin
+            bulk_nack_counter <= bulk_nack_counter + 1;
+        end else if (clr_bulk_nack_counter) begin
+            bulk_nack_counter <= bulk_nack_counter - 1;
         end
     end
 

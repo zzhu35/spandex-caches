@@ -13,6 +13,7 @@ FLAGS += -DRTL_CACHE
 FLAGS += -TOP glbl
 FLAGS += -access +R
 FLAGS += -ncvlog_args,"-define XILINX_FPGA"
+FLAGS += -DTEST_ID=$(TEST_ID)
 
 INCDIR ?=
 INCDIR += -I$(ACCEL)

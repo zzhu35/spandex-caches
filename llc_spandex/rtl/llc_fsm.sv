@@ -12,6 +12,8 @@ module llc_fsm (
     `FPGA_DBG input logic do_get_rsp_next,
     `FPGA_DBG input logic do_get_req,
     `FPGA_DBG input logic do_get_req_next,
+    `FPGA_DBG input logic do_bulk_req,
+    `FPGA_DBG input logic do_bulk_req_next,
     // From interfaces
     `FPGA_DBG input logic llc_mem_req_ready_int,
     `FPGA_DBG input logic llc_fwd_out_ready_int,
@@ -127,6 +129,11 @@ module llc_fsm (
     `FPGA_DBG output logic set_req_conflict,
     `FPGA_DBG output logic incr_flush_way,
     `FPGA_DBG output logic incr_flush_set,
+    `FPGA_DBG output logic incr_bulk_nack_counter,
+    `FPGA_DBG output logic clr_bulk_nack_counter,
+    `FPGA_DBG output logic incr_bulk_done,
+    `FPGA_DBG output logic set_req_bulk_addr,
+    `FPGA_DBG output line_addr_t set_req_bulk_addr_data,
 
     llc_mem_req_t.out llc_mem_req_o,
     llc_fwd_out_t.out llc_fwd_out_o,
@@ -263,7 +270,7 @@ module llc_fsm (
                     next_state = ONGOING_FLUSH_LOOKUP;
                 end else if (do_get_rsp_next) begin
                     next_state = RSP_MSHR_LOOKUP;
-                end else if (do_get_req_next) begin
+                end else if (do_get_req_next || do_bulk_req_next) begin
                     next_state = REQ_MSHR_LOOKUP;
                 end
             end
@@ -767,6 +774,12 @@ module llc_fsm (
         incr_flush_way = 1'b0;
         incr_flush_set = 1'b0;
 
+        incr_bulk_nack_counter = 1'b0;
+        clr_bulk_nack_counter = 1'b0;
+        incr_bulk_done = 1'b0;
+        set_req_bulk_addr_data = 'h0;
+        set_req_bulk_addr = 1'b0;
+
         case (state)
             RESET : begin
                 lmem_wr_en_state = 1'b1;
@@ -780,7 +793,7 @@ module llc_fsm (
                     lmem_set_in = flush_set;
                 end else if (do_get_rsp_next) begin
                     lmem_set_in = line_br_next.set;
-                end else if (do_get_req_next) begin
+                end else if (do_get_req_next || do_bulk_req_next) begin
                     lmem_set_in = line_br_next.set;
                 end
             end
@@ -1414,16 +1427,38 @@ module llc_fsm (
                         // to the owner. For the remaining words, we can send the response ourselves.
                         // TODO: We assume line granularity here. Need coalescing for word granularity.
                         if (word_owner_mask) begin
-                            // Send forward to owner, if we have any unowned words.
-                            if (llc_fwd_out_ready_int) begin
-                                send_fwd_out (
-                                    /* coh_msg */ `FWD_REQ_V,
-                                    /* addr */ llc_req_in.addr,
-                                    /* req_id */ llc_req_in.req_id,
-                                    /* dest_id */ owners_cache_id[0],
-                                    /* word_mask */ word_owner_mask,
-                                    /* line */ 'h0
-                                );
+                            if (owners_cache_id[0] == llc_req_in.req_id && do_bulk_req) begin
+                                // If the REQ_V bulk miss request is already owned by the requestor,
+                                // then we send a NACK to the current request and increment the NACK counter.
+                                if (llc_rsp_out_ready_int) begin
+                                    send_rsp_out (
+                                        /* coh_msg */ `RSP_NACK,
+                                        /* line_addr */ llc_req_in.addr,
+                                        /* line */ 'h0,
+                                        /* req_id */ llc_req_in.req_id,
+                                        /* dest_id */ llc_req_in.req_id,
+                                        /* invack_cnt */ 'h1,
+                                        /* word_offset */ 'h0,
+                                        /* word_mask */ llc_req_in.word_mask
+                                    );
+
+                                    incr_bulk_nack_counter = 1'b1;
+                                    incr_bulk_done = 1'b1;
+                                    set_req_bulk_addr_data = llc_req_in.addr + 1;
+                                    set_req_bulk_addr = 1'b1;
+                                end
+                            end else begin
+                                // Send forward to owner, if we have any unowned words.
+                                if (llc_fwd_out_ready_int) begin
+                                    send_fwd_out (
+                                        /* coh_msg */ `FWD_REQ_V,
+                                        /* addr */ llc_req_in.addr,
+                                        /* req_id */ llc_req_in.req_id,
+                                        /* dest_id */ owners_cache_id[0],
+                                        /* word_mask */ word_owner_mask,
+                                        /* line */ 'h0
+                                    );
+                                end
                             end
                         end
                     end
@@ -1436,10 +1471,17 @@ module llc_fsm (
                                 /* line */ lines_buf[req_in_way],
                                 /* req_id */ llc_req_in.req_id,
                                 /* dest_id */ llc_req_in.req_id,
-                                /* invack_cnt */ 'h0,
+                                /* invack_cnt */ do_bulk_req ? 'h1 : 'h0,
                                 /* word_offset */ 'h0,
                                 /* word_mask */ llc_req_in.word_mask
                             );
+
+                            if (do_bulk_req) begin
+                                clr_bulk_nack_counter = 1'b1;
+                                incr_bulk_done = 1'b1;
+                                set_req_bulk_addr_data = llc_req_in.addr + 1;
+                                set_req_bulk_addr = 1'b1;
+                            end
                         end
                     end
                 endcase
@@ -1456,10 +1498,17 @@ module llc_fsm (
                                     /* line */ lines_buf[req_in_way],
                                     /* req_id */ llc_req_in.req_id,
                                     /* dest_id */ llc_req_in.req_id,
-                                    /* invack_cnt */ 'h0,
+                                    /* invack_cnt */ do_bulk_req ? 'h1 : 'h0,
                                     /* word_offset */ 'h0,
                                     /* word_mask */ word_no_owner_mask
                                 );
+
+                                if (do_bulk_req) begin
+                                    clr_bulk_nack_counter = 1'b1;
+                                    incr_bulk_done = 1'b1;
+                                    set_req_bulk_addr_data = llc_req_in.addr + 1;
+                                    set_req_bulk_addr = 1'b1;
+                                end
                             end
                         end
                     end
@@ -1506,10 +1555,17 @@ module llc_fsm (
                         /* line */ llc_mem_rsp.line,
                         /* req_id */ llc_req_in.req_id,
                         /* dest_id */ llc_req_in.req_id,
-                        /* invack_cnt */ 'h0,
+                        /* invack_cnt */ do_bulk_req ? 'h1 : 'h0,
                         /* word_offset */ 'h0,
                         /* word_mask */ llc_req_in.word_mask
                     );
+                    
+                    if (do_bulk_req) begin
+                        clr_bulk_nack_counter = 1'b1;
+                        incr_bulk_done = 1'b1;
+                        set_req_bulk_addr_data = llc_req_in.addr + 1;
+                        set_req_bulk_addr = 1'b1;
+                    end
                 end
             end            
             REQ_WTFWD_HANDLER_HIT : begin

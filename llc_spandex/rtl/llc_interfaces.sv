@@ -30,6 +30,10 @@ module llc_interfaces (
 
     input logic set_req_from_conflict,
     input logic set_req_conflict,
+    input logic set_req_from_bulk,
+    input logic set_req_bulk,
+    input logic set_req_bulk_addr,
+    input line_addr_t set_req_bulk_addr_data,
 
     llc_req_in_t.in llc_req_in_i,
     llc_dma_req_in_t.in llc_dma_req_in_i,
@@ -64,6 +68,8 @@ module llc_interfaces (
     output logic llc_rst_tb, 
     output line_addr_t req_in_addr,
     output line_addr_t rsp_in_addr,
+    output addr_t llc_bulk_len_int,
+    output logic new_bulk_req,
 
     llc_req_in_t.out llc_req_in,
     llc_rsp_out_t.out llc_rsp_out,
@@ -436,6 +442,7 @@ module llc_interfaces (
 
    //llc req in
     llc_req_in_t llc_req_conflict();
+    llc_req_in_t llc_req_bulk();
     always_ff @(posedge clk or negedge rst) begin
         if(!rst) begin
             llc_req_in.coh_msg <= 0;
@@ -455,6 +462,15 @@ module llc_interfaces (
             llc_req_in.word_offset <= llc_req_conflict.word_offset;
             llc_req_in.valid_words <= llc_req_conflict.valid_words;
             llc_req_in.word_mask <= llc_req_conflict.word_mask;
+       end else if (set_req_from_bulk) begin
+            llc_req_in.coh_msg <= llc_req_bulk.coh_msg;
+            llc_req_in.hprot <= llc_req_bulk.hprot;
+            llc_req_in.addr <= llc_req_bulk.addr;
+            llc_req_in.line <= llc_req_bulk.line;
+            llc_req_in.req_id <= llc_req_bulk.req_id;
+            llc_req_in.word_offset <= llc_req_bulk.word_offset;
+            llc_req_in.valid_words <= llc_req_bulk.valid_words;
+            llc_req_in.word_mask <= llc_req_bulk.word_mask;
         end else if (llc_req_in_valid_int && llc_req_in_ready_int) begin
             llc_req_in.coh_msg <= llc_req_in_next.coh_msg;
             llc_req_in.hprot <= llc_req_in_next.hprot;
@@ -466,6 +482,9 @@ module llc_interfaces (
             llc_req_in.word_mask <= llc_req_in_next.word_mask;
         end
     end
+
+    assign new_bulk_req = llc_req_in_valid_int ? (llc_req_in_next.coh_msg == `REQ_V && llc_req_in_next.line[`BULK_LENGTH_BITS-1:0] != 0) : 1'b0;
+    assign llc_bulk_len_int = llc_req_bulk.line[`BULK_LENGTH_BITS-1:0];
 
     //req in stalled
     always_ff @(posedge clk or negedge rst) begin
@@ -487,6 +506,31 @@ module llc_interfaces (
             llc_req_conflict.word_offset <= llc_req_in.word_offset;
             llc_req_conflict.valid_words <= llc_req_in.valid_words;
             llc_req_conflict.word_mask <= llc_req_in.word_mask;
+        end
+    end
+
+    //req in bulk 
+    always_ff @(posedge clk or negedge rst) begin
+        if(!rst) begin
+            llc_req_bulk.coh_msg <= 0;
+            llc_req_bulk.hprot <= 0;
+            llc_req_bulk.addr <= 0;
+            llc_req_bulk.line <= 0;
+            llc_req_bulk.req_id <= 0;
+            llc_req_bulk.word_offset <= 0;
+            llc_req_bulk.valid_words <= 0;
+            llc_req_bulk.word_mask <= 0;
+        end else if (set_req_bulk) begin
+            llc_req_bulk.coh_msg <= llc_req_in_next.coh_msg;
+            llc_req_bulk.hprot <= llc_req_in_next.hprot;
+            llc_req_bulk.addr <= llc_req_in_next.addr;
+            llc_req_bulk.line <= llc_req_in_next.line;
+            llc_req_bulk.req_id <= llc_req_in_next.req_id;
+            llc_req_bulk.word_offset <= llc_req_in_next.word_offset;
+            llc_req_bulk.valid_words <= llc_req_in_next.valid_words;
+            llc_req_bulk.word_mask <= llc_req_in_next.word_mask;
+        end else if (set_req_bulk_addr) begin
+            llc_req_bulk.addr <= set_req_bulk_addr_data;
         end
     end
 
@@ -537,7 +581,9 @@ module llc_interfaces (
         end
     end
 
-    assign req_in_addr = set_req_from_conflict ? llc_req_conflict.addr : (llc_req_in_valid_tmp ? llc_req_in_tmp.addr : llc_req_in_i.addr);
+    assign req_in_addr = set_req_from_conflict ? llc_req_conflict.addr : 
+                        (set_req_from_bulk ? llc_req_bulk.addr : 
+                        (llc_req_in_valid_tmp ? llc_req_in_tmp.addr : llc_req_in_i.addr));
     assign rsp_in_addr = (llc_rsp_in_valid_tmp) ? llc_rsp_in_tmp.addr : llc_rsp_in_i.addr;
 
     //rst tb 
