@@ -247,7 +247,7 @@ module l2_regs (
         end else if (incr_bulk_nack_counter) begin
             bulk_nack_counter <= bulk_nack_counter + 1;
         end else if (clr_bulk_nack_counter) begin
-            bulk_nack_counter <= bulk_nack_counter - 1;
+            bulk_nack_counter <= 0;
         end
     end
 

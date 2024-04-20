@@ -5669,6 +5669,28 @@ void l2_spandex_tb::l2_test()
             get_rd_rsp(line /* line */);
         }
     }        
+
+    wait();
+
+    put_fwd_in(FWD_RVK_V /* coh_msg */, addr.word /* addr */, 0 /* req_id */,
+            0 /* line */, 0b0011 /* word_mask */);
+
+    line.range(BITS_PER_WORD - 1, 0) = 1;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 2;
+
+    get_rsp_out(RSP_RVK_O /* coh_msg */, 0 /* req_id */, 0 /* to_req */, addr.word /* addr */,
+            line /* line */, 0b0011 /* word_mask */);
+
+    wait();
+
+    put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
+        addr.word /* addr */, 0 /* word */, DATA /* hprot */,
+        0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+        0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+    get_rd_rsp(line /* line */);
+
+    wait();
 #endif // TEST_ID
 
 	CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);

@@ -1892,7 +1892,7 @@ void llc_spandex_tb::llc_test()
 
       wait();
 
-      word = i;
+      word = i+1;
       line.range(BITS_PER_WORD - 1, 0) = word;
       line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
@@ -1910,7 +1910,7 @@ void llc_spandex_tb::llc_test()
     wait();
 
     for (int i = 0; i < num_lines; i++) {
-      word = i;
+      word = i+1;
       line.range(BITS_PER_WORD - 1, 0) = word;
       line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
@@ -1936,7 +1936,7 @@ void llc_spandex_tb::llc_test()
 
       wait();
 
-      word = i;
+      word = i+1;
       line.range(BITS_PER_WORD - 1, 0) = word;
       line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
@@ -1960,7 +1960,7 @@ void llc_spandex_tb::llc_test()
       put_req_in(REQ_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 0 /* req_id */,
       DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
 
-      word = i;
+      word = i+1;
       line.range(BITS_PER_WORD - 1, 0) = word;
       line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
@@ -1980,7 +1980,7 @@ void llc_spandex_tb::llc_test()
 
         wait();
       } else {
-        word = i;
+        word = i+1;
         line.range(BITS_PER_WORD - 1, 0) = word;
         line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
@@ -1992,16 +1992,29 @@ void llc_spandex_tb::llc_test()
     }    
 
     /////////////////////////////////////////////////////////////
-    // NACK - 3rd to 6th line are owned 
+    // NACK - 2nd line is owned elsewhere and 
+    // 3rd to 6th line are owned by the requestor
     ////////////////////////////////////////////////////////////////
     base_addr = 0x83500100;
     addr.breakdown(base_addr);
+
+    put_req_in(REQ_Odata /* coh_msg */, addr.word + (1 * 0x10) /* addr */, 0 /* line */, 1 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    word = 2;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word + (1 * 0x10) /* addr */, line /* line */, 0 /* invack_cnt */,
+    1 /* req_id */, 1 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();      
 
     for (int i = 2; i < 6; i++) {
       put_req_in(REQ_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 0 /* req_id */,
       DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
 
-      word = i;
+      word = i+1;
       line.range(BITS_PER_WORD - 1, 0) = word;
       line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
@@ -2014,17 +2027,32 @@ void llc_spandex_tb::llc_test()
     put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, num_lines * WORDS_PER_LINE /* line */, 0 /* req_id */,
     DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
   
-    for (int i = 0; i < 2; i++) {
-      word = i;
-      line.range(BITS_PER_WORD - 1, 0) = word;
-      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+    // 1st line
+    word = 1;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
 
-      get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
-      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+    get_rsp_out(RSP_V /* coh_msg */, addr.word + (0 * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
 
-      wait();
-    }    
+    wait();
 
+    // 2nd line 
+    get_fwd_out(FWD_RVK_V /* coh_msg */, addr.word + (1 * 0x10) /* addr */, 1 /* req_id */, 1 /* dest_id */, 0 /* line */, 0b11 /* word_mask*/);
+
+    wait();
+
+    line.range(BITS_PER_WORD - 1, 0) = 3;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 2;
+
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word + (1 * 0x10) /* addr */, line /* line */, 1 /* req_id */, 0b11 /* word_mask */);
+
+    get_rsp_out(RSP_V /* coh_msg */, addr.word + (1 * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();
+
+    // 3rd to 6th lines
     for (int i = 2; i < 6; i++) {
       get_rsp_out(RSP_NACK /* coh_msg */, addr.word + (i * 0x10) /* addr */, 0 /* line */, 1 /* invack_cnt */,
       0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);

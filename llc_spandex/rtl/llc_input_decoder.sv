@@ -131,7 +131,7 @@ module llc_input_decoder (
                 // decoder will terminate the bulk transfer and clear bulk done.
                 // L2 will have a similar counter and threshold for NACK and know when the bulk has been terminated.
                 // Note that a successful RSP_V must reset the NACK counter.
-                if ((bulk_done == llc_bulk_len_int || bulk_nack_counter == `BULK_NACK_THRESHOLD) && (ongoing_bulk_req)) begin
+                if ((bulk_done >= llc_bulk_len_int || bulk_nack_counter == `BULK_NACK_THRESHOLD) && (ongoing_bulk_req)) begin
                     clr_ongoing_bulk_req = 1'b1;
                     clr_bulk_done = 1'b1;
                 end else if (ongoing_bulk_req) begin

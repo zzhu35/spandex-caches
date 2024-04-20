@@ -189,7 +189,7 @@ module l2_input_decoder (
                     set_cpu_req_from_conflict = 1'b1;
                 end
             end else if (((l2_cpu_req_valid_int && l2_cpu_req_len_int != 'h0) || ongoing_read_bulk_req || ongoing_write_bulk_req || (set_conflict && l2_cpu_conflict_len_int != 'h0)) && mshr_cnt != 0 && !evict_stall && !ongoing_fence && !ongoing_drain) begin
-                if ((bulk_done == l2_cpu_bulk_len_int) && (ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
+                if ((bulk_done >= l2_cpu_bulk_len_int) && (ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
                     clr_ongoing_bulk_req = 1'b1;
                     clr_bulk_done = 1'b1;
                     clr_bulk_nack_counter = 1'b1;

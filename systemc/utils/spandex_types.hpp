@@ -495,6 +495,7 @@ public:
             case FWD_REQ_O : os << "FWD_REQ_O"; break;
             case FWD_REQ_Odata : os << "FWD_REQ_Odata"; break;
             case FWD_RVK_O : os << "FWD_RVK_O"; break;
+            case FWD_RVK_V : os << "FWD_RVK_V"; break;
             case FWD_INV_SPDX : os << "FWD_INV"; break;
             case FWD_WTfwd : os << "FWD_WTfwd"; break;
             default: os << "UNKNOWN"; break;

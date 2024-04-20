@@ -648,6 +648,9 @@ module l2_fsm(
                     `FWD_INV : begin
                         next_state = FWD_INV_HANDLER;
                     end
+                    `FWD_RVK_V : begin
+                        next_state = FWD_RVK_O_HANDLER;
+                    end
                     `FWD_RVK_O : begin
                         next_state = FWD_RVK_O_HANDLER;
                     end
@@ -674,6 +677,9 @@ module l2_fsm(
                         next_state = FWD_INV_HANDLER;
                     end
                     `FWD_RVK_O : begin
+                        next_state = FWD_RVK_O_HANDLER;
+                    end
+                    `FWD_RVK_V : begin
                         next_state = FWD_RVK_O_HANDLER;
                     end
                     `FWD_REQ_S : begin
@@ -837,7 +843,11 @@ module l2_fsm(
                                     case(l2_cpu_req.dcs)
                                         `DCS_ReqOdata : begin
                                             if (word_mask_owned_next == `WORD_MASK_ALL) begin
-                                                next_state = CPU_REQ_READ_NO_REQ;
+                                                if (l2_rd_rsp_ready_int) begin
+                                                    next_state = DECODE;
+                                                end else begin
+                                                    next_state = CPU_REQ_READ_NO_REQ;
+                                                end
                                             end else begin
                                                 next_state = CPU_REQ_READ_REQ;
                                             end
@@ -848,7 +858,11 @@ module l2_fsm(
                                             // granularity, but since the Ariane need an entire line,
                                             // it is better to check that all words are valid.
                                             if (word_mask_valid_next == `WORD_MASK_ALL) begin
-                                                next_state = CPU_REQ_READ_NO_REQ;
+                                                if (l2_rd_rsp_ready_int) begin
+                                                    next_state = DECODE;
+                                                end else begin
+                                                    next_state = CPU_REQ_READ_NO_REQ;
+                                                end
                                             end else begin
                                                 next_state = CPU_REQ_READ_REQ;
                                             end
@@ -859,7 +873,11 @@ module l2_fsm(
                                     endcase
                                 end else begin
                                     if (word_mask_shared_next == `WORD_MASK_ALL) begin
-                                        next_state = CPU_REQ_READ_NO_REQ;
+                                        if (l2_rd_rsp_ready_int) begin
+                                            next_state = DECODE;
+                                        end else begin
+                                            next_state = CPU_REQ_READ_NO_REQ;
+                                        end
                                     end else begin
                                         next_state = CPU_REQ_READ_REQ;
                                     end
@@ -1455,11 +1473,12 @@ module l2_fsm(
                         // We do not immediately clear the MSHR entry either. We only decrement the number
                         // of lines remaining in the bulk transfer and send back the read response. Once the
                         // remaining words reaches 0, we clear the MSHR entry and the read_bypass.
-                        update_mshr_value_word = mshr[mshr_i].word - 2;
+                        update_mshr_value_word = mshr[mshr_i].word == 'h1 ? 'h0 : mshr[mshr_i].word - 2;
                         update_mshr_word = 1'b1;
 
                         if (!update_mshr_value_word) begin
                             clr_read_bypass = 1'b1;
+                            clr_set_conflict_fsm = 1'b1;
 
                             // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
                             if (l2_rd_rsp_ready_int) begin
@@ -1524,6 +1543,7 @@ module l2_fsm(
                             // number of NACKs we can receive, we will clear the read bypass and the MSHR entry.
                             if (!update_mshr_value_word || bulk_nack_counter + incr_bulk_nack_counter == `BULK_NACK_THRESHOLD) begin
                                 clr_read_bypass = 1'b1;
+                                clr_set_conflict_fsm = 1'b1;
 
                                 // Wait for read response to be accepted before incrementing the reqs_cnt and clearing state
                                 if (l2_rd_rsp_ready_int) begin
@@ -1615,49 +1635,66 @@ module l2_fsm(
                 end
             end
             FWD_RVK_O_HANDLER : begin
-                // Should we invalidate the line or downgrade to shared state?
-                // We choose to invalidate since revokes can be received for partial
-                // words, which could lead to partiall shared lines otherwise.
-                // If a revoke arrived when there is SPX_XR in the MSHR, that means
-                // the revoke was sent after the directory acknowledged the ReqOdata. This can only
-                // happen if there is reordering in the NoC.
-                if (mshr_hit) begin
-                    // update MSHR entry - the earlier ReqWB already invalidated the words.
-                    // Here, we are just unstalling the response.
-                    if (mshr[mshr_i].state == `SPX_RI) begin
-                        update_mshr_state = 1'b1;
-                        update_mshr_value_state = `SPX_II;
+                // If the forward is FWD_RVK_V, we know its to only get the up to date data
+                // for a bulk request. Therefore, we simply respond with no state change.
+                if (l2_fwd_in.coh_msg == `FWD_RVK_V) begin
+                    // send revoke response back - we send this irrespective of MSHR/tag hit
+                    // else the system will deadlock, but ideally one of them should happen.
+                    if (l2_rsp_out_ready_int) begin
+                        send_rsp_out (
+                            /* coh_msg */ `RSP_RVK_O,
+                            /* req_id */ l2_fwd_in.req_id,
+                            /* to_req */ 1'b0,
+                            /* line_addr */ l2_fwd_in.addr,
+                            /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
+                            /* word_mask */ l2_fwd_in.word_mask
+                        );
                     end
-                end else if (tag_hit) begin
-                    lmem_set_in = line_br.set;
-                    lmem_way_in = way_hit;
-                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
-                        // Only update the state for valid words in forward.
-                        if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] == `SPX_R) begin
-                            lmem_wr_data_state[i] = `SPX_I;
-                        end else begin
-                            lmem_wr_data_state[i] = states_buf[way_hit][i];
+                end else begin
+                    // Should we invalidate the line or downgrade to shared state?
+                    // We choose to invalidate since revokes can be received for partial
+                    // words, which could lead to partiall shared lines otherwise.
+                    // If a revoke arrived when there is SPX_XR in the MSHR, that means
+                    // the revoke was sent after the directory acknowledged the ReqOdata. This can only
+                    // happen if there is reordering in the NoC.
+                    if (mshr_hit) begin
+                        // update MSHR entry - the earlier ReqWB already invalidated the words.
+                        // Here, we are just unstalling the response.
+                        if (mshr[mshr_i].state == `SPX_RI) begin
+                            update_mshr_state = 1'b1;
+                            update_mshr_value_state = `SPX_II;
                         end
+                    end else if (tag_hit) begin
+                        lmem_set_in = line_br.set;
+                        lmem_way_in = way_hit;
+                        for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                            // Only update the state for valid words in forward.
+                            if (l2_fwd_in.word_mask[i] && states_buf[way_hit][i] == `SPX_R) begin
+                                lmem_wr_data_state[i] = `SPX_I;
+                            end else begin
+                                lmem_wr_data_state[i] = states_buf[way_hit][i];
+                            end
+                        end
+                        lmem_wr_en_state = 1'b1;
                     end
-                    lmem_wr_en_state = 1'b1;
-                end
 
-                // send revoke response back - we send this irrespective of MSHR/tag hit
-                // else the system will deadlock, but ideally one of them should happen.
-                if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
-                    send_rsp_out (
-                        /* coh_msg */ `RSP_RVK_O,
-                        /* req_id */ l2_fwd_in.req_id,
-                        /* to_req */ 1'b0,
-                        /* line_addr */ l2_fwd_in.addr,
-                        /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
-                        /* word_mask */ l2_fwd_in.word_mask
-                    );
+                    // send revoke response back - we send this irrespective of MSHR/tag hit
+                    // else the system will deadlock, but ideally one of them should happen.
+                    if (l2_rsp_out_ready_int && l2_inval_ready_int) begin
+                        send_rsp_out (
+                            /* coh_msg */ `RSP_RVK_O,
+                            /* req_id */ l2_fwd_in.req_id,
+                            /* to_req */ 1'b0,
+                            /* line_addr */ l2_fwd_in.addr,
+                            /* line */ (mshr_hit) ? mshr[mshr_i].line : lines_buf[way_hit],
+                            /* word_mask */ l2_fwd_in.word_mask
+                        );
 
-                    send_inval(
-                        /* addr */ l2_fwd_in.addr,
-                        /* hprot */ `DATA
-                    );
+                        send_inval(
+                            /* addr */ l2_fwd_in.addr,
+                            /* hprot */ `DATA
+                        );
+                    end
                 end
             end
             FWD_REQ_S_HANDLER : begin
@@ -1920,6 +1957,35 @@ module l2_fsm(
             CPU_REQ_TAG_LOOKUP : begin
                 lookup_en = 1'b1;
                 lookup_mode = `L2_LOOKUP;
+
+                // If the line hits in the L2 cache, immediately respond to avoid an extra
+                // cycle wait for read hits.
+                if (tag_hit_next && l2_cpu_req.cpu_msg == `READ) begin
+                    if (l2_cpu_req.dcs_en) begin
+                        case(l2_cpu_req.dcs)
+                            `DCS_ReqOdata : begin
+                                if (word_mask_owned_next == `WORD_MASK_ALL) begin
+                                    if (l2_rd_rsp_ready_int) begin
+                                        send_rd_rsp(/* line */ lines_buf[way_hit_next]);
+                                    end
+                                end
+                            end
+                            `DCS_ReqV : begin
+                                if (word_mask_valid_next == `WORD_MASK_ALL) begin
+                                    if (l2_rd_rsp_ready_int) begin
+                                        send_rd_rsp(/* line */ lines_buf[way_hit_next]);
+                                    end
+                                end
+                            end
+                        endcase
+                    end else begin
+                        if (word_mask_shared_next == `WORD_MASK_ALL) begin
+                            if (l2_rd_rsp_ready_int) begin
+                                send_rd_rsp(/* line */ lines_buf[way_hit_next]);
+                            end
+                        end
+                    end                
+                end
 
                 // In case the CPU request is a release, set the ongoing drain.
                 // The request with the release semantic must also be flushed before

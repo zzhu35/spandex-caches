@@ -341,6 +341,11 @@ module llc_fsm (
                     `LLC_OS : begin
                         next_state = DECODE;
                     end
+                    `LLC_OV : begin
+                        if (llc_rsp_out_ready_int) begin
+                            next_state = DECODE;
+                        end
+                    end
                     default : begin
                         next_state = DECODE;
                     end
@@ -916,72 +921,107 @@ module llc_fsm (
                 end
             end
             RSP_RVK_O_HANDLER : begin
-                // Directly update the RAMs because only one response is expected - lines and owner.
-                lmem_set_in = line_br.set;
-                lmem_way_in = mshr[mshr_i].way;
-                // Update the words in the response in the line, based on word_mask (overwriting the owner ID).
-                write_line_helper (
-                    /* line_orig */ mshr[mshr_i].line,
-                    /* line_in */ llc_rsp_in.line,
-                    /* word_mask_i */ llc_rsp_in.word_mask,
-                    /* line_out */ lmem_wr_data_line
-                );
-                // Clear the words that were owned earlier..
-                lmem_wr_data_owner = owners_buf[mshr[mshr_i].way] & ~llc_rsp_in.word_mask;
-                lmem_wr_data_dirty_bit = 1'b1;
-                lmem_wr_en_line = 1'b1;
-                lmem_wr_en_owner = 1'b1;
-                lmem_wr_en_dirty_bit = 1'b1;
+                if (mshr[mshr_i].invack_cnt == 'h1) begin
+                    // This is a response for a bulk response from an owner of the line currently
+                    // serviced. LLC does not change the ownership state of the line, only responds back
+                    // to the owner, clears the MSHR entry and increments bulk transfer tracking registers.
+                    case (mshr[mshr_i].state)
+                        `LLC_OV : begin
+                            if (llc_rsp_out_ready_int) begin
+                                // We assume that the owners are not at word granularity and respond back to the
+                                // requestor with all the words in the response. Similarly, update_mshr_value_line 
+                                // is not technically necessary in this case since it will be equal to llc_rsp_in.line.
+                                send_rsp_out (
+                                    /* coh_msg */ `RSP_V,
+                                    /* line_addr */ llc_rsp_in.addr,
+                                    /* line */ llc_rsp_in.line,
+                                    /* req_id */ mshr[mshr_i].req_id,
+                                    /* dest_id */ mshr[mshr_i].req_id,
+                                    /* invack_cnt */ 'h1,
+                                    /* word_offset */ 'h0,
+                                    /* word_mask */ llc_rsp_in.word_mask
+                                );
 
-                // We do not change the sharers list because L2 invalidates on revoke rather than go to shared.
-                // State table shows to move to valid state, which is okay even on eviction from LLC. However,
-                // this necessitates a self-invalidation. Therefore, we choose to invalidate instead for now.
-                case (mshr[mshr_i].state)
-                    `LLC_OWB : begin
-                        // Send the mem req and clear the MSHR entry only when mem req is accepted.
-                        if (llc_mem_req_ready_int) begin
-                            send_mem_req (
-                                /* coh_msg */ `LLC_WRITE,
-                                /* line_addr */ llc_rsp_in.addr,
-                                /* hprot */ mshr[mshr_i].hprot,
-                                /* line */ lmem_wr_data_line
-                            );
+                                clr_bulk_nack_counter = 1'b1;
+                                incr_bulk_done = 1'b1;
+                                set_req_bulk_addr_data = llc_req_in.addr + 1;
+                                set_req_bulk_addr = 1'b1;
 
+                                // Clear the MSHR entry
+                                update_mshr_state = 1'b1;
+                                update_mshr_value_state = `LLC_I;
+                                incr_mshr_cnt = 1'b1;
+                            end
+                        end
+                    endcase
+                end else begin
+                    // Directly update the RAMs because only one response is expected - lines and owner.
+                    lmem_set_in = line_br.set;
+                    lmem_way_in = mshr[mshr_i].way;
+                    // Update the words in the response in the line, based on word_mask (overwriting the owner ID).
+                    write_line_helper (
+                        /* line_orig */ mshr[mshr_i].line,
+                        /* line_in */ llc_rsp_in.line,
+                        /* word_mask_i */ llc_rsp_in.word_mask,
+                        /* line_out */ lmem_wr_data_line
+                    );
+                    // Clear the words that were owned earlier..
+                    lmem_wr_data_owner = owners_buf[mshr[mshr_i].way] & ~llc_rsp_in.word_mask;
+                    lmem_wr_data_dirty_bit = 1'b1;
+                    lmem_wr_en_line = 1'b1;
+                    lmem_wr_en_owner = 1'b1;
+                    lmem_wr_en_dirty_bit = 1'b1;
+
+                    // We do not change the sharers list because L2 invalidates on revoke rather than go to shared.
+                    // State table shows to move to valid state, which is okay even on eviction from LLC. However,
+                    // this necessitates a self-invalidation. Therefore, we choose to invalidate instead for now.
+                    case (mshr[mshr_i].state)
+                        `LLC_OWB : begin
+                            // Send the mem req and clear the MSHR entry only when mem req is accepted.
+                            if (llc_mem_req_ready_int) begin
+                                send_mem_req (
+                                    /* coh_msg */ `LLC_WRITE,
+                                    /* line_addr */ llc_rsp_in.addr,
+                                    /* hprot */ mshr[mshr_i].hprot,
+                                    /* line */ lmem_wr_data_line
+                                );
+
+                                // Clear the MSHR entry
+                                update_mshr_state = 1'b1;
+                                update_mshr_value_state = `LLC_I;
+                                incr_mshr_cnt = 1'b1;
+                            end
+
+                            // Update the states RAM
+                            lmem_set_in = line_br.set;
+                            lmem_way_in = mshr[mshr_i].way;
+                            lmem_wr_data_state = `LLC_I;
+                            lmem_wr_en_state = 1'b1;
+
+                            // LLC_OWB is triggered on eviction therefore, we clear the evict_stall.
+                            // In FSM 1, we transition to DECODE state, where input_decoder checks if set_conflict is asserted
+                            // and there is no evict stall. This triggers the interface to update the input request with
+                            // original pending request that caused the eviction.
+                            // It is okay to update evict_way multiple times here since
+                            // mshr[mshr_i].way (which is same as evict_way_buf) is never updated till entry is freed.
+                            lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
+                            lmem_wr_en_evict_way = 1'b1;
+                            clr_evict_stall = 1'b1;
+                        end
+                        `LLC_OS : begin
                             // Clear the MSHR entry
                             update_mshr_state = 1'b1;
                             update_mshr_value_state = `LLC_I;
                             incr_mshr_cnt = 1'b1;
+
+                            // Update the states RAM
+                            lmem_set_in = line_br.set;
+                            lmem_way_in = mshr[mshr_i].way;
+                            lmem_wr_data_state = `LLC_S;
+                            lmem_wr_en_state = 1'b1;
                         end
-
-                        // Update the states RAM
-                        lmem_set_in = line_br.set;
-                        lmem_way_in = mshr[mshr_i].way;
-                        lmem_wr_data_state = `LLC_I;
-                        lmem_wr_en_state = 1'b1;
-
-                        // LLC_OWB is triggered on eviction therefore, we clear the evict_stall.
-                        // In FSM 1, we transition to DECODE state, where input_decoder checks if set_conflict is asserted
-                        // and there is no evict stall. This triggers the interface to update the input request with
-                        // original pending request that caused the eviction.
-                        // It is okay to update evict_way multiple times here since
-                        // mshr[mshr_i].way (which is same as evict_way_buf) is never updated till entry is freed.
-                        lmem_wr_data_evict_way = mshr[mshr_i].way + 1;
-                        lmem_wr_en_evict_way = 1'b1;
-                        clr_evict_stall = 1'b1;
-                    end
-                    `LLC_OS : begin
-                        // Clear the MSHR entry
-                        update_mshr_state = 1'b1;
-                        update_mshr_value_state = `LLC_I;
-                        incr_mshr_cnt = 1'b1;
-
-                        // Update the states RAM
-                        lmem_set_in = line_br.set;
-                        lmem_way_in = mshr[mshr_i].way;
-                        lmem_wr_data_state = `LLC_S;
-                        lmem_wr_en_state = 1'b1;
-                    end
-                endcase
+                    endcase
+                end
             end
             ONGOING_FLUSH_LOOKUP : begin
                 rd_set_into_bufs = 1'b1;
@@ -1449,15 +1489,49 @@ module llc_fsm (
                                 end
                             end else begin
                                 // Send forward to owner, if we have any unowned words.
-                                if (llc_fwd_out_ready_int) begin
+                                // TMP FIX: If there is a bulk transfer element that is owned elsewhere,
+                                // we will request for that data with FWD_REQ_V but set the req_id as the
+                                // owner itself. Using this, the owner will know to respond back to the LLC
+                                // with the up to date copy (using RSP_RVK_O), however, without ceding ownership.
+                                // The LLC when it receives this response, will check the MSHR entry to find that
+                                // this is a bulk response, release evict stall without changing the ownership state
+                                // of the line and respond back to the requestor with received data as a RSP_V.
+                                // If the line is partially owned, we will coalesce the returned works with the
+                                // existing words in the LLC and respond with the full line as RSP_V.
+                                if (do_bulk_req) begin
+                                    // If the REQ_V bulk miss request is already owned by the requestor,
+                                    // then we send a NACK to the current request and increment the NACK counter.
                                     send_fwd_out (
-                                        /* coh_msg */ `FWD_REQ_V,
+                                        /* coh_msg */ `FWD_RVK_V,
                                         /* addr */ llc_req_in.addr,
-                                        /* req_id */ llc_req_in.req_id,
+                                        /* req_id */ owners_cache_id[0],
                                         /* dest_id */ owners_cache_id[0],
                                         /* word_mask */ word_owner_mask,
                                         /* line */ 'h0
                                     );
+
+                                    fill_mshr_entry (
+                                        /* msg */ `FWD_RVK_V,
+                                        /* req_id */ llc_req_in.req_id,
+                                        /* tag */ tags_buf[req_in_way],
+                                        /* way */ req_in_way,
+                                        /* state */ `LLC_OV,
+                                        /* hprot */ hprots_buf[req_in_way],
+                                        /* invack_cnt */ 'h1,
+                                        /* line */ lines_buf[req_in_way],
+                                        /* word_mask */ word_owner_mask
+                                    );        
+                                end else begin
+                                    if (llc_fwd_out_ready_int) begin
+                                        send_fwd_out (
+                                            /* coh_msg */ `FWD_REQ_V,
+                                            /* addr */ llc_req_in.addr,
+                                            /* req_id */ llc_req_in.req_id,
+                                            /* dest_id */ owners_cache_id[0],
+                                            /* word_mask */ word_owner_mask,
+                                            /* line */ 'h0
+                                        );
+                                    end
                                 end
                             end
                         end
