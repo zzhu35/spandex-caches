@@ -165,6 +165,7 @@ module l2_fsm(
     `FPGA_DBG output cache_id_t update_wb_value_pred_cid,
     `FPGA_DBG output l2_tag_t wb_dispatch_tag,
     `FPGA_DBG output l2_set_t wb_dispatch_set,
+    `FPGA_DBG output logic wb_use_dipatch_entry,
 `endif
     // To external interfaces - new data available.
     `FPGA_DBG output logic l2_rd_rsp_valid_int,
@@ -1050,7 +1051,11 @@ module l2_fsm(
                         if ((set_conflict | set_set_conflict_mshr) & !clr_set_conflict_mshr) begin
                             next_state = CPU_REQ_SET_CONFLICT;
                         end else begin
-                            next_state = CPU_REQ_DISPATCH_WB;
+                            if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
+                                next_state = DECODE;
+                            end else begin
+                                next_state = CPU_REQ_DISPATCH_WB;
+                            end
                         end
                     end
                 end
@@ -1229,6 +1234,7 @@ module l2_fsm(
         update_wb_value_pred_cid = 'h0;
         wb_dispatch_tag = 'h0;
         wb_dispatch_set = 'h0;
+        wb_use_dipatch_entry = 1'b0;
 `endif
 
         set_ongoing_read_bulk_req = 1'b0;
@@ -2494,6 +2500,94 @@ module l2_fsm(
                         mshr_op_code = `L2_MSHR_PEEK_WB;
                         wb_dispatch_tag = wb[wb_dispatch_i].tag;
                         wb_dispatch_set = wb[wb_dispatch_i].set;
+
+                        // If you are able to dispatch this cycle, dispatch an entry and add the 
+                        // new word to that entry itself.
+                        if (!(set_conflict | set_set_conflict_mshr) | clr_set_conflict_mshr) begin
+                            // We add the MSHR entry (and decrement the MSHR count) only
+                            // if the req_out is accepted.
+                            if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
+                                fill_mshr_entry (
+                                /* cpu_msg */ `WRITE,
+                                /* hprot */ wb[wb_dispatch_i].hprot,
+                                /* hsize */ 'h0,
+                                /* tag */ wb[wb_dispatch_i].tag,
+                                /* way */ wb[wb_dispatch_i].way,
+                                /* state */ `SPX_XRV,
+                                /* word */ 'h0,
+                                /* line */ wb[wb_dispatch_i].line,
+                                /* amo */ 'h0,
+                                /* word_mask */ wb[wb_dispatch_i].word_mask
+                                );
+
+                                if (l2_cpu_req.use_owner_pred) begin
+                                    send_fwd_out (
+                                        /* coh_msg */ `FWD_WTfwd,
+                                        /* req_id */ wb[wb_dispatch_i].pred_cid,
+                                        /* to_req */ 1'b1,
+                                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                                        /* line */ wb[wb_dispatch_i].line,
+                                        /* word_mask */ wb[wb_dispatch_i].word_mask
+                                    );
+                                end else begin
+                                    send_req_out (
+                                        /* coh_msg */ `REQ_WTfwd,
+                                        /* hprot */ wb[wb_dispatch_i].hprot,
+                                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                                        /* line */ wb[wb_dispatch_i].line,
+                                        /* word_mask */ wb[wb_dispatch_i].word_mask
+                                    );
+                                end                                
+
+                                // Now, we will initialize all the fields with the incoming request.
+                                write_word_helper (
+                                    /* line_in */ 'h0,
+                                    /* word */ l2_cpu_req.word,
+                                    /* w_off */ addr_br.w_off,
+                                    /* b_off */ addr_br.b_off,
+                                    /* hsize */ l2_cpu_req.hsize,
+                                    /* line_out */ update_wb_value_line
+                                );
+
+                                fill_wb_entry (
+                                    /* way */ 'h0,
+                                    /* hprot */ l2_cpu_req.hprot,
+                                    /* word_mask */ 1 << addr_br.w_off,
+                                    /* dcs_en */ l2_cpu_req.dcs_en,
+                                    /* dcs */ l2_cpu_req.dcs,
+                                    /* use_owner_pred */ l2_cpu_req.use_owner_pred,
+                                    /* pred_cid */ l2_cpu_req.pred_cid
+                                );
+
+                                // In fill_wb_entry, we are adding new entry as well. So, we 
+                                // cancel that out here because we are reusing the dispatched entry.
+                                add_wb_entry = 1'b0;
+                                // Reuse the dispatched entry for adding the new entry.
+                                wb_use_dipatch_entry = 1'b1;
+
+                                if (tag_hit && word_mask_shared) begin
+                                    lmem_set_in = addr_br.set;
+                                    lmem_way_in = cpu_req_way;
+                                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                                        lmem_wr_data_state[i] = `SPX_I;
+                                    end
+                                    lmem_wr_en_state = 1'b1;
+                                end else if (tag_hit && word_mask_valid) begin
+                                    lmem_set_in = addr_br.set;
+                                    lmem_way_in = cpu_req_way;
+                                    for (int i = 0; i < `WORDS_PER_LINE; i++) begin
+                                        lmem_wr_data_state[i] = states_buf[way_hit][i];
+                                    end
+                                    lmem_wr_data_state[addr_br.w_off] = `SPX_I;
+                                    lmem_wr_en_state = 1'b1;
+                                end
+
+                                send_inval (
+                                    /* addr */ addr_br.line_addr,
+                                    /* hprot */ `DATA
+                                );                                
+                            end
+                        end
                     end
                 end
             end

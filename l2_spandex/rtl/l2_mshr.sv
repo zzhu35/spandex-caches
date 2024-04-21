@@ -31,6 +31,7 @@ module l2_mshr(
     input word_mask_t update_mshr_value_word_mask_reg,
 `ifdef USE_WB
     input logic clear_wb_entry,
+    input logic wb_use_dipatch_entry,
     input l2_tag_t wb_dispatch_tag,
     input l2_set_t wb_dispatch_set,
 `endif
@@ -77,7 +78,7 @@ module l2_mshr(
                     mshr[i].amo <= 0;
                     mshr[i].word_mask_reg <= 0;
 `ifdef USE_WB
-                end else if (add_mshr_entry && clear_wb_entry) begin
+                end else if (add_mshr_entry && (wb_use_dipatch_entry || clear_wb_entry)) begin
                     // TODO: we assume that for entries added from the WB, we do not need 
                     // the w_off and b_off because the line is already updated using them.
                     if (mshr_i == i) begin

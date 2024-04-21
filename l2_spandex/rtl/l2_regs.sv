@@ -46,6 +46,7 @@ module l2_regs (
     input logic add_wb_entry,
     input logic wb_hit,
     input logic clear_wb_entry,
+    input logic wb_use_dipatch_entry,
 `endif
 
     // Registers
@@ -205,7 +206,7 @@ module l2_regs (
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             wb_evict_buf <= `N_WB-1;
-        end else if (clear_wb_entry && !ongoing_drain) begin
+        end else if (wb_use_dipatch_entry || (clear_wb_entry && !ongoing_drain)) begin
             wb_evict_buf <= wb_evict_buf + 1;
         end
     end

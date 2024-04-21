@@ -10,6 +10,7 @@ module l2_wb (
     input logic clear_wb_entry,
     input logic [`WB_BITS-1:0] wb_evict_buf,
     input logic ongoing_drain,
+    input logic wb_use_dipatch_entry,
     // Update parts of an WB entry.
     input logic update_wb_way,
     input logic update_wb_line,
@@ -93,6 +94,20 @@ module l2_wb (
                             wb[i].pred_cid <= update_wb_value_pred_cid;
                             wb[i].valid <= 1'b1;
                         end
+                    end
+                end else if (wb_use_dipatch_entry) begin
+                    if (wb_evict_buf == i) begin
+                        wb[i].tag <= addr_br.tag;
+                        wb[i].set <= addr_br.set;
+                        wb[i].way <= update_wb_value_way;
+                        wb[i].hprot <= update_wb_value_hprot;
+                        wb[i].line <= update_wb_value_line;
+                        wb[i].word_mask <= update_wb_value_word_mask;
+                        wb[i].dcs_en <= update_wb_value_dcs_en;
+                        wb[i].dcs <= update_wb_value_dcs;
+                        wb[i].use_owner_pred <= update_wb_value_use_owner_pred;
+                        wb[i].pred_cid <= update_wb_value_pred_cid;
+                        wb[i].valid <= 1'b1;
                     end
                 end else if (clear_wb_entry) begin
                     if (ongoing_drain) begin
