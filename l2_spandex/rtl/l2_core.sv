@@ -162,7 +162,7 @@ module l2_core(
     l2_set_t wb_dispatch_set;
     logic [`WB_BITS_P1-1:0] wb_cnt;
     wb_buf_t wb[`N_WB];
-    logic wb_use_dipatch_entry;
+    logic wb_use_dispatch_entry;
 `endif
 
     addr_t l2_cpu_req_len_int, l2_cpu_conflict_len_int, l2_cpu_bulk_len_int, bulk_done, bulk_nack_counter;

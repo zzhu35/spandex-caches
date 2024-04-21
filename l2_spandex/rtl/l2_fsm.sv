@@ -165,7 +165,7 @@ module l2_fsm(
     `FPGA_DBG output cache_id_t update_wb_value_pred_cid,
     `FPGA_DBG output l2_tag_t wb_dispatch_tag,
     `FPGA_DBG output l2_set_t wb_dispatch_set,
-    `FPGA_DBG output logic wb_use_dipatch_entry,
+    `FPGA_DBG output logic wb_use_dispatch_entry,
 `endif
     // To external interfaces - new data available.
     `FPGA_DBG output logic l2_rd_rsp_valid_int,
@@ -1234,7 +1234,7 @@ module l2_fsm(
         update_wb_value_pred_cid = 'h0;
         wb_dispatch_tag = 'h0;
         wb_dispatch_set = 'h0;
-        wb_use_dipatch_entry = 1'b0;
+        wb_use_dispatch_entry = 1'b0;
 `endif
 
         set_ongoing_read_bulk_req = 1'b0;
@@ -2563,7 +2563,7 @@ module l2_fsm(
                                 // cancel that out here because we are reusing the dispatched entry.
                                 add_wb_entry = 1'b0;
                                 // Reuse the dispatched entry for adding the new entry.
-                                wb_use_dipatch_entry = 1'b1;
+                                wb_use_dispatch_entry = 1'b1;
 
                                 if (tag_hit && word_mask_shared) begin
                                     lmem_set_in = addr_br.set;

@@ -31,7 +31,7 @@ module l2_mshr(
     input word_mask_t update_mshr_value_word_mask_reg,
 `ifdef USE_WB
     input logic clear_wb_entry,
-    input logic wb_use_dipatch_entry,
+    input logic wb_use_dispatch_entry,
     input l2_tag_t wb_dispatch_tag,
     input l2_set_t wb_dispatch_set,
 `endif
@@ -74,11 +74,10 @@ module l2_mshr(
                     mshr[i].w_off <= 0;
                     mshr[i].b_off <= 0;
                     mshr[i].hprot <= 0;
-                    mshr[i].word <= 0;
                     mshr[i].amo <= 0;
                     mshr[i].word_mask_reg <= 0;
 `ifdef USE_WB
-                end else if (add_mshr_entry && (wb_use_dipatch_entry || clear_wb_entry)) begin
+                end else if (add_mshr_entry && clear_wb_entry) begin
                     // TODO: we assume that for entries added from the WB, we do not need 
                     // the w_off and b_off because the line is already updated using them.
                     if (mshr_i == i) begin
@@ -89,10 +88,23 @@ module l2_mshr(
                         mshr[i].w_off <= addr_br.w_off;
                         mshr[i].b_off <= addr_br.b_off;
                         mshr[i].hprot <= update_mshr_value_hprot;
-                        mshr[i].word <= update_mshr_value_word;
                         mshr[i].amo <= update_mshr_value_amo;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end
+                end else if (add_mshr_entry && wb_use_dispatch_entry) begin
+                    // TODO: we assume that for entries added from the WB, we do not need 
+                    // the w_off and b_off because the line is already updated using them.
+                    if (mshr_i_next == i) begin
+                        mshr[i].cpu_msg <= update_mshr_value_cpu_msg;
+                        mshr[i].set <= wb_dispatch_set;
+                        mshr[i].way <= update_mshr_value_way;
+                        mshr[i].hsize <= update_mshr_value_hsize;
+                        mshr[i].w_off <= addr_br.w_off;
+                        mshr[i].b_off <= addr_br.b_off;
+                        mshr[i].hprot <= update_mshr_value_hprot;
+                        mshr[i].amo <= update_mshr_value_amo;
+                        mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
+                    end     
 `endif               
                 end else if (add_mshr_entry) begin
                     if (mshr_i == i) begin
@@ -103,7 +115,6 @@ module l2_mshr(
                         mshr[i].w_off <= addr_br.w_off;
                         mshr[i].b_off <= addr_br.b_off;
                         mshr[i].hprot <= update_mshr_value_hprot;
-                        mshr[i].word <= update_mshr_value_word;
                         mshr[i].amo <= update_mshr_value_amo;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end     
@@ -115,8 +126,14 @@ module l2_mshr(
                 if (!rst) begin
                     mshr[i].state <= 0;
                 end else if (update_mshr_state || add_mshr_entry) begin
-                    if (mshr_i == i) begin
-                        mshr[i].state <= update_mshr_value_state;
+                    if (wb_use_dispatch_entry) begin
+                        if (mshr_i_next == i) begin
+                            mshr[i].state <= update_mshr_value_state;
+                        end
+                    end else begin
+                        if (mshr_i == i) begin
+                            mshr[i].state <= update_mshr_value_state;
+                        end
                     end
                 end
             end
@@ -126,9 +143,19 @@ module l2_mshr(
                 if (!rst) begin
                     mshr[i].line <= 0;
                 end else if (update_mshr_line || add_mshr_entry) begin
-                    if (mshr_i == i) begin
-                        mshr[i].line <= update_mshr_value_line;
+`ifdef USE_WB
+                    if (wb_use_dispatch_entry) begin
+                        if (mshr_i_next == i) begin
+                            mshr[i].line <= update_mshr_value_line;
+                        end
+                    end else begin
+`endif                        
+                        if (mshr_i == i) begin
+                            mshr[i].line <= update_mshr_value_line;
+                        end
+`ifdef USE_WB
                     end
+`endif                        
                 end
             end
 
@@ -137,9 +164,19 @@ module l2_mshr(
                 if (!rst) begin
                     mshr[i].tag <= 0;
                 end else if (update_mshr_tag || add_mshr_entry) begin
-                    if (mshr_i == i) begin
-                        mshr[i].tag <= update_mshr_value_tag;
+`ifdef USE_WB
+                    if (wb_use_dispatch_entry) begin
+                        if (mshr_i_next == i) begin
+                            mshr[i].tag <= update_mshr_value_tag;
+                        end
+                    end else begin
+`endif                        
+                        if (mshr_i == i) begin
+                            mshr[i].tag <= update_mshr_value_tag;
+                        end
+`ifdef USE_WB
                     end
+`endif                        
                 end
             end
 
@@ -148,9 +185,19 @@ module l2_mshr(
                 if (!rst) begin
                     mshr[i].word_mask <= 0;
                 end else if (update_mshr_word_mask || add_mshr_entry) begin
-                    if (mshr_i == i) begin
-                        mshr[i].word_mask <= update_mshr_value_word_mask;
+`ifdef USE_WB
+                    if (wb_use_dispatch_entry) begin
+                        if (mshr_i_next == i) begin
+                            mshr[i].word_mask <= update_mshr_value_word_mask;
+                        end
+                    end else begin
+`endif                        
+                        if (mshr_i == i) begin
+                            mshr[i].word_mask <= update_mshr_value_word_mask;
+                        end
+`ifdef USE_WB
                     end
+`endif                        
                 end
             end
 
@@ -159,9 +206,19 @@ module l2_mshr(
                 if (!rst) begin
                     mshr[i].word <= 0;
                 end else if (update_mshr_word || add_mshr_entry) begin
-                    if (mshr_i == i) begin
-                        mshr[i].word <= update_mshr_value_word;
+`ifdef USE_WB
+                    if (wb_use_dispatch_entry) begin
+                        if (mshr_i_next == i) begin
+                            mshr[i].word <= update_mshr_value_word;
+                        end
+                    end else begin
+`endif                        
+                        if (mshr_i == i) begin
+                            mshr[i].word <= update_mshr_value_word;
+                        end
+`ifdef USE_WB
                     end
+`endif                        
                 end
             end
         end
