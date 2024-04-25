@@ -116,7 +116,7 @@ module llc_regs (
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             bulk_nack_counter <= 0;
-        end else if (clr_bulk_nack_counter) begin
+        end else if (clr_bulk_nack_counter || clr_bulk_done) begin
             bulk_nack_counter <= 0;
         end else if (incr_bulk_nack_counter) begin
             bulk_nack_counter <= bulk_nack_counter + 1;

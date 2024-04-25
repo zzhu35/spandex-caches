@@ -101,6 +101,7 @@ module l2_fsm(
     `FPGA_DBG input logic ongoing_write_bulk_req,
     `FPGA_DBG input addr_t bulk_done,
     `FPGA_DBG input addr_t bulk_nack_counter,
+    `FPGA_DBG input logic ongoing_read_bypass,
     `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
     `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
 
@@ -226,6 +227,8 @@ module l2_fsm(
     `FPGA_DBG output logic decr_bulk_done_2,
     `FPGA_DBG output logic do_bulk_rsp,
     `FPGA_DBG output logic incr_bulk_nack_counter,
+    `FPGA_DBG output logic set_read_bypass,
+    `FPGA_DBG output logic clr_read_bypass,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -342,7 +345,7 @@ module l2_fsm(
     // a tag hit, we assign ack_mask to the common words in the forward and owned words.
     // Similarly, we assign nack_mask to words in the forward that are not owned, or all
     // words in the forward if not a tag hit.
-    word_mask_t ack_mask, nack_mask;
+    `FPGA_DBG word_mask_t ack_mask, nack_mask;
     assign ack_mask = do_fwd ? (tag_hit ? (l2_fwd_in.word_mask & word_mask_owned) : 'h0) : 'h0;
     assign nack_mask = do_fwd ? ((mshr_hit && mshr[mshr_i] == `SPX_RI) ? l2_fwd_in.word_mask : (tag_hit ? (l2_fwd_in.word_mask & ~word_mask_owned) : l2_fwd_in.word_mask)) : 'h0;
 
@@ -359,20 +362,9 @@ module l2_fsm(
     end
 
 `ifdef USE_WB
-    logic [`WB_BITS-1:0] wb_dispatch_i;
+    `FPGA_DBG logic [`WB_BITS-1:0] wb_dispatch_i;
     assign wb_dispatch_i = ongoing_drain ? wb_valid_i : wb_evict_buf;
 `endif
-
-    logic set_read_bypass, clr_read_bypass, ongoing_read_bypass;
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            ongoing_read_bypass <= 0;
-        end else if (set_read_bypass) begin
-            ongoing_read_bypass <= 1'b1;
-        end else if (clr_read_bypass) begin
-            ongoing_read_bypass <= 1'b0;
-        end
-    end
 
     always_comb begin
         incr_bulk_done_1 = 1'b0;

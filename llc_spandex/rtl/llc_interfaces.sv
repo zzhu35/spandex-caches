@@ -68,6 +68,7 @@ module llc_interfaces (
     output logic llc_rst_tb, 
     output line_addr_t req_in_addr,
     output line_addr_t rsp_in_addr,
+    output addr_t llc_conflict_len_int,
     output addr_t llc_bulk_len_int,
     output logic new_bulk_req,
 
@@ -484,6 +485,7 @@ module llc_interfaces (
     end
 
     assign new_bulk_req = llc_req_in_valid_int ? (llc_req_in_next.coh_msg == `REQ_V && llc_req_in_next.line[`BULK_LENGTH_BITS-1:0] != 0) : 1'b0;
+    assign llc_conflict_len_int = llc_req_conflict.coh_msg == `REQ_V ? llc_req_conflict.line[`BULK_LENGTH_BITS-1:0] : 'h0;
     assign llc_bulk_len_int = llc_req_bulk.line[`BULK_LENGTH_BITS-1:0];
 
     //req in stalled

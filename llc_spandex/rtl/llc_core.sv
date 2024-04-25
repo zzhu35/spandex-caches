@@ -155,7 +155,7 @@ module llc_core (
 
     logic clr_ongoing_bulk_req, set_ongoing_bulk_req, incr_bulk_done, clr_bulk_done, set_req_from_bulk, set_req_bulk;
     logic new_bulk_req, ongoing_bulk_req, do_bulk_req, do_bulk_req_next, incr_bulk_nack_counter, clr_bulk_nack_counter;
-    addr_t llc_bulk_len_int, bulk_done, bulk_nack_counter;
+    addr_t llc_bulk_len_int, bulk_done, bulk_nack_counter, llc_conflict_len_int;
     logic set_req_bulk_addr;
     line_addr_t set_req_bulk_addr_data;
 

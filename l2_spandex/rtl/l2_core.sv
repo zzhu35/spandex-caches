@@ -171,7 +171,7 @@ module l2_core(
     logic set_cpu_req_from_bulk, set_cpu_req_bulk, set_cpu_req_bulk_addr;
     addr_t set_cpu_req_bulk_addr_data;
     logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, decr_bulk_done_1, decr_bulk_done_2;
-    logic do_bulk_rsp, incr_bulk_nack_counter, clr_bulk_nack_counter;    
+    logic do_bulk_rsp, incr_bulk_nack_counter, clr_bulk_nack_counter, set_read_bypass, clr_read_bypass, ongoing_read_bypass;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;

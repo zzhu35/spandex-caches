@@ -2041,6 +2041,10 @@ void llc_spandex_tb::llc_test()
     get_fwd_out(FWD_RVK_V /* coh_msg */, addr.word + (1 * 0x10) /* addr */, 1 /* req_id */, 1 /* dest_id */, 0 /* line */, 0b11 /* word_mask*/);
 
     wait();
+    
+    for (int i = 0; i < 10; i++) {
+      wait();
+    }
 
     line.range(BITS_PER_WORD - 1, 0) = 3;
     line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 2;
@@ -2060,7 +2064,83 @@ void llc_spandex_tb::llc_test()
       wait();
     }  
 
+    /////////////////////////////////////////////////////////////
+    // NACK - last line is owned elsewhere and 
+    ////////////////////////////////////////////////////////////////
+    base_addr = 0x83500200;
+    addr.breakdown(base_addr);
+
+    put_req_in(REQ_Odata /* coh_msg */, addr.word + (7 * 0x10) /* addr */, 0 /* line */, 1 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+
+    get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word + (7 * 0x10) /* addr */, 0 /* line */);
+
     wait();
+    
+    for (int i = 0; i < 10; i++) {
+      wait();
+    }
+
+    word = 8;
+    line.range(BITS_PER_WORD - 1, 0) = word;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+    put_mem_rsp(line /* line */);
+
+    get_rsp_out(RSP_Odata /* coh_msg */, addr.word + (7 * 0x10) /* addr */, line /* line */, 0 /* invack_cnt */,
+    1 /* req_id */, 1 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    wait();      
+
+    put_req_in(REQ_V /* coh_msg */, addr.word /* addr */, num_lines * WORDS_PER_LINE /* line */, 0 /* req_id */,
+    DATA /* hprot */, 0 /* woff */, 0 /* wvalid */, 0b11 /* word_mask */);
+  
+    wait();
+
+    for (int i = 0; i < num_lines - 1; i++) {
+      get_mem_req(LLC_READ /* hwrite */, WORD /* hsize */, DATA /* hprot */, addr.word + (i * 0x10) /* addr */, 0 /* line */);
+
+      wait();
+    
+      for (int i = 0; i < 10; i++) {
+        wait();
+      }
+
+      word = i+1;
+      line.range(BITS_PER_WORD - 1, 0) = word;
+      line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = word;
+
+      put_mem_rsp(line /* line */);
+
+      get_rsp_out(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+      0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+      wait();      
+    }    
+
+    wait();
+
+    // 2nd line 
+    get_fwd_out(FWD_RVK_V /* coh_msg */, addr.word + (7 * 0x10) /* addr */, 1 /* req_id */, 1 /* dest_id */, 0 /* line */, 0b11 /* word_mask*/);
+
+    wait();
+
+    for (int i = 0; i < 10; i++) {
+      wait();
+    }
+
+    line.range(BITS_PER_WORD - 1, 0) = 9;
+    line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = 8;
+
+    put_rsp_in(RSP_RVK_O /* rsp_msg */, addr.word + (7 * 0x10) /* addr */, line /* line */, 1 /* req_id */, 0b11 /* word_mask */);
+
+    get_rsp_out(RSP_V /* coh_msg */, addr.word + (7 * 0x10) /* addr */, line /* line */, 1 /* invack_cnt */,
+    0 /* req_id */, 0 /* dest_id */, 0 /* woff */, 0b11 /* word_mask */);
+
+    for (int i = 0; i < 10; i++) {
+      wait();
+    }
+
 #endif 
 	  CACHE_REPORT_VAR(sc_time_stamp(), "[SPANDEX] Error count", error_count);
 

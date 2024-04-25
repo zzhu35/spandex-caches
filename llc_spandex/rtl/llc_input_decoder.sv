@@ -20,11 +20,12 @@ module llc_input_decoder (
     input logic ongoing_flush,
     input logic [`LLC_SET_BITS:0] flush_set,
     input logic [`LLC_WAY_BITS:0] flush_way,
-    input logic new_bulk_req,
-    input addr_t llc_bulk_len_int,
-    input addr_t bulk_done,
-    input addr_t bulk_nack_counter,
-    input logic ongoing_bulk_req,
+    `FPGA_DBG input logic new_bulk_req,
+    `FPGA_DBG input addr_t llc_bulk_len_int,
+    `FPGA_DBG input addr_t llc_conflict_len_int,
+    `FPGA_DBG input addr_t bulk_done,
+    `FPGA_DBG input addr_t bulk_nack_counter,
+    `FPGA_DBG input logic ongoing_bulk_req,
 
     // Accept the new input now
     output logic do_get_req,
@@ -108,14 +109,14 @@ module llc_input_decoder (
             end else if (llc_rsp_in_valid_int && mshr_cnt != `N_MSHR) begin
                 do_get_rsp_next =  1'b1;
                 llc_rsp_in_ready_int = 1'b1;
-            end else if (((llc_req_in_valid_int && !new_bulk_req) || (set_conflict && !new_bulk_req)) && mshr_cnt != 0 && !evict_stall) begin
+            end else if (((llc_req_in_valid_int && !new_bulk_req) || (set_conflict && llc_conflict_len_int == 'h0)) && mshr_cnt != 0 && !evict_stall) begin
                 do_get_req_next = 1'b1;
                 if (set_conflict) begin
                     set_req_from_conflict = 1'b1;
                 end else if (llc_req_in_valid_int) begin
                     llc_req_in_ready_int = 1'b1;
                 end
-            end else if (((llc_req_in_valid_int && new_bulk_req) || ongoing_bulk_req || (set_conflict && new_bulk_req)) && mshr_cnt != 0 && !evict_stall) begin
+            end else if (((llc_req_in_valid_int && new_bulk_req && !ongoing_bulk_req) || ongoing_bulk_req || (set_conflict && llc_conflict_len_int != 'h0)) && mshr_cnt != 0 && !evict_stall) begin
                 // First check if bulk is done; if done, return without any do_*_req_next
                 // If not set do_get_req_next with some additional signal that FSM can identify (not necessary?)
                 // and set the req for next address from bulk in interfaces. This should set req_in_addr

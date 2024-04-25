@@ -5531,9 +5531,34 @@ void l2_spandex_tb::l2_test()
 
     int num_lines = 4;
 
-    // Write to all ways of 2nd and 3rd 4 lines
+    // Write to all ways of 2nd, 5th and to the 3rd 4 lines
     for (int i = 0; i < num_lines; i++) {
         base_addr = 0x83500040 + (i * 0x10);
+        addr.breakdown(base_addr);
+
+        for (int j = 0; j < L2_WAYS; j++) {
+            addr.tag_incr(1);
+
+            word = j+1;
+
+            put_cpu_req(cpu_req /* &cpu_req */, WRITE /* cpu_msg */, WORD /* hsize */,
+                addr.word /* addr */, word /* word */, DATA /* hprot */,
+                0 /* amo */, 0 /* aq */, 0 /* rl */, 0 /* dcs_en */,
+                0 /* use_owner_pred */, 0 /* dcs */, 0 /* pred_cid */);
+
+            get_req_out(REQ_Odata /* coh_msg */, addr.word /* addr */,
+                DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
+
+            wait();
+
+            line = 0;
+            line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = j+2;
+
+            put_rsp_in(RSP_Odata /* coh_msg */, addr.word /* addr */, line /* line */,
+                0b0011 /* word_mask */, 0 /* invack_cnt */);
+        }
+
+        base_addr = 0x83500100 + (i * 0x10);
         addr.breakdown(base_addr);
 
         for (int j = 0; j < L2_WAYS; j++) {
@@ -5584,7 +5609,7 @@ void l2_spandex_tb::l2_test()
     base_addr = 0x83500000;
     addr.breakdown(base_addr);
 
-    num_lines = 16;
+    num_lines = 20;
 
     put_cpu_req(cpu_req /* &cpu_req */, READ /* cpu_msg */, WORD /* hsize */,
         addr.word /* addr */, 0 /* word */, DATA /* hprot */,
@@ -5609,7 +5634,7 @@ void l2_spandex_tb::l2_test()
             get_rd_rsp(line /* line */);
         } else if (i == 4) {
             get_req_out(REQ_V /* coh_msg */, addr.word + (i * 0x10) /* addr */,
-                DATA /* hprot */, 24 /* line */, 0b0011 /* word_mask */);
+                DATA /* hprot */, 32 /* line */, 0b0011 /* word_mask */);
             
             line.range(BITS_PER_WORD - 1, 0) = i+1;
             line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
@@ -5652,7 +5677,7 @@ void l2_spandex_tb::l2_test()
             get_rd_rsp(line /* line */);
 
             wait();
-        } else {
+        } else if (i < 16) {            
             get_req_out(REQ_Odata /* coh_msg */, addr.word + (i * 0x10) /* addr */,
                 DATA /* hprot */, 0 /* line */, 0b0011 /* word_mask */);
             
@@ -5667,6 +5692,37 @@ void l2_spandex_tb::l2_test()
                 0b0011 /* word_mask */, 0 /* invack_cnt */);
 
             get_rd_rsp(line /* line */);
+        } else if (i == 16) {
+            get_req_out(REQ_V /* coh_msg */, addr.word + (i * 0x10) /* addr */,
+                DATA /* hprot */, 8 /* line */, 0b0011 /* word_mask */);
+            
+            line.range(BITS_PER_WORD - 1, 0) = i+1;
+            line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+            for (int i = 0; i < 8; i++) {
+                wait();
+            }
+
+            put_rsp_in(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */,
+                0b0011 /* word_mask */, 1 /* invack_cnt */);
+
+            get_rd_rsp(line /* line */);
+
+            wait();            
+        } else {            
+            line.range(BITS_PER_WORD - 1, 0) = i+1;
+            line.range(BITS_PER_LINE - 1, BITS_PER_WORD) = i+2;
+
+            for (int i = 0; i < 8; i++) {
+                wait();
+            }
+
+            put_rsp_in(RSP_V /* coh_msg */, addr.word + (i * 0x10) /* addr */, line /* line */,
+                0b0011 /* word_mask */, 1 /* invack_cnt */);
+
+            get_rd_rsp(line /* line */);
+
+            wait(); 
         }
     }        
 

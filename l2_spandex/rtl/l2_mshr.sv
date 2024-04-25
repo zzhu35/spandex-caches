@@ -241,6 +241,8 @@ module l2_mshr(
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
             // Check if there is a free MSHR entry
+            // TODO: this should check if the incoming response is within the range of the
+            // bulk transfer, else the wrong entry can be chosen.
             `L2_MSHR_LOOKUP : begin
                 for (int i = 0; i < `N_MSHR; i++) begin
                     if (do_bulk_rsp) begin

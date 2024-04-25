@@ -192,7 +192,6 @@ module l2_input_decoder (
                 if ((bulk_done >= l2_cpu_bulk_len_int) && (ongoing_read_bulk_req || ongoing_write_bulk_req)) begin
                     clr_ongoing_bulk_req = 1'b1;
                     clr_bulk_done = 1'b1;
-                    clr_bulk_nack_counter = 1'b1;
                 end else if (l2_cpu_req_valid_int && ongoing_write_bulk_req) begin
                     // Store bulk pending
                     do_bulk_req_next = 1'b1;
