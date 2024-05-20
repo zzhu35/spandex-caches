@@ -172,6 +172,8 @@ module l2_core(
     addr_t set_cpu_req_bulk_addr_data;
     logic incr_bulk_done_1, incr_bulk_done_2, clr_bulk_done, decr_bulk_done_1, decr_bulk_done_2;
     logic do_bulk_rsp, incr_bulk_nack_counter, clr_bulk_nack_counter, set_read_bypass, clr_read_bypass, ongoing_read_bypass;
+    logic mshr_coalesce_hit_next, mshr_coalesce_hit;
+    logic [`MSHR_BITS-1:0] mshr_coalesce_i_next, mshr_coalesce_i;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;

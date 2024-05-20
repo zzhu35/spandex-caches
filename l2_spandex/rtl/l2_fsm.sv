@@ -37,6 +37,10 @@ module l2_fsm(
     `FPGA_DBG input logic mshr_hit_next,
     `FPGA_DBG input logic [`MSHR_BITS-1:0] mshr_i,
     `FPGA_DBG input logic [`MSHR_BITS-1:0] mshr_i_next,
+    `FPGA_DBG input logic mshr_coalesce_hit_next,
+    `FPGA_DBG input logic mshr_coalesce_hit,
+    `FPGA_DBG input logic [`MSHR_BITS-1:0] mshr_coalesce_i_next,
+    `FPGA_DBG input logic [`MSHR_BITS-1:0] mshr_coalesce_i,
     `FPGA_DBG input mshr_buf_t mshr[`N_MSHR],
     `FPGA_DBG input logic set_set_conflict_mshr,
     `FPGA_DBG input logic clr_set_conflict_mshr,
@@ -102,6 +106,7 @@ module l2_fsm(
     `FPGA_DBG input addr_t bulk_done,
     `FPGA_DBG input addr_t bulk_nack_counter,
     `FPGA_DBG input logic ongoing_read_bypass,
+    `FPGA_DBG input addr_t l2_cpu_bulk_len_int,
     `FPGA_DBG input logic [`L2_SET_BITS:0] flush_set,
     `FPGA_DBG input logic [`L2_WAY_BITS:0] flush_way,
 
@@ -1829,6 +1834,27 @@ module l2_fsm(
                 // If there is a tag match and the words sent in the forward
                 // are owned in this cache, ack_mask will be non-zero and we will
                 // send a RSP_O to the sender.
+                // Incoming control request from LLC has word_mask set to 0.
+                // We check for this to identify a bulk forward request. Once the
+                // control request is received, the line field is used to check if its
+                // a header control and tail control. The header control would be
+                // indicated by 1 and tail by 2. These are both sent by the LLC because
+                // the LLC knows (from the first request sent by the requestor) how
+                // many elements are present in this bulk transfer and where/whether
+                // they are owned. Now, if header is identified, this cache will fill an
+                // mshr entry. Therefore, if mshr is full, we cannot accept a no word_mask
+                // write through forward in input_decoder! If you can allocate an MSHR,
+                // you will fill one entry with the address sent in the forward, length
+                // set in the forward in line and word initialized to 0. As you receive
+                // new forwards, you will check if they hit on an entry in the MSHR (check
+                // within bulk limit same way as before). If they hit, you will accept
+                // the forward, update the line and increment the word field in the mshr
+                // entry. Once you receive a tail message from the LLC (meaning that the
+                // LLC has received the last transfer from the requestor), you check if
+                // there is a hitting MSHR entry for that address. If yes, you send a response
+                // with indication that this for all the words in the bulk transfer recevied here.
+                // Use word_mask 0 as a no-op control message to communicate between L2,
+                // LLC and receiving L2.
                 if (mshr_hit && mshr[mshr_i] == `SPX_RI) begin
                 end else if (ack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     // We will update the words with ack_mask in memory.
@@ -2440,9 +2466,12 @@ module l2_fsm(
                         // TODO: we currently set way to 0 for ReqWTFwd, but
                         // we may choose to allocate for ReqO, in which case,
                         // we must add the way we are writing to.
+                        // If the new wb entry we are adding is a bulk request
+                        // with length more than WORDS_PER_LINE elements, then
+                        // we will coalesce the responses.
                         fill_wb_entry (
                             /* way */ 'h0,
-                            /* hprot */ l2_cpu_req.hprot,
+                            /* hprot */ (do_bulk_req && l2_cpu_req.len > `WORDS_PER_LINE) ? `DATA : `INSTR,
                             /* word_mask */ 1 << addr_br.w_off,
                             /* dcs_en */ l2_cpu_req.dcs_en,
                             /* dcs */ l2_cpu_req.dcs,
@@ -2489,6 +2518,9 @@ module l2_fsm(
                             /* hprot */ `DATA
                         );
                     end else begin
+                        // If we are going to coalesce a bulk write to the same MSHR entry,
+                        // then we do not need to peek MSHR for any conflict because we are 
+                        // not adding a new entry.
                         mshr_op_code = `L2_MSHR_PEEK_WB;
                         wb_dispatch_tag = wb[wb_dispatch_i].tag;
                         wb_dispatch_set = wb[wb_dispatch_i].set;
@@ -2499,19 +2531,45 @@ module l2_fsm(
                             // We add the MSHR entry (and decrement the MSHR count) only
                             // if the req_out is accepted.
                             if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
-                                fill_mshr_entry (
-                                /* cpu_msg */ `WRITE,
-                                /* hprot */ wb[wb_dispatch_i].hprot,
-                                /* hsize */ 'h0,
-                                /* tag */ wb[wb_dispatch_i].tag,
-                                /* way */ wb[wb_dispatch_i].way,
-                                /* state */ `SPX_XRV,
-                                /* word */ 'h0,
-                                /* line */ wb[wb_dispatch_i].line,
-                                /* amo */ 'h0,
-                                /* word_mask */ wb[wb_dispatch_i].word_mask
-                                );
-
+                                if (wb[wb_dispatch_i].hprot == `DATA) begin
+                                    // If there is an existing MSHR entry for this bulk write
+                                    // dispatch, simply increment the MSHR entry's word field.
+                                    if (mshr_coalesce_hit_next) begin
+                                        // Increment the number of words for only the number of valid 
+                                        // words in the WB entry.
+                                        update_mshr_value_word = mshr[mshr_coalesce_i_next].word + (wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1);
+                                        update_mshr_word = 1'b1;
+                                    end else begin
+                                        // Add a new MSHR entry with the line set as the bulk length,
+                                        // and word set to number of valid words in the first wb entry.
+                                        fill_mshr_entry (
+                                            /* cpu_msg */ `WRITE,
+                                            /* hprot */ wb[wb_dispatch_i].hprot,
+                                            /* hsize */ 'h0,
+                                            /* tag */ wb[wb_dispatch_i].tag,
+                                            /* way */ wb[wb_dispatch_i].way,
+                                            /* state */ `SPX_XRV,
+                                            /* word */ wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1,
+                                            /* line */ l2_cpu_bulk_len_int,
+                                            /* amo */ 'h0,
+                                            /* word_mask */ wb[wb_dispatch_i].word_mask
+                                        );
+                                    end
+                                end else begin
+                                    fill_mshr_entry (
+                                        /* cpu_msg */ `WRITE,
+                                        /* hprot */ wb[wb_dispatch_i].hprot,
+                                        /* hsize */ 'h0,
+                                        /* tag */ wb[wb_dispatch_i].tag,
+                                        /* way */ wb[wb_dispatch_i].way,
+                                        /* state */ `SPX_XRV,
+                                        /* word */ 'h0,
+                                        /* line */ wb[wb_dispatch_i].line,
+                                        /* amo */ 'h0,
+                                        /* word_mask */ wb[wb_dispatch_i].word_mask
+                                    );
+                                end
+                                
                                 if (l2_cpu_req.use_owner_pred) begin
                                     send_fwd_out (
                                         /* coh_msg */ `FWD_WTfwd,
@@ -2543,7 +2601,7 @@ module l2_fsm(
 
                                 fill_wb_entry (
                                     /* way */ 'h0,
-                                    /* hprot */ l2_cpu_req.hprot,
+                                    /* hprot */ (do_bulk_req && l2_cpu_req.len > `WORDS_PER_LINE) ? `DATA : `INSTR,
                                     /* word_mask */ 1 << addr_br.w_off,
                                     /* dcs_en */ l2_cpu_req.dcs_en,
                                     /* dcs */ l2_cpu_req.dcs,
@@ -2587,18 +2645,44 @@ module l2_fsm(
                 // We add the MSHR entry (and decrement the MSHR count) only
                 // if the req_out is accepted.
                 if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
-                    fill_mshr_entry (
-                        /* cpu_msg */ `WRITE,
-                        /* hprot */ wb[wb_dispatch_i].hprot,
-                        /* hsize */ 'h0,
-                        /* tag */ wb[wb_dispatch_i].tag,
-                        /* way */ wb[wb_dispatch_i].way,
-                        /* state */ `SPX_XRV,
-                        /* word */ 'h0,
-                        /* line */ wb[wb_dispatch_i].line,
-                        /* amo */ 'h0,
-                        /* word_mask */ wb[wb_dispatch_i].word_mask
-                    );
+                    if (wb[wb_dispatch_i].hprot == `DATA) begin
+                        // If there is an existing MSHR entry for this bulk write
+                        // dispatch, simply increment the MSHR entry's word field.
+                        if (mshr_coalesce_hit) begin
+                            // Increment the number of words for only the number of valid 
+                            // words in the WB entry.
+                            update_mshr_value_word = mshr[mshr_coalesce_i].word + (wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1);
+                            update_mshr_word = 1'b1;
+                        end else begin
+                            // Add a new MSHR entry with the line set as the bulk length,
+                            // and word set to number of valid words in the first wb entry.
+                            fill_mshr_entry (
+                                /* cpu_msg */ `WRITE,
+                                /* hprot */ wb[wb_dispatch_i].hprot,
+                                /* hsize */ 'h0,
+                                /* tag */ wb[wb_dispatch_i].tag,
+                                /* way */ wb[wb_dispatch_i].way,
+                                /* state */ `SPX_XRV,
+                                /* word */ wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1,
+                                /* line */ l2_cpu_bulk_len_int,
+                                /* amo */ 'h0,
+                                /* word_mask */ wb[wb_dispatch_i].word_mask
+                            );
+                        end
+                    end else begin
+                        fill_mshr_entry (
+                            /* cpu_msg */ `WRITE,
+                            /* hprot */ wb[wb_dispatch_i].hprot,
+                            /* hsize */ 'h0,
+                            /* tag */ wb[wb_dispatch_i].tag,
+                            /* way */ wb[wb_dispatch_i].way,
+                            /* state */ `SPX_XRV,
+                            /* word */ 'h0,
+                            /* line */ wb[wb_dispatch_i].line,
+                            /* amo */ 'h0,
+                            /* word_mask */ wb[wb_dispatch_i].word_mask
+                        );
+                    end
 
                     wb_dispatch_tag = wb[wb_dispatch_i].tag;
                     wb_dispatch_set = wb[wb_dispatch_i].set;
