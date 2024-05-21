@@ -5941,6 +5941,12 @@ void l2_spandex_tb::l2_test()
     
     wait();
 
+    // Put response for half the words first.
+    put_rsp_in(RSP_O /* coh_msg */, addr.word + (2 * 0x8) /* addr */,
+        num_lines * WORDS_PER_LINE / 2 /* line */, 0 /* word_mask */, 0 /* invack_cnt */);
+    
+    wait();
+
     // Get request out for line 7 (N_WB+3)
     line = 0;
     line.range(BITS_PER_WORD - 1, 0) = (N_WB+3)*WORDS_PER_LINE+1;
@@ -5970,6 +5976,18 @@ void l2_spandex_tb::l2_test()
         DATA /* hprot */, line /* line */, 0b0011 /* word_mask */);
     
     wait();
+
+    get_req_out(REQ_WTfwd /* coh_msg */, addr.word + (((N_WB+1)*WORDS_PER_LINE) * 0x8) /* addr */,
+        DATA /* hprot */, line /* line */, 0 /* word_mask */);
+    
+    wait();
+
+    put_rsp_in(RSP_O /* coh_msg */, addr.word + (((N_WB+1)*WORDS_PER_LINE) * 0x8) /* addr */,
+        num_lines * WORDS_PER_LINE / 2 /* line */, 0 /* word_mask */, 0 /* invack_cnt */);
+
+    for (int i = 0; i < 10; i++) {
+        wait();
+    }
 
 #endif // TEST_ID
 

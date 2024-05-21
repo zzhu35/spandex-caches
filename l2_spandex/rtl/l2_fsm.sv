@@ -296,6 +296,7 @@ module l2_fsm(
         CPU_REQ_EVICT,
         CPU_REQ_ADD_WB,
         CPU_REQ_DISPATCH_WB,
+        CPU_REQ_DISPATCH_TAIL,
         CPU_REQ_DRAIN_WB,
 
         BULK_REQ_HANDLER
@@ -1049,7 +1050,11 @@ module l2_fsm(
                             next_state = CPU_REQ_SET_CONFLICT;
                         end else begin
                             if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
-                                next_state = DECODE;
+                                if (update_mshr_word && update_mshr_value_word == l2_cpu_bulk_len_int) begin
+                                    next_state = CPU_REQ_DISPATCH_TAIL;
+                                end else begin
+                                    next_state = DECODE;
+                                end
                             end else begin
                                 next_state = CPU_REQ_DISPATCH_WB;
                             end
@@ -1059,13 +1064,26 @@ module l2_fsm(
             end
             CPU_REQ_DISPATCH_WB : begin
                 if (ongoing_drain) begin
-                    if (l2_req_out_ready_int) begin
-                        next_state = DECODE;
+                    if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
+                        if (update_mshr_word && update_mshr_value_word == l2_cpu_bulk_len_int) begin
+                            next_state = CPU_REQ_DISPATCH_TAIL;
+                        end else begin
+                            next_state = DECODE;
+                        end
                     end
                 end else begin
-                    if (l2_req_out_ready_int) begin
-                        next_state = CPU_REQ_MSHR_LOOKUP;
+                    if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
+                        if (update_mshr_word && update_mshr_value_word == l2_cpu_bulk_len_int) begin
+                            next_state = CPU_REQ_MSHR_LOOKUP;
+                        end else begin
+                            next_state = DECODE;
+                        end
                     end
+                end
+            end
+            CPU_REQ_DISPATCH_TAIL : begin
+                if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
+                    next_state = DECODE;
                 end
             end
             CPU_REQ_DRAIN_WB : begin
@@ -1444,18 +1462,34 @@ module l2_fsm(
                 incr_mshr_cnt = 1'b1;
             end
             RSP_O_HANDLER : begin
-                // Clear words in response from the pending MSHR word_mask.
-                update_mshr_value_word_mask = mshr[mshr_i].word_mask & ~l2_rsp_in.word_mask;
-                update_mshr_word_mask = 1'b1;
+                if (l2_rsp_in.word_mask == 'h0) begin
+                    // If word mask is 0, this is bulk response for bulk write. We use word mask
+                    // 0 temporarily since regular responses are never sent with it. We reduce the 
+                    // number of words pending by the data in the line.
+                    update_mshr_value_line = mshr[mshr_i].line - l2_rsp_in.line;
+                    update_mshr_line = 1'b1;
+                    
+                    // If there are no more words
+                    // pending, then we will clear this MSHR entry.
+                    if (!update_mshr_value_line) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_I;
+                        incr_mshr_cnt = 1'b1;
+                    end
+                end else begin
+                    // Clear words in response from the pending MSHR word_mask.
+                    update_mshr_value_word_mask = mshr[mshr_i].word_mask & ~l2_rsp_in.word_mask;
+                    update_mshr_word_mask = 1'b1;
 
-                // If all words requested have been received,
-                // update the MSHR entry state and increment the reqs_cnt.
-                // We do not update the RAMs here because in REQ_O, we already would have
-                // and in Req/FWD_WTfwd, we do not allocate on misses.
-                if (!update_mshr_value_word_mask) begin
-                    update_mshr_state = 1'b1;
-                    update_mshr_value_state = `SPX_I;
-                    incr_mshr_cnt = 1'b1;
+                    // If all words requested have been received,
+                    // update the MSHR entry state and increment the reqs_cnt.
+                    // We do not update the RAMs here because in REQ_O, we already would have
+                    // and in Req/FWD_WTfwd, we do not allocate on misses.
+                    if (!update_mshr_value_word_mask) begin
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_I;
+                        incr_mshr_cnt = 1'b1;
+                    end
                 end
             end
             RSP_V_HANDLER : begin
@@ -2715,11 +2749,31 @@ module l2_fsm(
                     end
                 end
             end            
+            CPU_REQ_DISPATCH_TAIL : begin
+                if (l2_cpu_req.use_owner_pred) begin
+                    send_fwd_out (
+                        /* coh_msg */ `FWD_WTfwd,
+                        /* req_id */ wb[wb_dispatch_i].pred_cid,
+                        /* to_req */ 1'b1,
+                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                        /* line */ wb[wb_dispatch_i].line,
+                        /* word_mask */ 'h0
+                    );
+                end else begin
+                    send_req_out (
+                        /* coh_msg */ `REQ_WTfwd,
+                        /* hprot */ wb[wb_dispatch_i].hprot,
+                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
+                        /* line */ wb[wb_dispatch_i].line,
+                        /* word_mask */ 'h0
+                    );
+                end
+            end
             CPU_REQ_DRAIN_WB : begin
                 mshr_op_code = `L2_MSHR_PEEK_DRAIN;
                 wb_dispatch_tag = wb[wb_dispatch_i].tag;
                 wb_dispatch_set = wb[wb_dispatch_i].set;
-            end
+            end            
 `endif
 
             BULK_REQ_HANDLER : begin

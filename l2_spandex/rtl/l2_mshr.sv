@@ -265,6 +265,15 @@ module l2_mshr(
                             mshr_hit_next = 1'b1;
                             mshr_i_next = i;
                         end
+                    end else if (l2_rsp_in.word_mask == 'h0 && l2_rsp_in.coh_msg == `RSP_O) begin
+                        within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, l2_cpu_bulk_len_int, is_within_bulk_limit);
+
+                        // If the incoming response is greater/equal to the current bulk done for a pending
+                        // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
+                        if (is_within_bulk_limit && mshr[i].state != `SPX_I) begin
+                            mshr_hit_next = 1'b1;
+                            mshr_i_next = i;
+                        end
                     end else begin
                         if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
                             mshr_hit_next = 1'b1;
