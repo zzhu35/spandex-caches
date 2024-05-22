@@ -36,6 +36,8 @@ module l2_mshr(
     input l2_tag_t wb_dispatch_tag,
     input l2_set_t wb_dispatch_set,
 `endif
+    input logic add_mshr_fwd_entry,
+    input logic coal_mshr_fwd_entry,
 
     addr_breakdown_t.in addr_br,
     line_breakdown_l2_t.in line_br,
@@ -117,7 +119,7 @@ module l2_mshr(
                 end else if (add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].cpu_msg <= update_mshr_value_cpu_msg;
-                        mshr[i].set <= addr_br.set;
+                        mshr[i].set <= add_mshr_fwd_entry ? line_br.set : addr_br.set;
                         mshr[i].way <= update_mshr_value_way;
                         mshr[i].hsize <= update_mshr_value_hsize;
                         mshr[i].w_off <= addr_br.w_off;
@@ -134,15 +136,23 @@ module l2_mshr(
                 if (!rst) begin
                     mshr[i].state <= 0;
                 end else if (update_mshr_state || add_mshr_entry) begin
+`ifdef USE_WB
                     if (wb_use_dispatch_entry) begin
                         if (mshr_i_next == i) begin
                             mshr[i].state <= update_mshr_value_state;
                         end
+                    end else if (coal_mshr_fwd_entry) begin
+                        if (mshr_coalesce_i == i) begin
+                            mshr[i].state <= update_mshr_value_state;
+                        end                        
                     end else begin
+`endif                        
                         if (mshr_i == i) begin
                             mshr[i].state <= update_mshr_value_state;
                         end
+`ifdef USE_WB
                     end
+`endif                        
                 end
             end
 
@@ -156,6 +166,10 @@ module l2_mshr(
                         if (mshr_i_next == i) begin
                             mshr[i].line <= update_mshr_value_line;
                         end
+                    end else if (coal_mshr_fwd_entry) begin
+                        if (mshr_coalesce_i == i) begin
+                            mshr[i].line <= update_mshr_value_line;
+                        end                        
                     end else begin
 `endif                        
                         if (mshr_i == i) begin
@@ -310,44 +324,78 @@ module l2_mshr(
             `L2_MSHR_PEEK_FWD : begin
                 clr_fwd_stall = 1'b1;
 
-                for (int i = 0; i < `N_MSHR; i++) begin
-                    if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
-                        mshr_hit_next = 1'b1;
-                        mshr_i_next = i;
+                // Check if MSHR is full if the forward msg type is bulk. Add a new input signal to get the msg type.
+                // Need to also check if there is a matching entry. better to do this in the MSHR module. and clear fwd stall
+                // with a signal indicating msg type of forward to regs module.
+                if (fwd_in_coh_msg == `FWD_WTfwd_BULK) begin
+                    for (int i = 0; i < `N_MSHR; i++) begin
+                        // First, we check if this entry is free. In case of no conflict and no pending hit entry,
+                        // we will use this entry to start the new bulk transfer.
+                        if (mshr[i].state == `SPX_I) begin
+                            mshr_hit_next = 1'b1;
+                            mshr_i_next = i;
+                        end
 
-                        // We do not always need to stall - in certain cases, we immediately de-assert fwd_stall
-                        case (fwd_in_coh_msg)
-                            // For FWD_INV, we always respond (and do not stall the forward). In
-                            // case of SPX_IS, we change transient state to SPX_II.
-                            // In case of FWD_REQ_S, FWD_REQ_OData, and FWD_RVK_O, need to check SPX_RI.
-                            `FWD_INV : begin
-                                fwd_stall_override = 1'b1;
-                            end
-                            `FWD_RVK_O : begin
-                                if (mshr[i].state == `SPX_RI) begin
-                                    fwd_stall_override = 1'b1;
-                                end
-                            end
-                            `FWD_REQ_S : begin
-                                if (mshr[i].state == `SPX_RI) begin
-                                    fwd_stall_override = 1'b1;
-                                end
-                            end
-                            `FWD_REQ_Odata : begin
-                                if (mshr[i].state == `SPX_RI) begin
-                                    fwd_stall_override = 1'b1;
-                                end
-                            end
-                            `FWD_WTfwd : begin
-                                if (mshr[i].state == `SPX_RI) begin
-                                    fwd_stall_override = 1'b1;
-                                end
-                            end
-                        endcase
-
-                        if (!fwd_stall_override) begin
+                        // Next, check if this entry conflicts with the incoming entry. Note that we check for pending
+                        // entry to coalesce with - this is relevant only for the HEAD packet.
+                        if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I && mshr[i].state != `SPX_RI) begin
                             set_fwd_stall = 1'b1;
                             clr_fwd_stall = 1'b0;
+                        end
+
+                        // Now we will check whether the incoming forward is within the range of any pending bulk forward
+                        // in this MSHR entry. 
+                        within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, mshr[i].word, is_within_bulk_limit);
+
+                        // If there is a hit, we will coalesce the tracking of this forward in the same entry.
+                        if (is_within_bulk_limit && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `WRITE) begin
+                            mshr_coalesce_hit_next = 1'b1;
+                            mshr_coalesce_i_next = i;
+                            // Clear fwd stall
+                            set_fwd_stall = 1'b0;
+                            clr_fwd_stall = 1'b1;
+                        end
+                    end
+                end else begin
+                    for (int i = 0; i < `N_MSHR; i++) begin
+                        if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `SPX_I) begin
+                            mshr_hit_next = 1'b1;
+                            mshr_i_next = i;
+
+                            // We do not always need to stall - in certain cases, we immediately de-assert fwd_stall
+                            case (fwd_in_coh_msg)
+                                // For FWD_INV, we always respond (and do not stall the forward). In
+                                // case of SPX_IS, we change transient state to SPX_II.
+                                // In case of FWD_REQ_S, FWD_REQ_OData, and FWD_RVK_O, need to check SPX_RI.
+                                `FWD_INV : begin
+                                    fwd_stall_override = 1'b1;
+                                end
+                                `FWD_RVK_O : begin
+                                    if (mshr[i].state == `SPX_RI) begin
+                                        fwd_stall_override = 1'b1;
+                                    end
+                                end
+                                `FWD_REQ_S : begin
+                                    if (mshr[i].state == `SPX_RI) begin
+                                        fwd_stall_override = 1'b1;
+                                    end
+                                end
+                                `FWD_REQ_Odata : begin
+                                    if (mshr[i].state == `SPX_RI) begin
+                                        fwd_stall_override = 1'b1;
+                                    end
+                                end
+                                `FWD_WTfwd : begin
+                                    if (mshr[i].state == `SPX_RI) begin
+                                        fwd_stall_override = 1'b1;
+                                    end
+                                end
+                            endcase
+
+                            if (!fwd_stall_override) begin
+                                set_fwd_stall = 1'b1;
+                                clr_fwd_stall = 1'b0;
+                            end
                         end
                     end
                 end

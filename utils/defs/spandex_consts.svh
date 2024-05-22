@@ -156,6 +156,7 @@
 `define FWD_REQ_O      5
 `define FWD_WTfwd      6
 `define FWD_RVK_V      7
+`define FWD_WTfwd_BULK 8
 
 // response (L2/TU to L2/TU, L2/TU to L3, L3 to L2/TU)
 `define RSP_S               0
@@ -168,6 +169,7 @@
 `define RSP_WT              7
 `define RSP_WTdata          8
 `define RSP_WB_ACK          9
+`define RSP_O_BULK          10
 
 // AMOS
 `define AMO_SWAP        48      // 0b110000 // SWAP

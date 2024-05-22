@@ -234,6 +234,8 @@ module l2_fsm(
     `FPGA_DBG output logic incr_bulk_nack_counter,
     `FPGA_DBG output logic set_read_bypass,
     `FPGA_DBG output logic clr_read_bypass,
+    `FPGA_DBG output logic add_mshr_fwd_entry,
+    `FPGA_DBG output logic coal_mshr_fwd_entry,
 
     `FPGA_DBG output bresp_t l2_bresp_o,
 
@@ -272,6 +274,7 @@ module l2_fsm(
         FWD_REQ_V_HANDLER_NACK,
         FWD_WTFWD_HANDLER,
         FWD_WTFWD_HANDLER_NACK,
+        FWD_WTFWD_BULK_HANDLER,
 
         ONGOING_FLUSH_LOOKUP,
         ONGOING_FLUSH_PROCESS,
@@ -296,7 +299,8 @@ module l2_fsm(
         CPU_REQ_EVICT,
         CPU_REQ_ADD_WB,
         CPU_REQ_DISPATCH_WB,
-        CPU_REQ_DISPATCH_TAIL,
+        CPU_REQ_BULK_HEAD,
+        CPU_REQ_BULK_TAIL,
         CPU_REQ_DRAIN_WB,
 
         BULK_REQ_HANDLER
@@ -633,7 +637,7 @@ module l2_fsm(
                 // i.e., input_decoder will not accept a new forward till it ends.
                 if ((fwd_stall || set_fwd_stall) & !clr_fwd_stall) begin
                     next_state = FWD_STALL;
-                end else if (mshr_hit_next) begin
+                end else if (mshr_hit_next | mshr_coalesce_hit_next) begin
                     next_state = FWD_MSHR_HIT;
                 end else begin
                     next_state = FWD_TAG_LOOKUP;
@@ -664,6 +668,9 @@ module l2_fsm(
                     end
                     `FWD_WTfwd : begin
                         next_state = FWD_WTFWD_HANDLER;
+                    end
+                    `FWD_WTfwd_BULK : begin
+                        next_state = FWD_WTFWD_BULK_HANDLER;
                     end
                     default : begin
                         next_state = DECODE;
@@ -755,6 +762,29 @@ module l2_fsm(
                         end
                     end else begin
                         next_state = FWD_WTFWD_HANDLER_NACK;
+                    end
+                end
+            end
+            FWD_WTFWD_BULK_HANDLER : begin
+                if (mshr_hit && mshr[mshr_i] == `SPX_RI) begin
+                    next_state = FWD_WTFWD_HANDLER_NACK;
+                end else begin
+                    if (l2_fwd_in.word_mask == 'h0) begin
+                        if (l2_fwd_in.line != 'h0) begin
+                            next_state = DECODE;
+                        end else begin
+                            if (l2_rsp_out_ready_int) begin
+                                next_state = DECODE;
+                            end
+                        end
+                    end else begin
+                        if (l2_inval_ready_int) begin
+                            if (ack_mask == `WORD_MASK_ALL) begin
+                                next_state = DECODE;
+                            end else begin
+                                next_state = FWD_WTFWD_HANDLER_NACK;
+                            end
+                        end
                     end
                 end
             end
@@ -1051,7 +1081,7 @@ module l2_fsm(
                         end else begin
                             if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
                                 if (update_mshr_word && update_mshr_value_word == l2_cpu_bulk_len_int) begin
-                                    next_state = CPU_REQ_DISPATCH_TAIL;
+                                    next_state = CPU_REQ_BULK_TAIL;
                                 end else begin
                                     next_state = DECODE;
                                 end
@@ -1066,7 +1096,7 @@ module l2_fsm(
                 if (ongoing_drain) begin
                     if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
                         if (update_mshr_word && update_mshr_value_word == l2_cpu_bulk_len_int) begin
-                            next_state = CPU_REQ_DISPATCH_TAIL;
+                            next_state = CPU_REQ_BULK_TAIL;
                         end else begin
                             next_state = DECODE;
                         end
@@ -1074,14 +1104,19 @@ module l2_fsm(
                 end else begin
                     if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
                         if (update_mshr_word && update_mshr_value_word == l2_cpu_bulk_len_int) begin
-                            next_state = CPU_REQ_MSHR_LOOKUP;
+                            next_state = CPU_REQ_BULK_TAIL;
                         end else begin
-                            next_state = DECODE;
+                            next_state = CPU_REQ_MSHR_LOOKUP;
                         end
                     end
                 end
             end
-            CPU_REQ_DISPATCH_TAIL : begin
+            CPU_REQ_BULK_HEAD : begin
+                if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
+                    next_state = DECODE;
+                end
+            end
+            CPU_REQ_BULK_TAIL : begin
                 if (l2_req_out_ready_int && l2_fwd_out_ready_int) begin
                     next_state = DECODE;
                 end
@@ -1101,7 +1136,11 @@ module l2_fsm(
                     if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
                         next_state = CPU_REQ_TAG_LOOKUP;
                     end else begin
-                        next_state = DECODE;
+                        if (l2_cpu_req.cpu_msg == `READ) begin
+                            next_state = DECODE;
+                        end else begin
+                            next_state = CPU_REQ_BULK_HEAD;
+                        end
                     end
                 end                
             end
@@ -1260,6 +1299,8 @@ module l2_fsm(
         clr_read_bypass = 1'b0;
         do_bulk_rsp = 1'b0;
         incr_bulk_nack_counter = 1'b0;
+        add_mshr_fwd_entry = 1'b0;
+        coal_mshr_fwd_entry = 1'b0;
 
         case (state)
             RESET : begin
@@ -1555,8 +1596,8 @@ module l2_fsm(
                                 /* coh_msg */ `REQ_WTfwd,
                                 /* hprot */ mshr[mshr_i].hprot,
                                 /* line_addr */ l2_rsp_in.addr,
-                                /* line */ mshr[mshr_i].line,
-                                /* word_mask */ mshr[mshr_i].word_mask
+                                /* line */ l2_rsp_in.line == 'h0 ? mshr[mshr_i].line : l2_rsp_in.line,
+                                /* word_mask */ l2_rsp_in.word_mask
                             );
                         end
                     end
@@ -1610,6 +1651,12 @@ module l2_fsm(
                 lmem_set_in = line_br.set;
                 mshr_op_code = `L2_MSHR_PEEK_FWD;
                 clr_fwd_stall_ended = 1'b1;
+            end
+            FWD_MSHR_HIT : begin
+                if (l2_fwd_in.coh_msg == `FWD_WTfwd_BULK) begin
+                    lookup_en = 1'b1;
+                    lookup_mode = `L2_LOOKUP_FWD;
+                end
             end
             FWD_TAG_LOOKUP : begin
                 lookup_en = 1'b1;
@@ -1832,7 +1879,7 @@ module l2_fsm(
                 // If there is a tag match and the words sent in the forward
                 // are owned in this cache, ack_mask will be non-zero and we will
                 // send a RSP_V to the sender.
-                if (mshr_hit && mshr[mshr_i] == `SPX_RI) begin
+                if (mshr_hit && mshr[mshr_i].state == `SPX_RI) begin
                 end else if (ack_mask && l2_rsp_out_ready_int) begin
                     // We simply respond with the data and not update any RAMs.
                     send_rsp_out (
@@ -1868,28 +1915,7 @@ module l2_fsm(
                 // If there is a tag match and the words sent in the forward
                 // are owned in this cache, ack_mask will be non-zero and we will
                 // send a RSP_O to the sender.
-                // Incoming control request from LLC has word_mask set to 0.
-                // We check for this to identify a bulk forward request. Once the
-                // control request is received, the line field is used to check if its
-                // a header control and tail control. The header control would be
-                // indicated by 1 and tail by 2. These are both sent by the LLC because
-                // the LLC knows (from the first request sent by the requestor) how
-                // many elements are present in this bulk transfer and where/whether
-                // they are owned. Now, if header is identified, this cache will fill an
-                // mshr entry. Therefore, if mshr is full, we cannot accept a no word_mask
-                // write through forward in input_decoder! If you can allocate an MSHR,
-                // you will fill one entry with the address sent in the forward, length
-                // set in the forward in line and word initialized to 0. As you receive
-                // new forwards, you will check if they hit on an entry in the MSHR (check
-                // within bulk limit same way as before). If they hit, you will accept
-                // the forward, update the line and increment the word field in the mshr
-                // entry. Once you receive a tail message from the LLC (meaning that the
-                // LLC has received the last transfer from the requestor), you check if
-                // there is a hitting MSHR entry for that address. If yes, you send a response
-                // with indication that this for all the words in the bulk transfer recevied here.
-                // Use word_mask 0 as a no-op control message to communicate between L2,
-                // LLC and receiving L2.
-                if (mshr_hit && mshr[mshr_i] == `SPX_RI) begin
+                if (mshr_hit && mshr[mshr_i].state == `SPX_RI) begin
                 end else if (ack_mask && l2_rsp_out_ready_int && l2_inval_ready_int) begin
                     // We will update the words with ack_mask in memory.
                     lmem_set_in = line_br.set;
@@ -1917,6 +1943,80 @@ module l2_fsm(
                     );
                 end
             end
+            FWD_WTFWD_BULK_HANDLER : begin
+                // If there is an MSHR hit and the entry is being evicted,
+                // we send a NACK like above.
+                // HEAD: If there is an MSHR hit, and it is an empty entry to start tracking,
+                // then we fill a new MSHR entry and set the word field as the total length
+                // of the transfer, and use line to calculate number of words received till now.
+                // TAIL: When the tail is received, we respond with RSP_O for whatever number of
+                // words have been incremented in the line field.
+                // Since HEAD/TAIL are control packets with no data, we do not update the RAMs.
+                // DATA: If there is an MSHR coalesce hit, we simply increment the line field.
+                // Here, we also check ack_mask and update the RAMs if there was a hit.
+                // For all the words that did not hit in this current forward, we will send a NACK
+                // with the line so that they can be reattempted by the writer.
+                if (mshr_hit && mshr[mshr_i].state == `SPX_RI) begin
+                end else if (mshr_hit && mshr[mshr_i].state == `SPX_I && l2_fwd_in.word_mask == 'h0 && l2_fwd_in.line != 'h0) begin
+                    // HEAD packet
+                    fill_mshr_entry (
+                        /* cpu_msg */ `WRITE,
+                        /* hprot */ `DATA,
+                        /* hsize */ `WORD_64,
+                        /* tag */ line_br.tag,
+                        /* way */ 'h0,
+                        /* state */ `SPX_XRV,
+                        /* word */ l2_fwd_in.line,
+                        /* line */ 'h0,
+                        /* amo */ 'h0,
+                        /* word_mask */ 'h0
+                    );
+
+                    add_mshr_fwd_entry = 1'b1;
+                end else if (mshr_coalesce_hit && mshr[mshr_coalesce_i].state == `SPX_XRV && l2_fwd_in.word_mask == 'h0 && l2_fwd_in.line == 'h0) begin
+                    // TAIL packet
+                    if (l2_rsp_out_ready_int) begin
+                        send_rsp_out (
+                            /* coh_msg */ `RSP_O,
+                            /* req_id */ l2_fwd_in.req_id,
+                            /* to_req */ 1'b1,
+                            /* line_addr */ l2_fwd_in.addr,
+                            /* line */ mshr[mshr_coalesce_i].line,
+                            /* word_mask */ 'h0
+                        );
+
+                        // Inform MSHR to update state is coalesced entry.
+                        update_mshr_state = 1'b1;
+                        update_mshr_value_state = `SPX_I;
+                        coal_mshr_fwd_entry = 1'b1;
+                        incr_mshr_cnt = 1'b1;
+                    end
+                end else if (mshr_coalesce_hit && mshr[mshr_coalesce_i].state == `SPX_XRV && ack_mask) begin
+                    // DATA packet
+                    if (l2_inval_ready_int) begin
+                        lmem_set_in = line_br.set;
+                        lmem_way_in = way_hit;
+                        write_line_helper (
+                            /* line_orig */ lines_buf[way_hit],
+                            /* line_in */ l2_fwd_in.line,
+                            /* word_mask_i */ ack_mask,
+                            /* line_out */ lmem_wr_data_line
+                        );
+                        lmem_wr_en_line = 1'b1;
+
+                        // Increment the number of words for only the number of valid 
+                        // words in the forward.
+                        update_mshr_value_line = mshr[mshr_coalesce_i].line + (ack_mask == `WORD_MASK_ALL ? 2 : 1);
+                        update_mshr_line = 1'b1;
+                        coal_mshr_fwd_entry = 1'b1;
+
+                        send_inval(
+                            /* addr */ l2_fwd_in.addr,
+                            /* hprot */ `DATA
+                        );
+                    end
+                end
+            end
             FWD_WTFWD_HANDLER_NACK : begin
                 // If there is a tag match and but the words sent in the forward
                 // are not owned in this cache or if the tag did not match, we simply send a nack
@@ -1927,8 +2027,8 @@ module l2_fsm(
                         /* req_id */ l2_fwd_in.req_id,
                         /* to_req */ 1'b1,
                         /* line_addr */ l2_fwd_in.addr,
-                        /* line */ 'h0,
-                        /* word_mask */ l2_fwd_in.word_mask
+                        /* line */ l2_fwd_in.coh_msg == `FWD_WTfwd_BULK ? l2_fwd_in.line : 'h0,
+                        /* word_mask */ nack_mask
                     );
                 end
             end
@@ -2606,7 +2706,7 @@ module l2_fsm(
                                 
                                 if (l2_cpu_req.use_owner_pred) begin
                                     send_fwd_out (
-                                        /* coh_msg */ `FWD_WTfwd,
+                                        /* coh_msg */ wb[wb_dispatch_i].hprot == `DATA ? `FWD_WTfwd_BULK : `FWD_WTfwd,
                                         /* req_id */ wb[wb_dispatch_i].pred_cid,
                                         /* to_req */ 1'b1,
                                         /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
@@ -2723,7 +2823,7 @@ module l2_fsm(
 
                     if (l2_cpu_req.use_owner_pred) begin
                         send_fwd_out (
-                            /* coh_msg */ `FWD_WTfwd,
+                            /* coh_msg */ wb[wb_dispatch_i].hprot == `DATA ? `FWD_WTfwd_BULK : `FWD_WTfwd,
                             /* req_id */ wb[wb_dispatch_i].pred_cid,
                             /* to_req */ 1'b1,
                             /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
@@ -2749,22 +2849,42 @@ module l2_fsm(
                     end
                 end
             end            
-            CPU_REQ_DISPATCH_TAIL : begin
+            CPU_REQ_BULK_HEAD : begin
                 if (l2_cpu_req.use_owner_pred) begin
                     send_fwd_out (
-                        /* coh_msg */ `FWD_WTfwd,
-                        /* req_id */ wb[wb_dispatch_i].pred_cid,
+                        /* coh_msg */ `FWD_WTfwd_BULK,
+                        /* req_id */ l2_cpu_req.pred_cid,
                         /* to_req */ 1'b1,
-                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
-                        /* line */ wb[wb_dispatch_i].line,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ l2_cpu_bulk_len_int,
                         /* word_mask */ 'h0
                     );
                 end else begin
                     send_req_out (
                         /* coh_msg */ `REQ_WTfwd,
-                        /* hprot */ wb[wb_dispatch_i].hprot,
-                        /* line_addr */ (wb[wb_dispatch_i].tag << `L2_SET_BITS) | wb[wb_dispatch_i].set,
-                        /* line */ wb[wb_dispatch_i].line,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ addr_br.line_addr,
+                        /* line */ l2_cpu_bulk_len_int,
+                        /* word_mask */ 'h0
+                    );
+                end
+            end            
+            CPU_REQ_BULK_TAIL : begin
+                if (l2_cpu_req.use_owner_pred) begin
+                    send_fwd_out (
+                        /* coh_msg */ `FWD_WTfwd_BULK,
+                        /* req_id */ l2_cpu_req.pred_cid,
+                        /* to_req */ 1'b1,
+                        /* line_addr */ (mshr[mshr_coalesce_i].tag << `L2_SET_BITS) | mshr[mshr_coalesce_i].set,
+                        /* line */ 0,
+                        /* word_mask */ 'h0
+                    );
+                end else begin
+                    send_req_out (
+                        /* coh_msg */ `REQ_WTfwd,
+                        /* hprot */ l2_cpu_req.hprot,
+                        /* line_addr */ (mshr[mshr_coalesce_i].tag << `L2_SET_BITS) | mshr[mshr_coalesce_i].set,
+                        /* line */ 0,
                         /* word_mask */ 'h0
                     );
                 end

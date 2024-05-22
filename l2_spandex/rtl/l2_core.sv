@@ -174,6 +174,7 @@ module l2_core(
     logic do_bulk_rsp, incr_bulk_nack_counter, clr_bulk_nack_counter, set_read_bypass, clr_read_bypass, ongoing_read_bypass;
     logic mshr_coalesce_hit_next, mshr_coalesce_hit;
     logic [`MSHR_BITS-1:0] mshr_coalesce_i_next, mshr_coalesce_i;
+    logic add_mshr_fwd_entry, coal_mshr_fwd_entry;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
