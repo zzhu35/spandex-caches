@@ -111,6 +111,7 @@ module llc_core (
 
     logic add_mshr_entry, mshr_hit_next, mshr_hit;
     logic update_mshr_tag, update_mshr_way, update_mshr_state, update_mshr_invack_cnt, update_mshr_line, update_mshr_word_mask;
+    logic update_mshr_hprot, update_mshr_coal_line, update_mshr_coal_state, update_mshr_coal_hprot, update_mshr_coal_invack_cnt;
     logic [2:0] mshr_op_code;
     logic incr_mshr_cnt;
     mix_msg_t update_mshr_value_msg;
@@ -158,6 +159,8 @@ module llc_core (
     addr_t llc_bulk_len_int, bulk_done, bulk_nack_counter, llc_conflict_len_int;
     logic set_req_bulk_addr;
     line_addr_t set_req_bulk_addr_data;
+    logic mshr_coalesce_hit_next, mshr_coalesce_hit;
+    logic [`MSHR_BITS-1:0] mshr_coalesce_i_next, mshr_coalesce_i;
 
     assign llc_dma_req_in_ready_int = 1'b1;
     assign lmem_rd_en = 1'b1;

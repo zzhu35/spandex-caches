@@ -5987,7 +5987,7 @@ void l2_spandex_tb::l2_test()
     
     wait();
 
-    put_rsp_in(RSP_O /* coh_msg */, addr.word + (((N_WB+1)*WORDS_PER_LINE) * 0x8) /* addr */,
+    put_rsp_in(RSP_O /* coh_msg */, addr.word /* addr */,
         num_lines * WORDS_PER_LINE / 2 /* line */, 0 /* word_mask */, 0 /* invack_cnt */);
 
     for (int i = 0; i < 10; i++) {

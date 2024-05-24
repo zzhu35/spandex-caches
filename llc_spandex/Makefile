@@ -5,6 +5,8 @@ VIVADO = $(XILINX_VIVADO)
 ESP_ROOT = ../../../..
 ACCEL = $(ESP_ROOT)/accelerators/stratus_hls/common/inc
 
+TEST_ID ?= 0
+
 FLAGS ?=
 FLAGS += -NOWarn SCK505
 FLAGS += -SCTOP sc_main

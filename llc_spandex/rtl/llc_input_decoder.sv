@@ -139,7 +139,7 @@ module llc_input_decoder (
                     // Bulk response pending
                     set_req_from_bulk = 1'b1;
                     do_bulk_req_next = 1'b1;
-                end else if (llc_req_in_valid_int && !ongoing_bulk_req) begin
+                end else if ((llc_req_in_valid_int || (set_conflict && llc_conflict_len_int != 'h0)) && !ongoing_bulk_req) begin
                     // New bulk transfer
                     do_bulk_req_next = 1'b1;
                     set_ongoing_bulk_req = 1'b1;

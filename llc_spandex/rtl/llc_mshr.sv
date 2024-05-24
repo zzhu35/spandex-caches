@@ -13,6 +13,11 @@ module llc_mshr(
     input logic update_mshr_invack_cnt,
     input logic update_mshr_line,
     input logic update_mshr_word_mask,
+    input logic update_mshr_hprot,
+    input logic update_mshr_coal_state,
+    input logic update_mshr_coal_line,
+    input logic update_mshr_coal_hprot,
+    input logic update_mshr_coal_invack_cnt,
     // Function of the MSHR to perform
     input logic [2:0] mshr_op_code,
     input logic incr_mshr_cnt,
@@ -37,9 +42,16 @@ module llc_mshr(
     output logic mshr_hit,
     output logic [`MSHR_BITS-1:0] mshr_i_next,
     output logic [`MSHR_BITS-1:0] mshr_i,
+    output logic mshr_coalesce_hit_next,
+    output logic mshr_coalesce_hit,
+    output logic [`MSHR_BITS-1:0] mshr_coalesce_i_next,
+    output logic [`MSHR_BITS-1:0] mshr_coalesce_i,
     // All MSHR entries
     output mshr_llc_buf_t mshr[`N_MSHR]
     );
+
+    word_t temp_len_var;
+    logic is_within_bulk_limit;
 
     // Generate logic for all MSHR entries
     genvar i;
@@ -52,7 +64,6 @@ module llc_mshr(
                     mshr[i].req_id <= 0;
                     mshr[i].set <= 0;
                     mshr[i].way <= 0;
-                    mshr[i].hprot <= 0;
                     mshr[i].word_mask_reg <= 0;
                 end else if (add_mshr_entry) begin
                     if (mshr_i == i) begin
@@ -60,7 +71,6 @@ module llc_mshr(
                         mshr[i].req_id <= update_mshr_value_req_id;
                         mshr[i].set <= line_br.set;
                         mshr[i].way <= update_mshr_value_way;
-                        mshr[i].hprot <= update_mshr_value_hprot;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end
                 end
@@ -70,6 +80,10 @@ module llc_mshr(
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].state <= 0;
+                end else if (update_mshr_coal_state) begin
+                    if (mshr_coalesce_i == i) begin
+                        mshr[i].state <= update_mshr_value_state;
+                    end
                 end else if (update_mshr_state || add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].state <= update_mshr_value_state;
@@ -81,6 +95,10 @@ module llc_mshr(
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].line <= 0;
+                end else if (update_mshr_coal_line) begin
+                    if (mshr_coalesce_i == i) begin
+                        mshr[i].line <= update_mshr_value_line;
+                    end
                 end else if (update_mshr_line || add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].line <= update_mshr_value_line;
@@ -114,9 +132,28 @@ module llc_mshr(
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].invack_cnt <= 0;
+                end else if (update_mshr_coal_invack_cnt) begin
+                    if (mshr_coalesce_i == i) begin
+                        mshr[i].invack_cnt <= update_mshr_value_invack_cnt;
+                    end
                 end else if (update_mshr_invack_cnt || add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].invack_cnt <= update_mshr_value_invack_cnt;
+                    end
+                end
+            end
+
+            // Update only hprot of MSHR entry mshr_i
+            always_ff @(posedge clk or negedge rst) begin
+                if (!rst) begin
+                    mshr[i].hprot <= 0;
+                end else if (update_mshr_coal_hprot) begin
+                    if (mshr_coalesce_i == i) begin
+                        mshr[i].hprot <= update_mshr_value_hprot;
+                    end
+                end else if (update_mshr_hprot || add_mshr_entry) begin
+                    if (mshr_i == i) begin
+                        mshr[i].hprot <= update_mshr_value_hprot;
                     end
                 end
             end
@@ -126,8 +163,12 @@ module llc_mshr(
     always_comb begin
         mshr_i_next = 0;
         mshr_hit_next = 1'b0;
+        mshr_coalesce_i_next = 0;
+        mshr_coalesce_hit_next = 1'b0;
         clr_set_conflict_mshr = 1'b0;
         set_set_conflict_mshr = 1'b0;
+        temp_len_var = 'h0;
+        is_within_bulk_limit = 1'b0;
 
         // Different MSHR-specific actions from L2 FSM
         case(mshr_op_code)
@@ -137,6 +178,17 @@ module llc_mshr(
                     if (mshr[i].tag == line_br.tag && mshr[i].set == line_br.set && mshr[i].state != `LLC_I) begin
                         mshr_hit_next = 1'b1;
                         mshr_i_next = i;
+                    end
+
+                    get_ref_len(mshr[i].line, temp_len_var);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
+
+                    // If the incoming response is greater/equal to the current bulk done for an ongoing
+                    // write request in an MSHR entry. If yes, RSP_HANDLER will not send a response to writer.
+                    if (is_within_bulk_limit && mshr[i].state == `LLC_O && mshr[i].msg == `FWD_WTfwd_BULK) begin
+                        // Return matching entry in MSHR for coalescing.
+                        mshr_coalesce_hit_next = 1'b1;
+                        mshr_coalesce_i_next = i;
                     end
                 end
             end
@@ -155,6 +207,20 @@ module llc_mshr(
                         set_set_conflict_mshr = 1'b1;
                         clr_set_conflict_mshr = 1'b0;
                     end
+
+                    get_ref_len(mshr[i].line, temp_len_var);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
+
+                    // If the incoming request is greater/equal to the current bulk done for an ongoing
+                    // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
+                    if (is_within_bulk_limit && mshr[i].state == `LLC_O && mshr[i].msg == `FWD_WTfwd_BULK) begin
+                        // Return matching entry in MSHR for coalescing.
+                        mshr_coalesce_hit_next = 1'b1;
+                        mshr_coalesce_i_next = i;
+                        // Clear set conflict.
+                        set_set_conflict_mshr = 1'b0;
+                        clr_set_conflict_mshr = 1'b1;
+                    end
                 end
             end
             default : begin
@@ -167,10 +233,39 @@ module llc_mshr(
         if (!rst) begin
             mshr_i <= 0;
             mshr_hit <= 0;
+            mshr_coalesce_i <= 0;
+            mshr_coalesce_hit <= 0;
         end else if (mshr_op_code != `LLC_MSHR_IDLE) begin
             mshr_i <= mshr_i_next;
             mshr_hit <= mshr_hit_next;
+            mshr_coalesce_i <= mshr_coalesce_i_next;
+            mshr_coalesce_hit <= mshr_coalesce_hit_next;
         end
     end
+
+    function void within_bulk_limit_check;
+        input llc_tag_t mshr_tag;
+        input llc_set_t mshr_set;
+        input llc_tag_t req_tag;
+        input llc_set_t req_set;
+        input word_t bulk_len;
+        output logic is_within;
+
+        line_addr_t mshr_addr, req_addr;
+        word_t bulk_len_in_lines;
+
+        mshr_addr = (mshr_tag << `L2_SET_BITS) | mshr_set;
+        req_addr = (req_tag << `L2_SET_BITS) | req_set;
+        bulk_len_in_lines = bulk_len/`WORDS_PER_LINE;
+
+        is_within = ((req_addr >= mshr_addr) && (req_addr < mshr_addr + bulk_len_in_lines)) ? 1'b1 : 1'b0;
+    endfunction
+
+    function void get_ref_len;
+        input line_t line_in;
+        output word_t word_out;
+
+        word_out = line_in[0 +: `BITS_PER_WORD];
+    endfunction
 
 endmodule
