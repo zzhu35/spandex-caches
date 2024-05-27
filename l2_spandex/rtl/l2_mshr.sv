@@ -454,9 +454,8 @@ module l2_mshr(
                         // Return matching entry in MSHR for coalescing.
                         mshr_coalesce_hit_next = 1'b1;
                         mshr_coalesce_i_next = i;
-                        // Clear set conflict.
-                        set_set_conflict_mshr = 1'b0;
-                        clr_set_conflict_mshr = 1'b1;
+                        // Clear drain conflict.
+                        mshr_drain_conflict = 1'b0;
                     end
                 end
             end            
@@ -481,6 +480,16 @@ module l2_mshr(
                     if (((mshr[i].set + 1 == addr_br.set) || (mshr[i].tag + 1 == addr_br.tag)) && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `READ) begin
                         set_set_conflict_mshr = 1'b1;
                         clr_set_conflict_mshr = 1'b0;
+                    end
+
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, addr_br.tag, addr_br.set, l2_cpu_bulk_len_int, is_within_bulk_limit);
+
+                    // If the incoming request is greater/equal to the current bulk done for an ongoing
+                    // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
+                    if (is_within_bulk_limit && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `WRITE) begin
+                        // Clear set conflict.
+                        set_set_conflict_mshr = 1'b0;
+                        clr_set_conflict_mshr = 1'b1;
                     end
                 end
             end

@@ -1136,10 +1136,12 @@ module l2_fsm(
                     if (ongoing_read_bulk_req || ongoing_write_bulk_req) begin
                         next_state = CPU_REQ_TAG_LOOKUP;
                     end else begin
-                        if (l2_cpu_req.cpu_msg == `READ) begin
+                        if (l2_cpu_req.cpu_msg == `READ || l2_cpu_req.len <= `WORDS_PER_LINE) begin
                             next_state = DECODE;
-                        end else begin
+                        end else if (l2_cpu_req.cpu_msg == `WRITE || l2_cpu_req.len > `WORDS_PER_LINE) begin
                             next_state = CPU_REQ_BULK_HEAD;
+                        end else begin
+                            next_state = DECODE;
                         end
                     end
                 end                

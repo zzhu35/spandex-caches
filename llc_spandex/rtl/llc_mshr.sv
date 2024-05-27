@@ -200,26 +200,20 @@ module llc_mshr(
                     if (mshr[i].state == `LLC_I) begin
                         mshr_i_next = i;
                     end
-
-                    // If the incoming request matches with an entry in the MSHR,
-                    // assert set_conflict (which is sampled in l2_core).
-                    if (mshr[i].set == line_br.set && mshr[i].state != `LLC_I) begin
-                        set_set_conflict_mshr = 1'b1;
-                        clr_set_conflict_mshr = 1'b0;
-                    end
-
+                    
                     get_ref_len(mshr[i].line, temp_len_var);
                     within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
 
                     // If the incoming request is greater/equal to the current bulk done for an ongoing
                     // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
+                    // If no, and the request set conflicts with an MSHR entry, then we will assert set conflict.
                     if (is_within_bulk_limit && mshr[i].state == `LLC_O && mshr[i].msg == `FWD_WTfwd_BULK) begin
                         // Return matching entry in MSHR for coalescing.
                         mshr_coalesce_hit_next = 1'b1;
                         mshr_coalesce_i_next = i;
-                        // Clear set conflict.
-                        set_set_conflict_mshr = 1'b0;
-                        clr_set_conflict_mshr = 1'b1;
+                    end else if (!is_within_bulk_limit && mshr[i].set == line_br.set && mshr[i].state != `LLC_I) begin
+                        set_set_conflict_mshr = 1'b1;
+                        clr_set_conflict_mshr = 1'b0;
                     end
                 end
             end
@@ -254,8 +248,8 @@ module llc_mshr(
         line_addr_t mshr_addr, req_addr;
         word_t bulk_len_in_lines;
 
-        mshr_addr = (mshr_tag << `L2_SET_BITS) | mshr_set;
-        req_addr = (req_tag << `L2_SET_BITS) | req_set;
+        mshr_addr = (mshr_tag << `LLC_SET_BITS) | mshr_set;
+        req_addr = (req_tag << `LLC_SET_BITS) | req_set;
         bulk_len_in_lines = bulk_len/`WORDS_PER_LINE;
 
         is_within = ((req_addr >= mshr_addr) && (req_addr < mshr_addr + bulk_len_in_lines)) ? 1'b1 : 1'b0;

@@ -498,6 +498,7 @@ public:
             case FWD_RVK_V : os << "FWD_RVK_V"; break;
             case FWD_INV_SPDX : os << "FWD_INV"; break;
             case FWD_WTfwd : os << "FWD_WTfwd"; break;
+            case FWD_WTfwd_BULK : os << "FWD_WTfwd_BULK"; break;
             default: os << "UNKNOWN"; break;
         }
         os << ", addr: "       << x.addr

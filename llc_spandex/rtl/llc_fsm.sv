@@ -676,6 +676,7 @@ module llc_fsm (
                     end
                 end else begin                
                     if (mshr_coalesce_hit) begin
+                        next_state = DECODE;
                     end else begin
                         if (llc_rsp_out_ready_int) begin
                             next_state = DECODE;
