@@ -111,7 +111,7 @@ module llc_core (
 
     logic add_mshr_entry, mshr_hit_next, mshr_hit;
     logic update_mshr_tag, update_mshr_way, update_mshr_state, update_mshr_invack_cnt, update_mshr_line, update_mshr_word_mask;
-    logic update_mshr_hprot, update_mshr_coal_line, update_mshr_coal_state, update_mshr_coal_hprot, update_mshr_coal_invack_cnt;
+    logic update_mshr_hprot, update_mshr_coal_line, update_mshr_coal_state, update_mshr_coal_hprot, update_mshr_coal_invack_cnt, update_mshr_coal_word_mask;
     logic [2:0] mshr_op_code;
     logic incr_mshr_cnt;
     mix_msg_t update_mshr_value_msg;

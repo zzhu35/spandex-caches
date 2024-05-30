@@ -2675,21 +2675,6 @@ module l2_fsm(
                                         // words in the WB entry.
                                         update_mshr_value_word = mshr[mshr_coalesce_i_next].word + (wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1);
                                         update_mshr_word = 1'b1;
-                                    end else begin
-                                        // Add a new MSHR entry with the line set as the bulk length,
-                                        // and word set to number of valid words in the first wb entry.
-                                        fill_mshr_entry (
-                                            /* cpu_msg */ `WRITE,
-                                            /* hprot */ wb[wb_dispatch_i].hprot,
-                                            /* hsize */ 'h0,
-                                            /* tag */ wb[wb_dispatch_i].tag,
-                                            /* way */ wb[wb_dispatch_i].way,
-                                            /* state */ `SPX_XRV,
-                                            /* word */ wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1,
-                                            /* line */ l2_cpu_bulk_len_int,
-                                            /* amo */ 'h0,
-                                            /* word_mask */ wb[wb_dispatch_i].word_mask
-                                        );
                                     end
                                 end else begin
                                     fill_mshr_entry (
@@ -2789,21 +2774,6 @@ module l2_fsm(
                             // words in the WB entry.
                             update_mshr_value_word = mshr[mshr_coalesce_i].word + (wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1);
                             update_mshr_word = 1'b1;
-                        end else begin
-                            // Add a new MSHR entry with the line set as the bulk length,
-                            // and word set to number of valid words in the first wb entry.
-                            fill_mshr_entry (
-                                /* cpu_msg */ `WRITE,
-                                /* hprot */ wb[wb_dispatch_i].hprot,
-                                /* hsize */ 'h0,
-                                /* tag */ wb[wb_dispatch_i].tag,
-                                /* way */ wb[wb_dispatch_i].way,
-                                /* state */ `SPX_XRV,
-                                /* word */ wb[wb_dispatch_i].word_mask == `WORD_MASK_ALL ? 2 : 1,
-                                /* line */ l2_cpu_bulk_len_int,
-                                /* amo */ 'h0,
-                                /* word_mask */ wb[wb_dispatch_i].word_mask
-                            );
                         end
                     end else begin
                         fill_mshr_entry (
@@ -2870,6 +2840,20 @@ module l2_fsm(
                         /* word_mask */ 'h0
                     );
                 end
+
+                // Add a new MSHR entry with the line set as the bulk length and word set to zero.
+                fill_mshr_entry (
+                    /* cpu_msg */ `WRITE,
+                    /* hprot */ `DATA,
+                    /* hsize */ l2_cpu_req.hsize,
+                    /* tag */ addr_br.tag,
+                    /* way */ 'h0,
+                    /* state */ `SPX_XRV,
+                    /* word */ 0,
+                    /* line */ l2_cpu_req.len,
+                    /* amo */ addr_br.w_off,
+                    /* word_mask */ 'h0
+                );
             end            
             CPU_REQ_BULK_TAIL : begin
                 if (l2_cpu_req.use_owner_pred) begin

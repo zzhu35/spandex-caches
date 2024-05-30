@@ -10,6 +10,8 @@ module l2_mshr(
     input logic do_bulk_rsp,
     input addr_t l2_cpu_bulk_len_int,
     input logic ongoing_drain,
+    input word_mask_t mshr_l2_rsp_in_word_mask,
+    input coh_msg_t mshr_l2_rsp_in_coh_msg,
     // Update parts of an MSHR entry.
     input logic update_mshr_state,
     input logic update_mshr_line,
@@ -96,7 +98,6 @@ module l2_mshr(
                         mshr[i].w_off <= addr_br.w_off;
                         mshr[i].b_off <= addr_br.b_off;
                         mshr[i].hprot <= update_mshr_value_hprot;
-                        mshr[i].word <= update_mshr_value_word;
                         mshr[i].amo <= update_mshr_value_amo;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end
@@ -111,7 +112,6 @@ module l2_mshr(
                         mshr[i].w_off <= addr_br.w_off;
                         mshr[i].b_off <= addr_br.b_off;
                         mshr[i].hprot <= update_mshr_value_hprot;
-                        mshr[i].word <= update_mshr_value_word;
                         mshr[i].amo <= update_mshr_value_amo;
                         mshr[i].word_mask_reg <= update_mshr_value_word_mask_reg;
                     end                    
@@ -237,6 +237,10 @@ module l2_mshr(
                         if (mshr_coalesce_i == i) begin
                             mshr[i].word <= update_mshr_value_word;
                         end                        
+                    end else if (wb_use_dispatch_entry) begin
+                        if (mshr_i_next == i) begin
+                            mshr[i].word <= update_mshr_value_word;
+                        end
                     end else begin
 `endif                        
                         if (mshr_i == i) begin
@@ -279,8 +283,8 @@ module l2_mshr(
                             mshr_hit_next = 1'b1;
                             mshr_i_next = i;
                         end
-                    end else if (l2_rsp_in.word_mask == 'h0 && l2_rsp_in.coh_msg == `RSP_O) begin
-                        within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, l2_cpu_bulk_len_int, is_within_bulk_limit);
+                    end else if (mshr_l2_rsp_in_word_mask == 'h0 && mshr_l2_rsp_in_coh_msg == `RSP_O) begin
+                        within_bulk_limit_check(mshr[i].tag, mshr[i].set, 'h0, line_br.tag, line_br.set, 'h0, l2_cpu_bulk_len_int, is_within_bulk_limit);
 
                         // If the incoming response is greater/equal to the current bulk done for a pending
                         // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
@@ -345,7 +349,8 @@ module l2_mshr(
 
                         // Now we will check whether the incoming forward is within the range of any pending bulk forward
                         // in this MSHR entry. 
-                        within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, mshr[i].word, is_within_bulk_limit);
+                        // TODO: We are assuming two concurrent bulk transfer forward to this cache cannot be contiguous with each other.
+                        within_bulk_limit_check(mshr[i].tag, mshr[i].set, 'h1, line_br.tag, line_br.set, 'h0, mshr[i].word, is_within_bulk_limit);
 
                         // If there is a hit, we will coalesce the tracking of this forward in the same entry.
                         if (is_within_bulk_limit && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `WRITE) begin
@@ -420,7 +425,7 @@ module l2_mshr(
                         clr_set_conflict_mshr = 1'b0;
                     end
 
-                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, wb_dispatch_tag, wb_dispatch_set, l2_cpu_bulk_len_int, is_within_bulk_limit);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, mshr[i].amo, wb_dispatch_tag, wb_dispatch_set, 'h0, l2_cpu_bulk_len_int, is_within_bulk_limit);
 
                     // If the incoming request is greater/equal to the current bulk done for an ongoing
                     // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
@@ -446,7 +451,7 @@ module l2_mshr(
                         mshr_drain_conflict = 1'b1;
                     end
 
-                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, wb_dispatch_tag, wb_dispatch_set, l2_cpu_bulk_len_int, is_within_bulk_limit);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, mshr[i].amo, wb_dispatch_tag, wb_dispatch_set, 'h0, l2_cpu_bulk_len_int, is_within_bulk_limit);
 
                     // If the incoming request is greater/equal to the current bulk done for an ongoing
                     // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
@@ -482,7 +487,7 @@ module l2_mshr(
                         clr_set_conflict_mshr = 1'b0;
                     end
 
-                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, addr_br.tag, addr_br.set, l2_cpu_bulk_len_int, is_within_bulk_limit);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, mshr[i].amo, addr_br.tag, addr_br.set, addr_br.w_off, l2_cpu_bulk_len_int, is_within_bulk_limit);
 
                     // If the incoming request is greater/equal to the current bulk done for an ongoing
                     // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
@@ -527,19 +532,23 @@ module l2_mshr(
     function void within_bulk_limit_check;
         input l2_tag_t mshr_tag;
         input l2_set_t mshr_set;
+        input word_offset_t mshr_w_off;
         input l2_tag_t dispatch_tag;
         input l2_set_t dispatch_set;
+        input word_offset_t dispatch_w_off;
         input word_t bulk_len;
         output logic is_within;
 
-        line_addr_t mshr_addr, dispatch_addr;
+        line_addr_t mshr_line_addr, mshr_addr, dispatch_line_addr, dispatch_addr;
         word_t bulk_len_in_lines;
 
-        mshr_addr = (mshr_tag << `L2_SET_BITS) | mshr_set;
-        dispatch_addr = (dispatch_tag << `L2_SET_BITS) | dispatch_set;
+        mshr_line_addr = (mshr_tag << `L2_SET_BITS) | mshr_set;
+        mshr_addr = (((mshr_tag << `L2_SET_BITS) | mshr_set) << `WORD_BITS) | mshr_w_off;
+        dispatch_line_addr = (dispatch_tag << `L2_SET_BITS) | dispatch_set;
+        dispatch_addr = (((dispatch_tag << `L2_SET_BITS) | dispatch_set) << `WORD_BITS) | dispatch_w_off;
         bulk_len_in_lines = bulk_len/`WORDS_PER_LINE;
 
-        is_within = ((dispatch_addr >= mshr_addr) && (dispatch_addr < mshr_addr + bulk_len_in_lines)) ? 1'b1 : 1'b0;
+        is_within = ((dispatch_line_addr >= mshr_line_addr) && (dispatch_addr < mshr_addr + bulk_len)) ? 1'b1 : 1'b0;
     endfunction
 `endif
 

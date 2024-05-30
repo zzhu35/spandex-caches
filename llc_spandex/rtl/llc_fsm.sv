@@ -99,6 +99,7 @@ module llc_fsm (
     `FPGA_DBG output logic update_mshr_coal_state,
     `FPGA_DBG output logic update_mshr_coal_hprot,
     `FPGA_DBG output logic update_mshr_coal_invack_cnt,
+    `FPGA_DBG output logic update_mshr_coal_word_mask,
     `FPGA_DBG output logic [2:0] mshr_op_code,
     `FPGA_DBG output logic incr_mshr_cnt,
     `FPGA_DBG output mix_msg_t update_mshr_value_msg,
@@ -787,6 +788,7 @@ module llc_fsm (
         update_mshr_coal_state = 1'b0;
         update_mshr_coal_hprot = 1'b0;
         update_mshr_coal_invack_cnt = 1'b0;
+        update_mshr_coal_word_mask = 1'b0;
         mshr_op_code = `LLC_MSHR_IDLE;
         incr_mshr_cnt = 1'b0;
         update_mshr_value_msg = 'h0;
@@ -1795,6 +1797,11 @@ module llc_fsm (
                                             /* word_mask */ word_owner_mask,
                                             /* line */ llc_req_in.line
                                         );
+
+                                        if (llc_req_in.word_mask == 'h2) begin
+                                            update_mshr_value_word_mask = 'h1;
+                                            update_mshr_coal_word_mask = 1'b1;
+                                        end
                                     end else begin
                                         // Original non-bulk WTfwd case.
                                         send_fwd_out (
@@ -1889,6 +1896,11 @@ module llc_fsm (
                                     wtfwd_temp_line = wtfwd_temp_line + (word_no_owner_mask == `WORD_MASK_ALL ? 2 : 1);
                                     set_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line, update_mshr_value_line);
                                     update_mshr_coal_line = 1'b1;
+
+                                    if (llc_req_in.word_mask == 'h2) begin
+                                        update_mshr_value_word_mask = 'h1;
+                                        update_mshr_coal_word_mask = 1'b1;
+                                    end
                                 end else begin
                                     if (llc_rsp_out_ready_int) begin
                                         send_rsp_out (
@@ -1947,6 +1959,11 @@ module llc_fsm (
                                 // the line that is added to the FWD_INV MSHR entry is not important, therefore, it is okay
                                 // to overwrite with the current length value.
                                 update_mshr_coal_line = 1'b1;
+
+                                if (llc_req_in.word_mask == 'h2) begin
+                                    update_mshr_value_word_mask = 'h1;
+                                    update_mshr_coal_word_mask = 1'b1;
+                                end
                             end else begin
                                 if (fwd_invack_cnt) begin
                                     fill_mshr_entry (
@@ -2075,6 +2092,11 @@ module llc_fsm (
                                 wtfwd_temp_line = wtfwd_temp_line + (word_no_owner_mask == `WORD_MASK_ALL ? 2 : 1);
                                 set_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line, update_mshr_value_line);
                                 update_mshr_coal_line = 1'b1;
+
+                                if (llc_req_in.word_mask == 'h2) begin
+                                    update_mshr_value_word_mask = 'h1;
+                                    update_mshr_coal_word_mask = 1'b1;
+                                end
                             end else begin
                                 send_rsp_out (
                                     /* coh_msg */ `RSP_O,
@@ -2167,6 +2189,11 @@ module llc_fsm (
                         wtfwd_temp_line = wtfwd_temp_line + (word_no_owner_mask == `WORD_MASK_ALL ? 2 : 1);
                         set_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line, update_mshr_value_line);
                         update_mshr_coal_line = 1'b1;
+
+                        if (llc_req_in.word_mask == 'h2) begin
+                            update_mshr_value_word_mask = 'h1;
+                            update_mshr_coal_word_mask = 1'b1;
+                        end
                     end else begin
                         if (llc_rsp_out_ready_int) begin
                             send_rsp_out (

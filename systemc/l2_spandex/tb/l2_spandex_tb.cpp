@@ -6123,16 +6123,20 @@ void l2_spandex_tb::l2_test()
     put_fwd_in(FWD_WTfwd_BULK /* coh_msg */, addr.word /* addr */, 1 /* req_id */,
             0 /* line */, 0 /* word_mask */);
     
+    // TODO: Temporary workaround for bulk forwards to the same cache
+    // to contiguous addresses happening concurrently.
     get_rsp_out(RSP_O /* coh_msg */, 1 /* req_id */, 1 /* to_req */, addr.word /* addr */,
-            num_lines * WORDS_PER_LINE / 2 /* line */, 0 /* word_mask */);
+            num_lines * WORDS_PER_LINE / 2 + WORDS_PER_LINE/* line */, 0 /* word_mask */);
 
     wait();
 
     put_fwd_in(FWD_WTfwd_BULK /* coh_msg */, addr.word + (num_lines * 0x10 / 2) /* addr */, 2 /* req_id */,
             0 /* line */, 0 /* word_mask */);
     
+    // TODO: Temporary workaround for bulk forwards to the same cache
+    // to contiguous addresses happening concurrently.
     get_rsp_out(RSP_O /* coh_msg */, 2 /* req_id */, 1 /* to_req */, addr.word + (num_lines * 0x10 / 2) /* addr */,
-            num_lines * WORDS_PER_LINE / 2 /* line */, 0 /* word_mask */);
+            num_lines * WORDS_PER_LINE / 2 - WORDS_PER_LINE/* line */, 0 /* word_mask */);
 
     wait();
     

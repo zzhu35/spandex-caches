@@ -176,6 +176,9 @@ module l2_core(
     logic [`MSHR_BITS-1:0] mshr_coalesce_i_next, mshr_coalesce_i;
     logic add_mshr_fwd_entry, coal_mshr_fwd_entry;
 
+    word_mask_t mshr_l2_rsp_in_word_mask;
+    coh_msg_t mshr_l2_rsp_in_coh_msg;
+
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
     assign flush_stall_ended = 1'b0;
@@ -187,6 +190,9 @@ module l2_core(
     assign clr_set_conflict = clr_set_conflict_fsm | clr_set_conflict_mshr;
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
     assign lmem_rd_en = 1'b1;
+
+    assign mshr_l2_rsp_in_word_mask = l2_rsp_in.word_mask;
+    assign mshr_l2_rsp_in_coh_msg = l2_rsp_in.coh_msg;
 
     //instances
     l2_bufs bufs_u(.*);

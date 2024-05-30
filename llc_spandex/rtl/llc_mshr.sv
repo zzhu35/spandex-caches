@@ -18,6 +18,7 @@ module llc_mshr(
     input logic update_mshr_coal_line,
     input logic update_mshr_coal_hprot,
     input logic update_mshr_coal_invack_cnt,
+    input logic update_mshr_coal_word_mask,
     // Function of the MSHR to perform
     input logic [2:0] mshr_op_code,
     input logic incr_mshr_cnt,
@@ -121,6 +122,10 @@ module llc_mshr(
             always_ff @(posedge clk or negedge rst) begin
                 if (!rst) begin
                     mshr[i].word_mask <= 0;
+                end else if (update_mshr_coal_word_mask) begin
+                    if (mshr_coalesce_i == i) begin
+                        mshr[i].word_mask <= update_mshr_value_word_mask;
+                    end
                 end else if (update_mshr_word_mask || add_mshr_entry) begin
                     if (mshr_i == i) begin
                         mshr[i].word_mask <= update_mshr_value_word_mask;
@@ -181,7 +186,7 @@ module llc_mshr(
                     end
 
                     get_ref_len(mshr[i].line, temp_len_var);
-                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, mshr[i].word_mask, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
 
                     // If the incoming response is greater/equal to the current bulk done for an ongoing
                     // write request in an MSHR entry. If yes, RSP_HANDLER will not send a response to writer.
@@ -201,19 +206,21 @@ module llc_mshr(
                         mshr_i_next = i;
                     end
                     
+                    // If the request set conflicts with an MSHR entry, we will assert set conflict.
+                    if (mshr[i].set == line_br.set && mshr[i].state != `LLC_I && mshr[i].state != `LLC_O && mshr[i].msg != `FWD_WTfwd_BULK) begin
+                        set_set_conflict_mshr = 1'b1;
+                        clr_set_conflict_mshr = 1'b0;
+                    end
+
                     get_ref_len(mshr[i].line, temp_len_var);
-                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
+                    within_bulk_limit_check(mshr[i].tag, mshr[i].set, mshr[i].word_mask, line_br.tag, line_br.set, temp_len_var, is_within_bulk_limit);
 
                     // If the incoming request is greater/equal to the current bulk done for an ongoing
                     // write request in an MSHR entry. If yes, we will choose to coalesce the entries.
-                    // If no, and the request set conflicts with an MSHR entry, then we will assert set conflict.
                     if (is_within_bulk_limit && mshr[i].state == `LLC_O && mshr[i].msg == `FWD_WTfwd_BULK) begin
                         // Return matching entry in MSHR for coalescing.
                         mshr_coalesce_hit_next = 1'b1;
                         mshr_coalesce_i_next = i;
-                    end else if (!is_within_bulk_limit && mshr[i].set == line_br.set && mshr[i].state != `LLC_I) begin
-                        set_set_conflict_mshr = 1'b1;
-                        clr_set_conflict_mshr = 1'b0;
                     end
                 end
             end
@@ -240,19 +247,24 @@ module llc_mshr(
     function void within_bulk_limit_check;
         input llc_tag_t mshr_tag;
         input llc_set_t mshr_set;
+        input word_offset_t mshr_w_off;
         input llc_tag_t req_tag;
         input llc_set_t req_set;
         input word_t bulk_len;
         output logic is_within;
 
-        line_addr_t mshr_addr, req_addr;
+        line_addr_t mshr_line_addr, mshr_addr, req_line_addr, req_addr;
         word_t bulk_len_in_lines;
 
-        mshr_addr = (mshr_tag << `LLC_SET_BITS) | mshr_set;
-        req_addr = (req_tag << `LLC_SET_BITS) | req_set;
+        mshr_line_addr = (mshr_tag << `LLC_SET_BITS) | mshr_set;
+        mshr_addr = (((mshr_tag << `LLC_SET_BITS) | mshr_set) << `WORD_BITS) | mshr_w_off;
+        req_line_addr = (req_tag << `LLC_SET_BITS) | req_set;
+        req_addr = (((req_tag << `LLC_SET_BITS) | req_set) << `WORD_BITS) | 'h0;
         bulk_len_in_lines = bulk_len/`WORDS_PER_LINE;
 
-        is_within = ((req_addr >= mshr_addr) && (req_addr < mshr_addr + bulk_len_in_lines)) ? 1'b1 : 1'b0;
+        // TODO: we assume the line after the end is okay to keep as buffer because the original
+        // requestor would not send it as a bulk transfer if it did not lie within in the L2 MSHR check.
+        is_within = ((req_line_addr >= mshr_line_addr) && (req_addr < mshr_addr + bulk_len)) ? 1'b1 : 1'b0;
     endfunction
 
     function void get_ref_len;
