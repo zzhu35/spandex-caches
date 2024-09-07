@@ -264,7 +264,7 @@ module llc_fsm (
     end
 
     // Temporary line to hold the line value for coalesced MSHR line.
-    line_t wtfwd_temp_line;
+    `FPGA_DBG line_t wtfwd_temp_line;
 
     always_comb begin
         next_state = state;
@@ -2089,14 +2089,9 @@ module llc_fsm (
                                 // entry that is coalescing the response by the number of words
                                 // that are in the word_no_owner_mask.
                                 get_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line);
-                                wtfwd_temp_line = wtfwd_temp_line + (word_no_owner_mask == `WORD_MASK_ALL ? 2 : 1);
+                                wtfwd_temp_line = wtfwd_temp_line + 2;
                                 set_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line, update_mshr_value_line);
                                 update_mshr_coal_line = 1'b1;
-
-                                if (llc_req_in.word_mask == 'h2) begin
-                                    update_mshr_value_word_mask = 'h1;
-                                    update_mshr_coal_word_mask = 1'b1;
-                                end
                             end else begin
                                 send_rsp_out (
                                     /* coh_msg */ `RSP_O,
@@ -2186,7 +2181,7 @@ module llc_fsm (
                         // entry that is coalescing the response by the number of words
                         // that are in the word_no_owner_mask.
                         get_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line);
-                        wtfwd_temp_line = wtfwd_temp_line + (word_no_owner_mask == `WORD_MASK_ALL ? 2 : 1);
+                        wtfwd_temp_line = wtfwd_temp_line + (llc_req_in.word_mask == `WORD_MASK_ALL ? 2 : 1);
                         set_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line, update_mshr_value_line);
                         update_mshr_coal_line = 1'b1;
 

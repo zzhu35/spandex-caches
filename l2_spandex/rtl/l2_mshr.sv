@@ -6,12 +6,12 @@ module l2_mshr(
     input logic clk,
     input logic rst,
     input logic add_mshr_entry,
-    input mix_msg_t fwd_in_coh_msg,
+    `FPGA_DBG input mix_msg_t fwd_in_coh_msg,
     input logic do_bulk_rsp,
     input addr_t l2_cpu_bulk_len_int,
     input logic ongoing_drain,
-    input word_mask_t mshr_l2_rsp_in_word_mask,
-    input coh_msg_t mshr_l2_rsp_in_coh_msg,
+    `FPGA_DBG input word_mask_t mshr_l2_rsp_in_word_mask,
+    `FPGA_DBG input coh_msg_t mshr_l2_rsp_in_coh_msg,
     // Update parts of an MSHR entry.
     input logic update_mshr_state,
     input logic update_mshr_line,
@@ -68,7 +68,7 @@ module l2_mshr(
     );
 
     logic fwd_stall_override;
-    logic is_within_bulk_limit;
+    `FPGA_DBG logic is_within_bulk_limit;
 
     // Generate logic for all MSHR entries
     genvar i;
@@ -353,7 +353,7 @@ module l2_mshr(
                         within_bulk_limit_check(mshr[i].tag, mshr[i].set, 'h1, line_br.tag, line_br.set, 'h0, mshr[i].word, is_within_bulk_limit);
 
                         // If there is a hit, we will coalesce the tracking of this forward in the same entry.
-                        if (is_within_bulk_limit && mshr[i].state != `SPX_I && mshr[i].cpu_msg == `WRITE) begin
+                        if (is_within_bulk_limit && mshr[i].state == `SPX_XRV && mshr[i].cpu_msg == `WRITE) begin
                             mshr_coalesce_hit_next = 1'b1;
                             mshr_coalesce_i_next = i;
                             // Clear fwd stall

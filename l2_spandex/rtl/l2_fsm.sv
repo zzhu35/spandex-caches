@@ -232,6 +232,7 @@ module l2_fsm(
     `FPGA_DBG output logic decr_bulk_done_2,
     `FPGA_DBG output logic do_bulk_rsp,
     `FPGA_DBG output logic incr_bulk_nack_counter,
+    `FPGA_DBG output logic clr_bulk_nack_counter,
     `FPGA_DBG output logic set_read_bypass,
     `FPGA_DBG output logic clr_read_bypass,
     `FPGA_DBG output logic add_mshr_fwd_entry,
@@ -779,7 +780,7 @@ module l2_fsm(
                         end
                     end else begin
                         if (l2_inval_ready_int) begin
-                            if (ack_mask == `WORD_MASK_ALL) begin
+                            if (ack_mask == l2_fwd_in.word_mask) begin
                                 next_state = DECODE;
                             end else begin
                                 next_state = FWD_WTFWD_HANDLER_NACK;
@@ -1301,6 +1302,7 @@ module l2_fsm(
         clr_read_bypass = 1'b0;
         do_bulk_rsp = 1'b0;
         incr_bulk_nack_counter = 1'b0;
+        clr_bulk_nack_counter = 1'b0;
         add_mshr_fwd_entry = 1'b0;
         coal_mshr_fwd_entry = 1'b0;
 
@@ -1509,12 +1511,12 @@ module l2_fsm(
                     // If word mask is 0, this is bulk response for bulk write. We use word mask
                     // 0 temporarily since regular responses are never sent with it. We reduce the 
                     // number of words pending by the data in the line.
-                    update_mshr_value_line = mshr[mshr_i].line - l2_rsp_in.line;
-                    update_mshr_line = 1'b1;
+                    update_mshr_value_word = mshr[mshr_i].word - l2_rsp_in.line;
+                    update_mshr_word = 1'b1;
                     
                     // If there are no more words
                     // pending, then we will clear this MSHR entry.
-                    if (!update_mshr_value_line) begin
+                    if (!update_mshr_value_word) begin
                         update_mshr_state = 1'b1;
                         update_mshr_value_state = `SPX_I;
                         incr_mshr_cnt = 1'b1;
@@ -1555,6 +1557,9 @@ module l2_fsm(
                         // remaining words reaches 0, we clear the MSHR entry and the read_bypass.
                         update_mshr_value_word = mshr[mshr_i].word == 'h1 ? 'h0 : mshr[mshr_i].word - 2;
                         update_mshr_word = 1'b1;
+
+                        // Anytime we receive a bulk read response, we will clr nack counter
+                        clr_bulk_nack_counter = 1'b1;
 
                         if (!update_mshr_value_word) begin
                             clr_read_bypass = 1'b1;
