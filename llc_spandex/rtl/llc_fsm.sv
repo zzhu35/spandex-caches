@@ -185,6 +185,7 @@ module llc_fsm (
         REQ_WTFWD_HANDLER_MISS,
         REQ_WTFWD_HANDLER_MISS_MEM_RSP,
         REQ_WTFWD_HANDLER_MISS_RSP,
+        REQ_WTFWD_HANDLER_BYPASS,
         REQ_V_HANDLER_HIT,
         REQ_V_HANDLER_HIT_RSP,
         REQ_V_HANDLER_MISS,
@@ -450,7 +451,26 @@ module llc_fsm (
                         end
                     endcase
                 end else begin
-                    next_state = REQ_EVICT;
+                    case(llc_req_in.coh_msg)
+                        `REQ_WTfwd : begin
+                            // We follow a different flow for eviction with bulk transfer requests (HEAD, TAIL
+                            // or DATA packets) and regular write-through forwards.
+                            // If the set is full and the way to be evicted is valid with no owner
+                            // (i.e., requiring no forwards), we will reuse that way for the write-through
+                            // forward directly (without having to replay the request).
+                            // Else, if the way to be evicted is valid with owner or shared, we write-through
+                            // the data in the request to main memory.
+                            // The goal is to reduce latency of processing bulk transfers at the LLC.
+                            if ((llc_req_in.word_mask == 'h0 || mshr_coalesce_hit) && llc_req_in.word_mask == `WORD_MASK_ALL) begin
+                                next_state = REQ_WTFWD_HANDLER_BYPASS;
+                            end else begin
+                                next_state = REQ_EVICT;
+                            end
+                        end
+                        default : begin
+                            next_state = REQ_EVICT;
+                        end
+                    endcase
                 end
             end
             REQ_ODATA_HANDLER_HIT : begin
@@ -682,6 +702,23 @@ module llc_fsm (
                         if (llc_rsp_out_ready_int) begin
                             next_state = DECODE;
                         end
+                    end
+                end
+            end
+            REQ_WTFWD_HANDLER_BYPASS : begin
+                if (llc_req_in.word_mask == 'h0 && llc_req_in.line != 'h0) begin
+                    // HEAD packet - simply go back to DECODE after creating a new MSHR entry.
+                    next_state = DECODE;
+                end else if (llc_req_in.word_mask == 'h0 && llc_req_in.line == 'h0) begin
+                    // TAIL packet - if there is a owner for this bulk transfer, forward
+                    // the owner a TAIL packet.
+                    if (llc_fwd_out_ready_int) begin
+                        next_state = REQ_WTFWD_HANDLER_MISS_RSP;
+                    end
+                end else begin
+                    // DATA packet - Directly write-through the data to memory.
+                    if (llc_mem_req_ready_int) begin
+                        next_state = DECODE;
                     end
                 end
             end
@@ -2205,28 +2242,82 @@ module llc_fsm (
                     end
                 end
             end
+            REQ_WTFWD_HANDLER_BYPASS : begin
+                if (llc_req_in.word_mask == 'h0 && llc_req_in.line != 'h0) begin
+                    // HEAD packet - we create a new MSHR entry to start tracking this
+                    // bulk write and return to DECODE state to wait for the date packets.
+                    fill_mshr_entry (
+                        /* msg */ `FWD_WTfwd_BULK,
+                        /* req_id */ llc_req_in.req_id,
+                        /* tag */ line_br.tag,
+                        /* way */ 'h0,
+                        /* state */ `LLC_O,
+                        /* hprot */ `INSTR,
+                        /* invack_cnt */ 'h0,
+                        /* line */ llc_req_in.line,
+                        /* word_mask */ 'h0 
+                    ); 
+                end else if (llc_req_in.word_mask == 'h0 && llc_req_in.line == 'h0) begin
+                    // TAIL packet - we first forward a FWD_WTfwd_BULK tail packet to any pending owner
+                    // in the MSHR entry (identified from the hprot and invack_cnt fields of the mshr entry).
+                    // We then transition to the RSP state, where the LLC itself can respond to any lines
+                    // that it had the up to date copy for.
+                    if (mshr_coalesce_hit && mshr[mshr_coalesce_i].hprot == `DATA) begin
+                        if (llc_fwd_out_ready_int) begin
+                            send_fwd_out (
+                                /* coh_msg */ `FWD_WTfwd_BULK,
+                                /* addr */ (mshr[mshr_coalesce_i].tag << `LLC_SET_BITS) | mshr[mshr_coalesce_i].set,
+                                /* req_id */ llc_req_in.req_id,
+                                /* dest_id */ mshr[mshr_coalesce_i].invack_cnt,
+                                /* word_mask */ 'h0,
+                                /* line */ 'h0
+                            );
+                        end
+                    end
+                end else begin
+                    // DATA packet - since,we check that all words are valid initially,
+                    // we can update the data directly to memory.
+                    if (llc_mem_req_ready_int) begin
+                        send_mem_req (
+                            /* coh_msg */ `LLC_WRITE,
+                            /* line_addr */ llc_req_in.addr,
+                            /* hprot */ `DATA,
+                            /* line */ llc_req_in.line
+                        );
+
+                        // Here, we will update the second word of the line of the MSHR
+                        // entry that is coalescing the response by 2.
+                        get_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line);
+                        wtfwd_temp_line = wtfwd_temp_line + 2;
+                        set_cur_len(mshr[mshr_coalesce_i].line, wtfwd_temp_line, update_mshr_value_line);
+                        update_mshr_coal_line = 1'b1;
+                    end
+                end
+            end
             REQ_EVICT : begin
                 case (states_buf[evict_way_buf])
                     `LLC_V : begin
                         // Check if there are an owners for words in this line - single owner at the moment.
                         if (!owners_buf[evict_way_buf]) begin
-                            // If not, check if the line is dirty.
-                            if (dirty_bits_buf[evict_way_buf]) begin
-                                send_mem_req (
-                                    /* coh_msg */ `LLC_WRITE,
-                                    /* line_addr */ (tags_buf[evict_way_buf] << `LLC_SET_BITS) | line_br.set,
-                                    /* hprot */ hprots_buf[evict_way_buf],
-                                    /* line */ lines_buf[evict_way_buf]
-                                );
-                            end
+                            if (llc_mem_req_ready_int) begin
+                                // If not, check if the line is dirty.
+                                if (dirty_bits_buf[evict_way_buf]) begin
+                                    send_mem_req (
+                                        /* coh_msg */ `LLC_WRITE,
+                                        /* line_addr */ (tags_buf[evict_way_buf] << `LLC_SET_BITS) | line_br.set,
+                                        /* hprot */ hprots_buf[evict_way_buf],
+                                        /* line */ lines_buf[evict_way_buf]
+                                    );
+                                end
 
-                            // Update the states and evict_way RAM
-                            lmem_set_in = line_br.set;
-                            lmem_way_in = evict_way_buf;
-                            lmem_wr_data_evict_way = evict_way_buf + 1;
-                            lmem_wr_data_state = `LLC_I;
-                            lmem_wr_en_evict_way = 1'b1;
-                            lmem_wr_en_state = 1'b1;
+                                // Update the states and evict_way RAM
+                                lmem_set_in = line_br.set;
+                                lmem_way_in = evict_way_buf;
+                                lmem_wr_data_evict_way = evict_way_buf + 1;
+                                lmem_wr_data_state = `LLC_I;
+                                lmem_wr_en_evict_way = 1'b1;
+                                lmem_wr_en_state = 1'b1;
+                            end
                         end else begin
                             // For words that are owned elsewhere, we need to first revoke them.
                             // TODO: We assume line granularity here. Need coalescing for word granularity.
