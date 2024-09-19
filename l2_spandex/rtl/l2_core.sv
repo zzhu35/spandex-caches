@@ -178,6 +178,8 @@ module l2_core(
 
     word_mask_t mshr_l2_rsp_in_word_mask;
     coh_msg_t mshr_l2_rsp_in_coh_msg;
+    word_mask_t fwd_in_word_mask;
+    word_mask_t fwd_in_line;
 
     assign clr_flush_stall_ended = 1'b0;
     assign set_flush_stall_ended = 1'b0;
@@ -189,6 +191,8 @@ module l2_core(
     assign set_set_conflict = set_set_conflict_fsm | set_set_conflict_mshr;
     assign clr_set_conflict = clr_set_conflict_fsm | clr_set_conflict_mshr;
     assign fwd_in_coh_msg = l2_fwd_in.coh_msg;
+    assign fwd_in_word_mask = l2_fwd_in.word_mask;
+    assign fwd_in_line = l2_fwd_in.line;
     assign lmem_rd_en = 1'b1;
 
     assign mshr_l2_rsp_in_word_mask = l2_rsp_in.word_mask;

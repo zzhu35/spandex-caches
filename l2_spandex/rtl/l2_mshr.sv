@@ -372,11 +372,13 @@ module l2_mshr(
                                 // For FWD_INV, we always respond (and do not stall the forward). In
                                 // case of SPX_IS, we change transient state to SPX_II.
                                 // In case of FWD_REQ_S, FWD_REQ_OData, and FWD_RVK_O, need to check SPX_RI.
+                                // If we receive a FWD_RVK_O, it's likely that it can lead to a deadlock if we do not
+                                // respond, therefore, during bulk transfers, we override the fwd_stall.
                                 `FWD_INV : begin
                                     fwd_stall_override = 1'b1;
                                 end
                                 `FWD_RVK_O : begin
-                                    if (mshr[i].state == `SPX_RI) begin
+                                    if (mshr[i].state == `SPX_RI || (mshr[i].state == `SPX_XRV && mshr[i].cpu_msg == `WRITE && mshr[i].word_mask == 'h0)) begin
                                         fwd_stall_override = 1'b1;
                                     end
                                 end

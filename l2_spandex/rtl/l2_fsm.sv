@@ -349,7 +349,10 @@ module l2_fsm(
     end
 
     // Temporary line to hold the line value with just the WTFwd word non-zero.
-    line_t wtfwd_temp_line;
+    `FPGA_DBG line_t wtfwd_temp_line;
+
+    // Temporary signal to hold the length of a read bypass request.
+    `FPGA_DBG addr_t read_bypass_length;
 
     // Temporary word mask to hold the words that we will send positive and
     // negative acknowledgements. Here, if we are servicing a forward and there is
@@ -415,7 +418,11 @@ module l2_fsm(
         end else if (ongoing_read_bypass && state == RSP_V_HANDLER) begin
             // TODO: we assume that REQ_V misses are always at line granularity.
             if (!update_mshr_value_word_mask) begin
-                incr_bulk_done_2 = 1'b1;
+                if (bulk_done + mshr[mshr_i].word == l2_cpu_bulk_len_int + 1) begin
+                    incr_bulk_done_1 = 1'b1;
+                end else begin
+                    incr_bulk_done_2 = 1'b1;
+                end
             end
         end else if (ongoing_read_bypass && state == RSP_NACK_HANDLER) begin
             // TODO: we assume that REQ_V misses are always at line granularity.
@@ -988,7 +995,7 @@ module l2_fsm(
                         endcase
                     end
                 end else begin
-                    if (l2_cpu_req.cpu_msg == `READ && l2_cpu_req.dcs_en && (l2_cpu_req.len > 1) && word_mask_owned_evict_next) begin
+                    if (l2_cpu_req.cpu_msg == `READ && l2_cpu_req.dcs_en && (l2_cpu_req.len > `WORDS_PER_LINE) && word_mask_owned_evict_next) begin
                         next_state = CPU_REQ_READ_REQ;
                     end else if (l2_cpu_req.cpu_msg == `WRITE && l2_cpu_req.dcs_en) begin
                         case(l2_cpu_req.dcs)
@@ -1305,6 +1312,7 @@ module l2_fsm(
         clr_bulk_nack_counter = 1'b0;
         add_mshr_fwd_entry = 1'b0;
         coal_mshr_fwd_entry = 1'b0;
+        read_bypass_length = 'h0;
 
         case (state)
             RESET : begin
@@ -2168,7 +2176,7 @@ module l2_fsm(
                 end
 
                 if (!(tag_hit_next || empty_way_found_next) && word_mask_owned_evict_next) begin
-                    if (l2_cpu_req.cpu_msg == `READ && l2_cpu_req.dcs_en && (l2_cpu_req.len > 1)) begin                
+                    if (l2_cpu_req.cpu_msg == `READ && l2_cpu_req.dcs_en && (l2_cpu_req.len > `WORDS_PER_LINE)) begin                
                         set_read_bypass = 1'b1;
                     end
                 end
@@ -2284,6 +2292,14 @@ module l2_fsm(
                 // If bulk miss: we capture remainder length as part of the word field
                 // in MSHR entry and send as part of line field in req_out.
                 if (l2_req_out_ready_int && l2_inval_ready_int) begin
+                    if (ongoing_read_bypass) begin
+                        read_bypass_length = l2_cpu_req.len - bulk_done + (decr_bulk_done_2 * 2) + decr_bulk_done_1;
+
+                        if (addr_br.w_off && read_bypass_length[0] == 1'b0) begin
+                            read_bypass_length = read_bypass_length + 1;
+                        end
+                    end
+
                     fill_mshr_entry (
                         /* cpu_msg */ l2_cpu_req.cpu_msg,
                         /* hprot */ l2_cpu_req.hprot,
@@ -2294,8 +2310,7 @@ module l2_fsm(
                                     (l2_cpu_req.dcs == `DCS_ReqOdata) ? `SPX_XR : 
                                     ((l2_cpu_req.dcs == `DCS_ReqV) ? `SPX_IV :
                                     `SPX_IS),
-                        /* word */ ongoing_read_bypass ? l2_cpu_req.len - bulk_done + (decr_bulk_done_2 * 2) + decr_bulk_done_1 :
-                                   'h0,
+                        /* word */ ongoing_read_bypass ? read_bypass_length : 'h0,
                         /* line */ lines_buf[cpu_req_way],
                         /* amo */ 'h0,
                         /* word_mask */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? ~word_mask_owned: 
@@ -2310,7 +2325,7 @@ module l2_fsm(
                                       `REQ_S),
                         /* hprot */ l2_cpu_req.hprot,
                         /* line_addr */ addr_br.line_addr,
-                        /* line */ ongoing_read_bypass ? l2_cpu_req.len - bulk_done + (decr_bulk_done_2 * 2) + decr_bulk_done_1 : 'h0,
+                        /* line */ ongoing_read_bypass ? read_bypass_length : 'h0,
                         /* word_mask */ (l2_cpu_req.dcs == `DCS_ReqOdata) ? ~word_mask_owned: 
                                         ((l2_cpu_req.dcs == `DCS_ReqV) ? ~word_mask_valid: 
                                         ~word_mask_shared)

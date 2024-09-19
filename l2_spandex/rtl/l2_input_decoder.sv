@@ -39,6 +39,8 @@ module l2_input_decoder (
     `FPGA_DBG input addr_t l2_cpu_conflict_len_int,
     `FPGA_DBG input mix_msg_t fwd_in_coh_msg,
     `FPGA_DBG input addr_t bulk_done,
+    `FPGA_DBG input word_mask_t fwd_in_word_mask,
+    input word_mask_t fwd_in_line,
 
     // Assign cpu_req from conflict registers
     `FPGA_DBG output logic set_cpu_req_from_conflict,
@@ -151,7 +153,7 @@ module l2_input_decoder (
             end else if (l2_rsp_in_valid_int && mshr_cnt != `N_MSHR && !(l2_fwd_in_valid_int && (!fwd_stall || fwd_stall_ended) && rsp_in_addr == fwd_in_tmp_addr)) begin
                 do_rsp_next = 1'b1;
                 l2_rsp_in_ready_int = 1'b1;
-            end else if ((l2_fwd_in_valid_int && !fwd_stall && !(mshr_cnt == 0 && fwd_in_coh_msg == `FWD_WTfwd_BULK)) || fwd_stall_ended) begin
+            end else if ((l2_fwd_in_valid_int && !fwd_stall && !(mshr_cnt == 0 && fwd_in_coh_msg == `FWD_WTfwd_BULK && fwd_in_word_mask == 'h0 && fwd_in_line != 'h0)) || fwd_stall_ended) begin
                 do_fwd_next = 1'b1;
                 if (!fwd_stall) begin
                     l2_fwd_in_ready_int = 1'b1;
